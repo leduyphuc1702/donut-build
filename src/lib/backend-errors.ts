@@ -244,6 +244,10 @@ export type BackendErrorCode =
   // `params.device` names it, `params.expiresAt` is when its lease ends,
   // `params.canTakeOver` is "true" for this account's own device.
   | "PROFILE_LEASE_HELD"
+  // The device running this synced profile did not answer a request to
+  // close it and hand it over. `params.device` names it (empty when the sync
+  // server has no hand-over).
+  | "PROFILE_RELEASE_NO_ANSWER"
   // The pull before a launch timed out and its download had not stopped.
   | "PROFILE_STILL_SYNCING"
   | "NOT_TEAM_MEMBER"
@@ -1032,6 +1036,8 @@ export function translateBackendError(t: TFunction, err: unknown): string {
         device: parsed.params?.device ?? "",
         time: leaseExpiryTime(parsed.params?.expiresAt),
       });
+    case "PROFILE_RELEASE_NO_ANSWER":
+      return t("backendErrors.profileReleaseNoAnswer");
     case "PROFILE_STILL_SYNCING":
       return t("backendErrors.profileStillSyncing");
     case "PROFILE_LOCK_UNAVAILABLE":

@@ -2979,6 +2979,7 @@
     "siteStorageIoFailed": "Donut はサイトデータを変更できませんでした: {{detail}}",
     "agentChatNotFound": "このチャットはもう存在しません。",
     "profileLeaseHeld": "このプロファイルは {{device}} で開かれています。{{time}} またはそのデバイスが閉じると使用できます。",
+    "profileReleaseNoAnswer": "このプロファイルを実行している端末から応答がありません。もう一度試すか、最後に同期したコピーを開いてください。",
     "profileStillSyncing": "このプロファイルはまだ同期中です。しばらくしてからもう一度お試しください。"
   },
   "rail": {
@@ -5009,9 +5010,19 @@
     }
   },
   "leaseTakeOver": {
-    "title": "このプロファイルを引き継ぎますか?",
-    "description": "{{profile}} は {{time}} まで {{device}} で開かれています。引き継ぐと、そのデバイスは同期を停止し、開いてからの変更は失われます。",
-    "confirm": "引き継ぐ",
-    "lost": "{{device}} が {{profile}} を引き継ぎました。ここでの変更は同期されません。"
+    "title": "このプロファイルをここで開きますか？",
+    "description": "{{profile}} は {{device}} で開いています。Donut はそちらで閉じ、その端末の同期が終わるのを待ってから、ここで開きます。",
+    "confirm": "向こうで閉じてここで開く",
+    "lost": "{{device}} が {{profile}} を引き継いだため、ここのブラウザーを閉じました。ここでの変更は同期されません。",
+    "waiting": {
+      "asked": "{{device}} に {{profile}} を閉じるよう依頼しています…",
+      "closing": "{{device}} が {{profile}} を閉じています…",
+      "uploading": "{{device}} が {{profile}} の最新のコピーを同期しています。終わりしだい、ここで開きます。"
+    },
+    "noAnswerTitle": "{{device}} から応答がありません",
+    "noAnswer": "{{device}} は電源が切れているか、オフラインの可能性があります。代わりに {{profile}} の最後に同期したコピーを開けます。その後に向こうで変わった内容は失われ、サイトから再ログインを求められることがあります。",
+    "forceConfirm": "最後に同期したコピーを開く",
+    "otherDevice": "もう一方の端末",
+    "requested": "{{device}} が {{profile}} を必要としています。ここで閉じて、そちらへ同期します。"
   }
 }

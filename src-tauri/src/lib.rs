@@ -3861,6 +3861,7 @@ pub fn run_with_builder(
       team_lock::get_team_locks,
       team_lock::get_team_lock_status,
       sync::lease::take_over_profile_lease,
+      sync::lease::request_profile_release,
       // Synchronizer commands
       synchronizer::start_sync_session,
       synchronizer::stop_sync_session,

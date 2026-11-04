@@ -2999,6 +2999,7 @@
     "siteStorageIoFailed": "Donut no pudo cambiar los datos del sitio: {{detail}}",
     "agentChatNotFound": "Este chat ya no existe.",
     "profileLeaseHeld": "Este perfil está abierto en {{device}}. Quedará libre a las {{time}} o cuando ese dispositivo lo cierre.",
+    "profileReleaseNoAnswer": "El dispositivo que ejecuta este perfil no respondió. Inténtalo de nuevo o abre la última copia sincronizada.",
     "profileStillSyncing": "Este perfil aún se está sincronizando. Inténtalo de nuevo en breve."
   },
   "rail": {
@@ -5064,9 +5065,19 @@
     }
   },
   "leaseTakeOver": {
-    "title": "¿Tomar el control de este perfil?",
-    "description": "{{profile}} está abierto en {{device}} hasta las {{time}}. Si tomas el control, ese dispositivo deja de sincronizarlo y se pierden sus cambios desde que lo abrió.",
-    "confirm": "Tomar el control",
-    "lost": "{{device}} tomó el control de {{profile}}. Los cambios hechos aquí no se sincronizarán."
+    "title": "¿Abrir este perfil aquí?",
+    "description": "{{profile}} está abierto en {{device}}. Donut lo cerrará allí, esperará a que ese dispositivo lo sincronice y luego lo abrirá aquí.",
+    "confirm": "Cerrarlo allí y abrirlo aquí",
+    "lost": "{{device}} tomó el control de {{profile}}, así que su navegador aquí se cerró. Los cambios hechos aquí no se sincronizarán.",
+    "waiting": {
+      "asked": "Pidiendo a {{device}} que cierre {{profile}}…",
+      "closing": "{{device}} está cerrando {{profile}}…",
+      "uploading": "{{device}} está sincronizando su última copia de {{profile}}. Se abrirá aquí en cuanto termine."
+    },
+    "noAnswerTitle": "{{device}} no respondió",
+    "noAnswer": "Puede que {{device}} esté apagado o sin conexión. Puedes abrir la última copia sincronizada de {{profile}}: lo que cambió allí desde entonces se pierde y los sitios pueden pedirte que vuelvas a iniciar sesión.",
+    "forceConfirm": "Abrir la última copia sincronizada",
+    "otherDevice": "El otro dispositivo",
+    "requested": "{{device}} necesita {{profile}}. Se cierra aquí y se sincroniza hacia allí."
   }
 }

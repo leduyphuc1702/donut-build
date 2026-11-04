@@ -81,6 +81,41 @@ async fn two_devices_take_turns() {
 }
 
 #[tokio::test]
+async fn a_device_asks_the_holder_to_give_the_profile_up() {
+  let server = Server::start(&bucket("lease-handoff"), &[]).await;
+  let (status, a) = call(&server, "acquire", acquire("dev-a", false)).await;
+  assert_eq!(status, 200, "{a}");
+
+  let ask = json!({ "profileRoot": ROOT, "deviceId": "dev-b", "deviceName": "dev-b" });
+  let (status, asked) = call(&server, "request-release", ask.clone()).await;
+  assert_eq!(status, 200, "{asked}");
+  assert_eq!(asked["requested"], true);
+  assert_eq!(asked["holder"]["deviceName"], "dev-a");
+
+  let (status, renewed) = call(
+    &server,
+    "renew",
+    json!({ "profileRoot": ROOT, "token": a["token"], "releaseStage": "closing" }),
+  )
+  .await;
+  assert_eq!(status, 200);
+  assert_eq!(renewed["releaseRequested"]["deviceName"], "dev-b");
+  let (_, held) = call(&server, "status", json!({ "profileRoot": ROOT })).await;
+  assert_eq!(held["releaseRequested"]["stage"], "closing");
+
+  call(
+    &server,
+    "release",
+    json!({ "profileRoot": ROOT, "token": a["token"] }),
+  )
+  .await;
+  let (status, after) = call(&server, "request-release", ask).await;
+  assert_eq!((status, after), (200, json!({ "requested": false })));
+  let (status, b) = call(&server, "acquire", acquire("dev-b", false)).await;
+  assert_eq!(status, 200, "{b}");
+}
+
+#[tokio::test]
 async fn an_expired_lease_frees_the_profile() {
   let name = bucket("lease-expiry");
   let server = Server::start(&name, &[]).await;

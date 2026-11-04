@@ -2979,6 +2979,7 @@
     "siteStorageIoFailed": "Donut 无法更改网站数据:{{detail}}",
     "agentChatNotFound": "此对话已不存在。",
     "profileLeaseHeld": "此配置文件已在 {{device}} 上打开。它将在 {{time}} 或该设备关闭它时释放。",
+    "profileReleaseNoAnswer": "运行此配置文件的设备没有响应。请重试，或打开最后一次同步的副本。",
     "profileStillSyncing": "此配置文件仍在同步。请稍后再试。"
   },
   "rail": {
@@ -5009,9 +5010,19 @@
     }
   },
   "leaseTakeOver": {
-    "title": "接管此配置文件?",
-    "description": "{{profile}} 在 {{device}} 上打开,直到 {{time}}。接管后,该设备将停止同步它,并且自打开以来的更改将丢失。",
-    "confirm": "接管",
-    "lost": "{{device}} 已接管 {{profile}}。此处的更改将不会同步。"
+    "title": "在这里打开此配置文件？",
+    "description": "{{profile}} 正在 {{device}} 上打开。Donut 会在那台设备上关闭它，等它同步完成后再在这里打开。",
+    "confirm": "在那边关闭并在这里打开",
+    "lost": "{{device}} 已接管 {{profile}}，因此这里的浏览器已关闭。在这里所做的更改不会同步。",
+    "waiting": {
+      "asked": "正在请求 {{device}} 关闭 {{profile}}…",
+      "closing": "{{device}} 正在关闭 {{profile}}…",
+      "uploading": "{{device}} 正在同步 {{profile}} 的最新副本。完成后会立即在这里打开。"
+    },
+    "noAnswerTitle": "{{device}} 没有响应",
+    "noAnswer": "{{device}} 可能已关机或离线。你可以改为打开 {{profile}} 最后一次同步的副本：那台设备此后的更改会丢失，网站也可能要求你重新登录。",
+    "forceConfirm": "打开最后一次同步的副本",
+    "otherDevice": "另一台设备",
+    "requested": "{{device}} 需要使用 {{profile}}。正在这里关闭并同步过去。"
   }
 }

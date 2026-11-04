@@ -2999,6 +2999,7 @@
     "siteStorageIoFailed": "O Donut não conseguiu alterar os dados do site: {{detail}}",
     "agentChatNotFound": "Este chat não existe mais.",
     "profileLeaseHeld": "Este perfil está aberto em {{device}}. Fica livre às {{time}} ou quando esse dispositivo o fechar.",
+    "profileReleaseNoAnswer": "O dispositivo que executa este perfil não respondeu. Tente de novo ou abra a última cópia sincronizada.",
     "profileStillSyncing": "Este perfil ainda está a sincronizar. Tente novamente daqui a pouco."
   },
   "rail": {
@@ -5064,9 +5065,19 @@
     }
   },
   "leaseTakeOver": {
-    "title": "Assumir este perfil?",
-    "description": "{{profile}} está aberto em {{device}} até às {{time}}. Se o assumir, esse dispositivo deixa de o sincronizar e as alterações desde que o abriu perdem-se.",
-    "confirm": "Assumir",
-    "lost": "{{device}} assumiu {{profile}}. As alterações feitas aqui não serão sincronizadas."
+    "title": "Abrir este perfil aqui?",
+    "description": "{{profile}} está aberto em {{device}}. O Donut vai fechá-lo lá, esperar que esse dispositivo o sincronize e depois abri-lo aqui.",
+    "confirm": "Fechar lá e abrir aqui",
+    "lost": "{{device}} assumiu {{profile}}, então o navegador aqui foi fechado. As alterações feitas aqui não serão sincronizadas.",
+    "waiting": {
+      "asked": "Pedindo a {{device}} que feche {{profile}}…",
+      "closing": "{{device}} está fechando {{profile}}…",
+      "uploading": "{{device}} está sincronizando sua cópia mais recente de {{profile}}. Ele abre aqui assim que terminar."
+    },
+    "noAnswerTitle": "{{device}} não respondeu",
+    "noAnswer": "{{device}} pode estar desligado ou offline. Você pode abrir a última cópia sincronizada de {{profile}}: o que mudou lá desde então se perde, e os sites podem pedir que você entre de novo.",
+    "forceConfirm": "Abrir a última cópia sincronizada",
+    "otherDevice": "O outro dispositivo",
+    "requested": "{{device}} precisa de {{profile}}. Fechando aqui e sincronizando para lá."
   }
 }

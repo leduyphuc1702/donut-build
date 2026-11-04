@@ -26,6 +26,8 @@ interface DeleteConfirmationDialogProps {
     | "secondary"
     | "ghost";
   isLoading?: boolean;
+  /** Keeps Cancel usable while the confirm button shows its spinner. */
+  cancelWhileLoading?: boolean;
   profileIds?: string[];
   profiles?: { id: string; name: string }[];
 }
@@ -39,6 +41,7 @@ export function DeleteConfirmationDialog({
   confirmButtonText,
   confirmButtonVariant = "destructive",
   isLoading = false,
+  cancelWhileLoading = false,
   profileIds,
   profiles = [],
 }: DeleteConfirmationDialogProps) {
@@ -81,7 +84,7 @@ export function DeleteConfirmationDialog({
           <RippleButton
             variant="outline"
             onClick={onClose}
-            disabled={isLoading}
+            disabled={isLoading && !cancelWhileLoading}
           >
             {t("common.buttons.cancel")}
           </RippleButton>

@@ -1426,6 +1426,147 @@ test("one device at a time runs a synced profile: a second launch is refused, ta
   }
 });
 
+test("a device asks the one running a synced profile to hand it over, and is told when it does not answer", async () => {
+  assert.ok(syncUrl && syncToken, "Sync infrastructure was not started");
+  const deviceA = appFromEnvironment("sync-handover-a");
+  const deviceB = appFromEnvironment("sync-handover-b");
+  try {
+    await Promise.all([deviceA.start(), deviceB.start()]);
+    await Promise.all([configureSync(deviceA), configureSync(deviceB)]);
+    // Launches stop at the route check, past the lease: no browser needed.
+    for (const app of [deviceA, deviceB]) {
+      const settings = await app.invoke("get_app_settings");
+      await app.invoke("save_app_settings", {
+        settings: { ...settings, require_route_for_launch: true },
+      });
+    }
+    const profile = await createProfile(deviceB, "Handed Over");
+    const profileData = path.join(
+      deviceB.dataRoot,
+      "data",
+      "profiles",
+      profile.id,
+      "profile",
+      "Default",
+    );
+    await mkdir(profileData, { recursive: true });
+    await writeFile(path.join(profileData, "Preferences"), "{}");
+    await deviceB.invoke("set_profile_sync_mode", {
+      profileId: profile.id,
+      syncMode: "Regular",
+    });
+    await deviceB.invoke("request_profile_sync", { profileId: profile.id });
+    await waitFor(
+      deviceB,
+      async () =>
+        (await listRemote(`profiles/${profile.id}/`)).some(
+          (object) => object.key === `profiles/${profile.id}/manifest.json`,
+        ),
+      "profile uploaded",
+    );
+    await deviceA.invoke("restart_sync_service");
+    await waitFor(
+      deviceA,
+      async () =>
+        (await deviceA.invoke("list_browser_profiles")).some(
+          (item) => item.id === profile.id,
+        ),
+      "device A receives the profile",
+    );
+    const onB = (await deviceB.invoke("list_browser_profiles")).find(
+      (item) => item.id === profile.id,
+    );
+    const profileRoot = `profiles/${profile.id}/`;
+    const launch = (app, item) =>
+      app.invokeError("launch_browser_profile", { profile: item, url: null });
+
+    // A holder that never answers: device B is told so, by name.
+    const silent = await leaseRequest("acquire", {
+      profileRoot,
+      deviceId: "e2e-silent-device",
+      deviceName: "Silent Laptop",
+      ttlSeconds: 300,
+    });
+    assert.equal(silent.status, 200, JSON.stringify(silent.body));
+    const keepAlive = setInterval(() => {
+      void leaseRequest("renew", {
+        profileRoot,
+        token: silent.body.token,
+        ttlSeconds: 300,
+      });
+    }, 10_000);
+    let unanswered;
+    try {
+      unanswered = backendCode(
+        await deviceB.invokeError("request_profile_release", {
+          profileId: profile.id,
+        }),
+      );
+    } finally {
+      clearInterval(keepAlive);
+    }
+    assert.equal(unanswered.code, "PROFILE_RELEASE_NO_ANSWER", unanswered.text);
+    assert.equal(unanswered.params.device, "Silent Laptop");
+    const asked = await leaseRequest("status", { profileRoot });
+    assert.equal(asked.body.holder.deviceId, "e2e-silent-device");
+    assert.ok(asked.body.releaseRequested.deviceName);
+    await leaseRequest("release", { profileRoot, token: silent.body.token });
+
+    // A holder that answers, uploads and releases: device B gets it.
+    const answering = await leaseRequest("acquire", {
+      profileRoot,
+      deviceId: "e2e-answering-device",
+      deviceName: "Answering Laptop",
+      ttlSeconds: 300,
+    });
+    assert.equal(answering.status, 200, JSON.stringify(answering.body));
+    const handOver = deviceB.invoke("request_profile_release", {
+      profileId: profile.id,
+    });
+    await waitFor(
+      deviceB,
+      async () =>
+        Boolean(
+          (await leaseRequest("status", { profileRoot })).body.releaseRequested,
+        ),
+      "device B asked for the profile",
+    );
+    const renewed = await leaseRequest("renew", {
+      profileRoot,
+      token: answering.body.token,
+      ttlSeconds: 300,
+      releaseStage: "uploading",
+    });
+    assert.equal(renewed.status, 200);
+    assert.ok(renewed.body.releaseRequested.deviceName);
+    await leaseRequest("release", { profileRoot, token: answering.body.token });
+    await handOver;
+    const launched = backendCode(await launch(deviceB, onB));
+    assert.equal(launched.code, "PROFILE_ROUTE_REQUIRED", launched.text);
+    await waitFor(
+      deviceB,
+      async () =>
+        (await leaseRequest("status", { profileRoot })).body.held === false,
+      "device B released the lease after its launch ended",
+      90_000,
+    );
+
+    // The real app as the holder: device A hears the request on its next
+    // renew and frees the profile for device B.
+    await deviceA.invoke("take_over_profile_lease", { profileId: profile.id });
+    const heldByA = await leaseRequest("status", { profileRoot });
+    assert.equal(heldByA.body.held, true);
+    await deviceB.invoke("request_profile_release", { profileId: profile.id });
+    const after = await leaseRequest("status", { profileRoot });
+    assert.equal(after.body.held, false);
+  } catch (error) {
+    await Promise.all([deviceA.capture("failure"), deviceB.capture("failure")]);
+    throw error;
+  } finally {
+    await Promise.all([deviceA.close(), deviceB.close()]);
+  }
+});
+
 function writeCookie(file, value) {
   const db = new DatabaseSync(file);
   db.exec(

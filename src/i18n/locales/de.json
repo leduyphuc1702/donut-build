@@ -2979,6 +2979,7 @@
     "siteStorageIoFailed": "Donut konnte die Websitedaten nicht ändern: {{detail}}",
     "agentChatNotFound": "Dieser Chat existiert nicht mehr.",
     "profileLeaseHeld": "Dieses Profil ist auf {{device}} geöffnet. Es wird um {{time}} frei oder wenn dieses Gerät es schließt.",
+    "profileReleaseNoAnswer": "Das Gerät, auf dem dieses Profil läuft, hat nicht geantwortet. Versuche es erneut oder öffne die zuletzt synchronisierte Kopie.",
     "profileStillSyncing": "Dieses Profil wird noch synchronisiert. Versuchen Sie es gleich erneut."
   },
   "rail": {
@@ -5009,9 +5010,19 @@
     }
   },
   "leaseTakeOver": {
-    "title": "Dieses Profil übernehmen?",
-    "description": "{{profile}} ist bis {{time}} auf {{device}} geöffnet. Wenn Sie es übernehmen, synchronisiert dieses Gerät es nicht mehr, und seine Änderungen seit dem Öffnen gehen verloren.",
-    "confirm": "Übernehmen",
-    "lost": "{{device}} hat {{profile}} übernommen. Änderungen auf diesem Gerät werden nicht synchronisiert."
+    "title": "Dieses Profil hier öffnen?",
+    "description": "{{profile}} ist auf {{device}} geöffnet. Donut schließt es dort, wartet, bis dieses Gerät es synchronisiert hat, und öffnet es dann hier.",
+    "confirm": "Dort schließen und hier öffnen",
+    "lost": "{{device}} hat {{profile}} übernommen, deshalb wurde der Browser hier geschlossen. Änderungen hier werden nicht synchronisiert.",
+    "waiting": {
+      "asked": "{{device}} wird gebeten, {{profile}} zu schließen…",
+      "closing": "{{device}} schließt {{profile}}…",
+      "uploading": "{{device}} synchronisiert seine neueste Kopie von {{profile}}. Danach öffnet es sich hier."
+    },
+    "noAnswerTitle": "{{device}} antwortet nicht",
+    "noAnswer": "{{device}} ist vielleicht aus oder offline. Du kannst stattdessen die zuletzt synchronisierte Kopie von {{profile}} öffnen: Was sich dort seitdem geändert hat, geht verloren, und Websites fragen eventuell erneut nach der Anmeldung.",
+    "forceConfirm": "Zuletzt synchronisierte Kopie öffnen",
+    "otherDevice": "Das andere Gerät",
+    "requested": "{{device}} braucht {{profile}}. Es wird hier geschlossen und hinübersynchronisiert."
   }
 }

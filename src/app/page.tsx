@@ -3,6 +3,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrent } from "@tauri-apps/plugin-deep-link";
+import type { TFunction } from "i18next";
 import { useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -163,6 +164,46 @@ function consistencyFromErrorParams(
     // compared must not be rebuilt here as a dimension that passed.
     unverified: (params?.unverified ?? "").split(",").filter(Boolean),
   };
+}
+
+/**
+ * A synced profile another device of this account runs. `ask` offers to close
+ * it there and open it here; `waiting` follows that device closing and
+ * uploading (`stage`); `noAnswer` offers the last synced copy instead.
+ */
+interface LeaseConflict {
+  profile: BrowserProfile;
+  device: string;
+  expiresAt: string;
+  phase: "ask" | "waiting" | "noAnswer";
+  stage: string | null;
+}
+
+/** What the dialog for a profile open on another device says, per phase. */
+function leaseConflictDescription(
+  t: TFunction,
+  conflict: LeaseConflict | null,
+): string {
+  const device = conflict?.device || t("leaseTakeOver.otherDevice");
+  const profile = conflict?.profile.name ?? "";
+  switch (conflict?.phase) {
+    case "waiting":
+      if (conflict.stage === "uploading") {
+        return t("leaseTakeOver.waiting.uploading", { device, profile });
+      }
+      if (conflict.stage === "closing") {
+        return t("leaseTakeOver.waiting.closing", { device, profile });
+      }
+      return t("leaseTakeOver.waiting.asked", { device, profile });
+    case "noAnswer":
+      return t("leaseTakeOver.noAnswer", { device, profile });
+    default:
+      return t("leaseTakeOver.description", {
+        profile,
+        device,
+        time: leaseExpiryTime(conflict?.expiresAt),
+      });
+  }
 }
 
 type BrowserTypeString = "wayfern";
@@ -550,14 +591,13 @@ export default function Home() {
   const [showBulkDeleteConfirmation, setShowBulkDeleteConfirmation] =
     useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-  // A synced profile another device of this account runs: the take-over
-  // confirmation.
-  const [leaseConflict, setLeaseConflict] = useState<{
-    profile: BrowserProfile;
-    device: string;
-    expiresAt: string;
-  } | null>(null);
+  const [leaseConflict, setLeaseConflict] = useState<LeaseConflict | null>(
+    null,
+  );
   const [isTakingOver, setIsTakingOver] = useState(false);
+  // The profile whose hand-over this window still waits for; cleared when the
+  // dialog closes, so a hand-over that ends later launches nothing.
+  const releaseWaitRef = useRef<string | null>(null);
   const [syncConfigDialogOpen, setSyncConfigDialogOpen] = useState(false);
   const [deviceCodeDialogOpen, setDeviceCodeDialogOpen] = useState(false);
   const [syncAllDialogOpen, setSyncAllDialogOpen] = useState(false);
@@ -1810,6 +1850,8 @@ export default function Home() {
             profile,
             device: parsed.params.device ?? "",
             expiresAt: parsed.params.expiresAt ?? "",
+            phase: "ask",
+            stage: null,
           });
           return { status: "blocked" };
         }
@@ -1830,27 +1872,143 @@ export default function Home() {
     [persistGateAcks, requestGateDecision, noteLaunchError, t],
   );
 
+  const closeLeaseConflict = useCallback(() => {
+    releaseWaitRef.current = null;
+    setLeaseConflict(null);
+  }, []);
+
+  // No answer from the other device: take the lease and open the copy that
+  // was last synced.
+  const takeOverLease = useCallback(
+    async (profile: BrowserProfile) => {
+      setIsTakingOver(true);
+      try {
+        await invoke("take_over_profile_lease", { profileId: profile.id });
+        setLeaseConflict(null);
+        // launchProfile reports its own failure.
+        await launchProfile(profile).catch(() => undefined);
+      } catch (err: unknown) {
+        setLeaseConflict(null);
+        showErrorToast(
+          t("errors.launchBrowserFailed", {
+            name: profile.name,
+            error: translateBackendError(t, err),
+          }),
+        );
+      } finally {
+        setIsTakingOver(false);
+      }
+    },
+    [launchProfile, t],
+  );
+
+  // Ask the other device to close the profile, wait until it uploaded, then
+  // launch here from that copy.
+  const handOverLease = useCallback(
+    async (profile: BrowserProfile) => {
+      releaseWaitRef.current = profile.id;
+      setLeaseConflict((current) =>
+        current ? { ...current, phase: "waiting", stage: null } : current,
+      );
+      try {
+        await invoke("request_profile_release", { profileId: profile.id });
+        if (releaseWaitRef.current !== profile.id) return;
+        releaseWaitRef.current = null;
+        setLeaseConflict(null);
+        await launchProfile(profile).catch(() => undefined);
+      } catch (err: unknown) {
+        if (releaseWaitRef.current !== profile.id) return;
+        releaseWaitRef.current = null;
+        const parsed = parseBackendError(err);
+        if (parsed?.code === "PROFILE_RELEASE_NO_ANSWER") {
+          setLeaseConflict((current) =>
+            current
+              ? {
+                  ...current,
+                  device: parsed.params?.device || current.device,
+                  phase: "noAnswer",
+                  stage: null,
+                }
+              : current,
+          );
+          return;
+        }
+        if (
+          parsed?.code === "PROFILE_LEASE_HELD" &&
+          parsed.params?.canTakeOver === "true"
+        ) {
+          // A third device got it first: ask again about that one.
+          setLeaseConflict({
+            profile,
+            device: parsed.params.device ?? "",
+            expiresAt: parsed.params.expiresAt ?? "",
+            phase: "ask",
+            stage: null,
+          });
+          return;
+        }
+        setLeaseConflict(null);
+        showErrorToast(
+          t("errors.launchBrowserFailed", {
+            name: profile.name,
+            error: translateBackendError(t, err),
+          }),
+        );
+      }
+    },
+    [launchProfile, t],
+  );
+
   const confirmLeaseTakeOver = useCallback(async () => {
     if (!leaseConflict) return;
-    const { profile } = leaseConflict;
-    setIsTakingOver(true);
-    try {
-      await invoke("take_over_profile_lease", { profileId: profile.id });
-      setLeaseConflict(null);
-      // launchProfile reports its own failure.
-      await launchProfile(profile).catch(() => undefined);
-    } catch (err: unknown) {
-      setLeaseConflict(null);
-      showErrorToast(
-        t("errors.launchBrowserFailed", {
-          name: profile.name,
-          error: translateBackendError(t, err),
-        }),
-      );
-    } finally {
-      setIsTakingOver(false);
+    if (leaseConflict.phase === "noAnswer") {
+      await takeOverLease(leaseConflict.profile);
+    } else if (leaseConflict.phase === "ask") {
+      await handOverLease(leaseConflict.profile);
     }
-  }, [leaseConflict, launchProfile, t]);
+  }, [leaseConflict, takeOverLease, handOverLease]);
+
+  useEffect(() => {
+    const unlisten = listen<{
+      profile_id: string;
+      device: string;
+      stage: string | null;
+    }>("profile-sync-release-progress", (event) => {
+      setLeaseConflict((current) =>
+        current?.phase === "waiting" &&
+        current.profile.id === event.payload.profile_id
+          ? { ...current, stage: event.payload.stage }
+          : current,
+      );
+    });
+    return () => {
+      void unlisten.then((fn) => {
+        fn();
+      });
+    };
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<{
+      profile_id: string;
+      profile_name: string;
+      device: string;
+    }>("profile-sync-release-requested", (event) => {
+      showToast({
+        type: "info",
+        id: `release-requested-${event.payload.profile_id}`,
+        title: t("leaseTakeOver.requested", {
+          device: event.payload.device,
+          profile: event.payload.profile_name,
+        }),
+      });
+    });
+    return () => {
+      void unlisten.then((fn) => {
+        fn();
+      });
+    };
+  }, [t]);
 
   useEffect(() => {
     const unlisten = listen<{
@@ -3684,19 +3842,27 @@ export default function Home() {
         />
         <DeleteConfirmationDialog
           isOpen={leaseConflict !== null}
-          onClose={() => {
-            setLeaseConflict(null);
-          }}
+          onClose={closeLeaseConflict}
           onConfirm={confirmLeaseTakeOver}
-          title={t("leaseTakeOver.title")}
-          description={t("leaseTakeOver.description", {
-            profile: leaseConflict?.profile.name ?? "",
-            device: leaseConflict?.device ?? "",
-            time: leaseExpiryTime(leaseConflict?.expiresAt),
-          })}
-          confirmButtonText={t("leaseTakeOver.confirm")}
-          confirmButtonVariant="default"
-          isLoading={isTakingOver}
+          title={
+            leaseConflict?.phase === "noAnswer"
+              ? t("leaseTakeOver.noAnswerTitle", {
+                  device:
+                    leaseConflict.device || t("leaseTakeOver.otherDevice"),
+                })
+              : t("leaseTakeOver.title")
+          }
+          description={leaseConflictDescription(t, leaseConflict)}
+          confirmButtonText={
+            leaseConflict?.phase === "noAnswer"
+              ? t("leaseTakeOver.forceConfirm")
+              : t("leaseTakeOver.confirm")
+          }
+          confirmButtonVariant={
+            leaseConflict?.phase === "noAnswer" ? "destructive" : "default"
+          }
+          isLoading={isTakingOver || leaseConflict?.phase === "waiting"}
+          cancelWhileLoading={leaseConflict?.phase === "waiting"}
         />
         <DeleteConfirmationDialog
           isOpen={showBulkDeleteConfirmation}

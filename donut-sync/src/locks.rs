@@ -6,6 +6,12 @@
 //! browser starts, renews it while the browser runs, and releases it once its
 //! last upload is done. An expired lease is free.
 //!
+//! Another device of the account can ask the holder to give the profile up
+//! (`request-release`). The holder reads the request on its next renew,
+//! closes its browser, uploads, releases, and reports how far it got
+//! (`releaseStage`) on the renews in between, so the asking device knows
+//! whether to keep waiting.
+//!
 //! Leases live under this server's internal prefix, so listings never show
 //! them and a sealed store seals them. Every operation on one profile's lease
 //! runs under that profile's lock in this process (one replica), which makes
@@ -33,6 +39,32 @@ pub const MAX_TTL_SECS: u64 = 300;
 pub const DEFAULT_TTL_SECS: u64 = 120;
 const MAX_DEVICE_ID: usize = 128;
 const MAX_DEVICE_NAME: usize = 64;
+/// How far a holder got in giving the profile up, as it reports it.
+const RELEASE_STAGES: [&str; 2] = ["closing", "uploading"];
+
+/// Another device asked the holder to give the profile up.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseRequest {
+  pub device_id: String,
+  #[serde(default)]
+  pub device_name: Option<String>,
+  pub requested_at_ms: i64,
+  /// Set by the holder's renews once it acts on the request.
+  #[serde(default)]
+  pub stage: Option<String>,
+}
+
+impl ReleaseRequest {
+  fn json(&self) -> Value {
+    json!({
+      "deviceId": self.device_id,
+      "deviceName": self.device_name,
+      "requestedAt": time::iso_from_ms(self.requested_at_ms),
+      "stage": self.stage,
+    })
+  }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +78,8 @@ pub struct Lease {
   pub sub: Option<String>,
   pub acquired_at_ms: i64,
   pub expires_at_ms: i64,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub release_request: Option<ReleaseRequest>,
 }
 
 impl Lease {
@@ -63,10 +97,14 @@ impl Lease {
   }
 
   fn granted_json(&self) -> Value {
-    json!({
+    let mut granted = json!({
       "token": self.token,
       "expiresAt": time::iso_from_ms(self.expires_at_ms),
-    })
+    });
+    if let Some(request) = &self.release_request {
+      granted["releaseRequested"] = request.json();
+    }
+    granted
   }
 }
 
@@ -145,6 +183,16 @@ fn ttl_ms(body: &Body) -> Result<i64, ApiError> {
     _ => return Err(invalid()),
   };
   Ok(secs as i64 * 1000)
+}
+
+/// The stage a renew reports; anything else is ignored, so an older or newer
+/// app never fails its renew over it.
+fn release_stage(body: &Body) -> Option<String> {
+  body
+    .optional_field("releaseStage")
+    .as_str()
+    .filter(|stage| RELEASE_STAGES.contains(stage))
+    .map(str::to_string)
 }
 
 fn token(body: &Body) -> Result<String, ApiError> {
@@ -245,6 +293,7 @@ impl SyncService {
       sub: ctx.sub.clone(),
       acquired_at_ms: now,
       expires_at_ms: now + ttl,
+      release_request: None,
     };
     self.write_lease(&key, &lease).await?;
     if let Some(previous) = taken_over {
@@ -291,6 +340,20 @@ impl SyncService {
     match self.read_lease(&key).await? {
       Some(mut lease) if lease.token == token => {
         lease.expires_at_ms = now + ttl;
+        if let (Some(request), Some(stage)) = (lease.release_request.as_mut(), release_stage(body))
+        {
+          if request.stage.as_deref() != Some(stage.as_str()) {
+            log::log(
+              CONTEXT,
+              &format!(
+                "Lease release under way profile={} device={} stage={stage}",
+                profile_id_of(root),
+                short_device(&lease.device_id)
+              ),
+            );
+          }
+          request.stage = Some(stage);
+        }
         self.write_lease(&key, &lease).await?;
         Ok(lease.granted_json())
       }
@@ -338,14 +401,84 @@ impl SyncService {
     let key = self.lease_key(ctx, root).await?;
     let now = time::now_ms();
     Ok(match self.read_lease(&key).await? {
-      Some(lease) if lease.live(now) => json!({
-        "held": true,
-        "holder": { "deviceId": lease.device_id, "deviceName": lease.device_name },
-        "expiresAt": time::iso_from_ms(lease.expires_at_ms),
-        "sameAccount": lease.sub == ctx.sub,
-      }),
+      Some(lease) if lease.live(now) => {
+        let mut held = json!({
+          "held": true,
+          "holder": { "deviceId": lease.device_id, "deviceName": lease.device_name },
+          "expiresAt": time::iso_from_ms(lease.expires_at_ms),
+          "sameAccount": lease.sub == ctx.sub,
+        });
+        if let Some(request) = &lease.release_request {
+          held["releaseRequested"] = request.json();
+        }
+        held
+      }
       _ => json!({ "held": false }),
     })
+  }
+
+  pub async fn request_lease_release(
+    &self,
+    body: &Body,
+    ctx: &UserContext,
+  ) -> Result<Value, ApiError> {
+    self
+      .request_lease_release_at(body, ctx, time::now_ms())
+      .await
+  }
+
+  /// Asks the device holding the lease to close its browser, upload and
+  /// release. Only a device of the account that could take the lease over
+  /// may ask. Nothing to ask when the lease is free or the caller's own.
+  pub(crate) async fn request_lease_release_at(
+    &self,
+    body: &Body,
+    ctx: &UserContext,
+    now: i64,
+  ) -> Result<Value, ApiError> {
+    let root = self.lease_root(body)?;
+    let device = device_id(body)?;
+    let key = self.lease_key(ctx, root).await?;
+    let lock = self.lease_locks.lock_for(&key);
+    let _held = lock.lock().await;
+    let Some(mut lease) = self
+      .read_lease(&key)
+      .await?
+      .filter(|lease| lease.live(now) && lease.device_id != device)
+    else {
+      return Ok(json!({ "requested": false }));
+    };
+    if lease.sub != ctx.sub {
+      return Err(conflict(lease.holder_json(ctx)));
+    }
+    let asked_before = lease
+      .release_request
+      .as_ref()
+      .is_some_and(|request| request.device_id == device);
+    if !asked_before {
+      lease.release_request = Some(ReleaseRequest {
+        device_id: device.clone(),
+        device_name: device_name(body),
+        requested_at_ms: now,
+        stage: None,
+      });
+      self.write_lease(&key, &lease).await?;
+      log::log(
+        CONTEXT,
+        &format!(
+          "Lease release requested profile={} device={} holder={}",
+          profile_id_of(root),
+          short_device(&device),
+          short_device(&lease.device_id)
+        ),
+      );
+    }
+    Ok(json!({
+      "requested": true,
+      "holder": { "deviceId": lease.device_id, "deviceName": lease.device_name },
+      "expiresAt": time::iso_from_ms(lease.expires_at_ms),
+      "releaseRequested": lease.release_request.as_ref().map(ReleaseRequest::json),
+    }))
   }
 }
 

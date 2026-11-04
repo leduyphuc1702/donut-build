@@ -2979,6 +2979,7 @@
     "siteStorageIoFailed": "Donut site verisini değiştiremedi: {{detail}}",
     "agentChatNotFound": "Bu sohbet artık yok.",
     "profileLeaseHeld": "Bu profil {{device}} üzerinde açık. {{time}} saatinde veya o cihaz kapattığında serbest kalır.",
+    "profileReleaseNoAnswer": "Bu profili çalıştıran cihaz yanıt vermedi. Yeniden deneyin ya da son eşitlenen kopyayı açın.",
     "profileStillSyncing": "Bu profil hâlâ eşitleniyor. Birazdan yeniden deneyin."
   },
   "rail": {
@@ -5009,9 +5010,19 @@
     }
   },
   "leaseTakeOver": {
-    "title": "Bu profili devralmak istiyor musunuz?",
-    "description": "{{profile}}, {{time}} saatine kadar {{device}} üzerinde açık. Devralırsanız o cihaz eşitlemeyi durdurur ve açıldığından beri yaptığı değişiklikler kaybolur.",
-    "confirm": "Devral",
-    "lost": "{{device}}, {{profile}} profilini devraldı. Burada yapılan değişiklikler eşitlenmeyecek."
+    "title": "Bu profil burada açılsın mı?",
+    "description": "{{profile}}, {{device}} üzerinde açık. Donut onu orada kapatacak, o cihaz eşitlemeyi bitirene kadar bekleyecek ve sonra burada açacak.",
+    "confirm": "Orada kapat ve burada aç",
+    "lost": "{{device}}, {{profile}} profilini devraldı; bu yüzden buradaki tarayıcı kapatıldı. Burada yapılan değişiklikler eşitlenmeyecek.",
+    "waiting": {
+      "asked": "{{device}} cihazından {{profile}} profilini kapatması isteniyor…",
+      "closing": "{{device}}, {{profile}} profilini kapatıyor…",
+      "uploading": "{{device}}, {{profile}} profilinin en son kopyasını eşitliyor. Biter bitmez burada açılacak."
+    },
+    "noAnswerTitle": "{{device}} yanıt vermedi",
+    "noAnswer": "{{device}} kapalı ya da çevrim dışı olabilir. Bunun yerine {{profile}} profilinin son eşitlenen kopyasını açabilirsiniz: o zamandan beri orada değişenler kaybolur ve siteler yeniden oturum açmanızı isteyebilir.",
+    "forceConfirm": "Son eşitlenen kopyayı aç",
+    "otherDevice": "Diğer cihaz",
+    "requested": "{{device}} cihazının {{profile}} profiline ihtiyacı var. Burada kapatılıp oraya eşitleniyor."
   }
 }

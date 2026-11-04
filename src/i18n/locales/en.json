@@ -2979,6 +2979,7 @@
     "siteStorageIoFailed": "Donut could not change the site data: {{detail}}",
     "agentChatNotFound": "This chat no longer exists.",
     "profileLeaseHeld": "This profile is open on {{device}}. It becomes free at {{time}}, or when that device closes it.",
+    "profileReleaseNoAnswer": "The device running this profile did not answer. Try again, or open the last synced copy.",
     "profileStillSyncing": "This profile is still syncing. Try again shortly."
   },
   "rail": {
@@ -5009,9 +5010,19 @@
     }
   },
   "leaseTakeOver": {
-    "title": "Take over this profile?",
-    "description": "{{profile}} is open on {{device}} until {{time}}. If you take it over, that device stops syncing it and its changes since it opened the profile are lost.",
-    "confirm": "Take over",
-    "lost": "{{device}} took over {{profile}}. Changes made here will not sync."
+    "title": "Open this profile here?",
+    "description": "{{profile}} is open on {{device}}. Donut will close it there, wait until that device has synced it, and then open it here.",
+    "confirm": "Close it there and open here",
+    "lost": "{{device}} took over {{profile}}, so its browser here was closed. Changes made here will not sync.",
+    "waiting": {
+      "asked": "Asking {{device}} to close {{profile}}…",
+      "closing": "{{device}} is closing {{profile}}…",
+      "uploading": "{{device}} is syncing its latest copy of {{profile}}. It opens here as soon as that is done."
+    },
+    "noAnswerTitle": "{{device}} did not answer",
+    "noAnswer": "{{device}} may be off or offline. You can open the last synced copy of {{profile}} instead: what changed there since then is lost, and sites may ask you to sign in again.",
+    "forceConfirm": "Open the last synced copy",
+    "otherDevice": "The other device",
+    "requested": "{{device}} needs {{profile}}. Closing it here and syncing it over."
   }
 }

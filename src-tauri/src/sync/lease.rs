@@ -7,6 +7,14 @@
 //! browser runs, and releases it after the browser exits and the upload that
 //! follows is done. A server without the routes, or one that cannot be
 //! reached, never blocks a launch.
+//!
+//! Handing a profile over: the device that wants it asks the holder to give
+//! it up (`request_profile_release`). The holder reads the request on its next
+//! renew, closes its browser the way Chromium needs to write its cookies,
+//! uploads, and releases; the asking device waits for that and then launches
+//! as usual, from the copy the holder just uploaded. A holder that loses its
+//! lease to a forced take-over closes its browser too, so two devices never
+//! run the same session.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -21,7 +29,15 @@ use crate::profile::BrowserProfile;
 
 /// What the lease is asked for; the server bounds it to 90-300 s.
 const TTL_SECS: u64 = 120;
-const HEARTBEAT: Duration = Duration::from_secs(TTL_SECS / 3);
+/// Also how soon a holder hears that another device asked for the profile.
+const HEARTBEAT: Duration = Duration::from_secs(10);
+/// How often a device waiting for a profile asks how far the holder got.
+const RELEASE_POLL: Duration = Duration::from_secs(2);
+/// A holder that has not answered a request by then is not coming: it is
+/// offline, asleep, or runs an app without hand-over.
+const RELEASE_ANSWER_LIMIT: Duration = Duration::from_secs(30);
+/// An answered hand-over that takes longer than this is given up on.
+const RELEASE_LIMIT: Duration = Duration::from_secs(600);
 /// A stopped profile whose upload never reports back still frees its lease.
 const STOPPED_LIMIT: Duration = Duration::from_secs(3600);
 /// Written into the profile when another device took the lease over: the
@@ -43,6 +59,24 @@ struct Held {
   acquired: Instant,
   /// Set once the browser stopped: the lease waits for the upload.
   stopped: Option<Instant>,
+  /// Set once another device asked for the profile: this device is closing
+  /// its browser and uploading, and says so on each renew.
+  handing_over: bool,
+}
+
+impl Held {
+  fn release_stage(&self) -> Option<&'static str> {
+    release_stage(self.handing_over, self.stopped.is_some())
+  }
+}
+
+/// What a holder reports on its renews while it hands the profile over.
+fn release_stage(handing_over: bool, stopped: bool) -> Option<&'static str> {
+  match (handing_over, stopped) {
+    (false, _) => None,
+    (true, false) => Some("closing"),
+    (true, true) => Some("uploading"),
+  }
 }
 
 /// Called once at startup: the sync client needs the app handle.
@@ -245,6 +279,7 @@ async fn take(profile: &BrowserProfile, force: bool) -> Result<bool, String> {
           client,
           acquired: Instant::now(),
           stopped: None,
+          handing_over: false,
         },
       );
       clear_taken_over(&profile_id);
@@ -276,22 +311,128 @@ async fn take(profile: &BrowserProfile, force: bool) -> Result<bool, String> {
   }
 }
 
-/// Takes a profile's lease from another device of this account, after the
-/// person confirmed it. The launch that follows takes it again as usual.
-#[tauri::command]
-pub async fn take_over_profile_lease(profile_id: String) -> Result<(), String> {
-  let profile = crate::profile::ProfileManager::instance()
+fn find_profile(profile_id: &str) -> Option<BrowserProfile> {
+  crate::profile::ProfileManager::instance()
+    .list_profiles()
+    .ok()?
+    .into_iter()
+    .find(|p| p.id.to_string() == profile_id)
+}
+
+fn profile_for_command(profile_id: &str) -> Result<BrowserProfile, String> {
+  crate::profile::ProfileManager::instance()
     .list_profiles()
     .map_err(|e| crate::wrap_backend_error(e, "Failed to list profiles"))?
     .into_iter()
     .find(|p| p.id.to_string() == profile_id)
-    .ok_or_else(|| crate::backend_error("PROFILE_NOT_FOUND"))?;
+    .ok_or_else(|| crate::backend_error("PROFILE_NOT_FOUND"))
+}
+
+/// Takes a profile's lease from another device of this account, after the
+/// person confirmed it. The launch that follows takes it again as usual.
+#[tauri::command]
+pub async fn take_over_profile_lease(profile_id: String) -> Result<(), String> {
+  let profile = profile_for_command(&profile_id)?;
   acquire(&profile, true).await?;
   if let Some(lease) = held().get_mut(&profile_id) {
     // Nothing runs yet: a launch that never comes frees it again.
     lease.stopped = Some(Instant::now());
   }
   Ok(())
+}
+
+fn no_answer(profile_id: &str, device: &str) -> String {
+  json!({
+    "code": "PROFILE_RELEASE_NO_ANSWER",
+    "params": { "profileId": profile_id, "device": device },
+  })
+  .to_string()
+}
+
+fn emit_release_progress(profile_id: &str, device: &str, stage: Option<&str>) {
+  let _ = crate::events::emit(
+    "profile-sync-release-progress",
+    json!({ "profile_id": profile_id, "device": device, "stage": stage }),
+  );
+}
+
+/// Asks the device that runs the profile to close it, upload and release,
+/// and waits until it did. `Ok` once the profile is free: the launch that
+/// follows takes the lease and pulls what that device uploaded.
+/// `PROFILE_RELEASE_NO_ANSWER` when that device does not answer in time,
+/// so the person can take the profile over from the last synced copy.
+#[tauri::command]
+pub async fn request_profile_release(profile_id: String) -> Result<(), String> {
+  let profile = profile_for_command(&profile_id)?;
+  let Some((client, root)) = target(&profile).await else {
+    return Ok(());
+  };
+  let device = device_id();
+  let ask = json!({ "profileRoot": root, "deviceId": device, "deviceName": device_name() });
+  let started = Instant::now();
+  let (status, reply) = client
+    .lease("request-release", &ask)
+    .await
+    .map_err(|_| no_answer(&profile_id, ""))?;
+  match status {
+    200 => {}
+    409 => return Err(held_error(&profile_id, &reply)),
+    // A server without hand-over: only a take-over is left.
+    _ => return Err(no_answer(&profile_id, "")),
+  }
+  if reply["requested"] != json!(true) {
+    return Ok(());
+  }
+  let holder = reply["holder"]["deviceId"]
+    .as_str()
+    .unwrap_or("")
+    .to_string();
+  let holder_name = reply["holder"]["deviceName"]
+    .as_str()
+    .unwrap_or("")
+    .to_string();
+  log::info!(
+    "Sync lease release asked profile={profile_id} holder={}",
+    short(&holder)
+  );
+  emit_release_progress(&profile_id, &holder_name, None);
+  let status_body = json!({ "profileRoot": root });
+  let mut stage: Option<String> = None;
+  loop {
+    tokio::time::sleep(RELEASE_POLL).await;
+    let answered = stage.is_some();
+    if started.elapsed() > RELEASE_LIMIT || (!answered && started.elapsed() > RELEASE_ANSWER_LIMIT)
+    {
+      log::warn!(
+        "Sync lease release not answered profile={profile_id} holder={} answered={answered} elapsed_ms={}",
+        short(&holder),
+        started.elapsed().as_millis()
+      );
+      return Err(no_answer(&profile_id, &holder_name));
+    }
+    let Ok((200, now)) = client.lease("status", &status_body).await else {
+      continue;
+    };
+    if now["held"] != json!(true) {
+      log::info!(
+        "Sync lease handed over profile={profile_id} holder={} elapsed_ms={}",
+        short(&holder),
+        started.elapsed().as_millis()
+      );
+      return Ok(());
+    }
+    if now["holder"]["deviceId"].as_str() != Some(holder.as_str()) {
+      // A third device got there first.
+      return Err(held_error(&profile_id, &now));
+    }
+    let reported = now["releaseRequested"]["stage"]
+      .as_str()
+      .map(str::to_string);
+    if reported != stage {
+      stage = reported;
+      emit_release_progress(&profile_id, &holder_name, stage.as_deref());
+    }
+  }
 }
 
 async fn sync_pending(profile_id: &str) -> bool {
@@ -366,8 +507,17 @@ fn start_heartbeat() {
   });
 }
 
+type Renewal = (
+  String,
+  String,
+  String,
+  SyncClient,
+  Option<Instant>,
+  Option<&'static str>,
+);
+
 async fn heartbeat() {
-  let leases: Vec<(String, String, String, SyncClient, Option<Instant>)> = held()
+  let leases: Vec<Renewal> = held()
     .iter()
     .map(|(id, l)| {
       (
@@ -376,10 +526,11 @@ async fn heartbeat() {
         l.token.clone(),
         l.client.clone(),
         l.stopped,
+        l.release_stage(),
       )
     })
     .collect();
-  for (profile_id, root, token, client, stopped) in leases {
+  for (profile_id, root, token, client, stopped, stage) in leases {
     if let Some(at) = stopped {
       if at.elapsed() > STOPPED_LIMIT || !sync_pending(&profile_id).await {
         release(
@@ -394,9 +545,14 @@ async fn heartbeat() {
         continue;
       }
     }
-    let body = json!({ "profileRoot": root, "token": token, "ttlSeconds": TTL_SECS });
+    let body = renew_body(&root, &token, stage);
     match client.lease("renew", &body).await {
-      Ok((200, _)) => RENEW.succeeded(&format!("profile={profile_id}")),
+      Ok((200, reply)) => {
+        RENEW.succeeded(&format!("profile={profile_id}"));
+        if stage.is_none() && reply["releaseRequested"].is_object() {
+          release_requested(&profile_id, &token, &reply["releaseRequested"]);
+        }
+      }
       Ok((409, reply)) => lost(&profile_id, &token, &reply),
       Ok((404, _)) => {
         // The server lost the routes (a downgrade): nothing left to renew.
@@ -412,6 +568,89 @@ async fn heartbeat() {
         format_args!("err=\"{e}\""),
       ),
     }
+  }
+}
+
+fn renew_body(root: &str, token: &str, stage: Option<&str>) -> Value {
+  let mut body = json!({ "profileRoot": root, "token": token, "ttlSeconds": TTL_SECS });
+  if let Some(stage) = stage {
+    body["releaseStage"] = json!(stage);
+  }
+  body
+}
+
+fn profile_name(profile_id: &str) -> String {
+  find_profile(profile_id).map(|p| p.name).unwrap_or_default()
+}
+
+/// Another device asked for the profile. Answer at once, so it knows this
+/// device is on it, then close the browser; the stop that follows uploads
+/// and releases as after any other close.
+fn release_requested(profile_id: &str, token: &str, request: &Value) {
+  let answer = {
+    let mut leases = held();
+    let Some(lease) = leases
+      .get_mut(profile_id)
+      .filter(|lease| lease.token == token && !lease.handing_over)
+    else {
+      return;
+    };
+    lease.handing_over = true;
+    (
+      lease.client.clone(),
+      renew_body(&lease.root, token, lease.release_stage()),
+    )
+  };
+  let device = request["deviceName"].as_str().unwrap_or("").to_string();
+  log::info!(
+    "Sync lease release requested profile={profile_id} by={}",
+    short(request["deviceId"].as_str().unwrap_or(""))
+  );
+  let _ = crate::events::emit(
+    "profile-sync-release-requested",
+    json!({
+      "profile_id": profile_id,
+      "profile_name": profile_name(profile_id),
+      "device": device,
+    }),
+  );
+  let profile_id = profile_id.to_string();
+  tauri::async_runtime::spawn(async move {
+    let (client, body) = answer;
+    if let Err(e) = client.lease("renew", &body).await {
+      log::debug!("Sync lease answer not sent profile={profile_id} err=\"{e}\"");
+    }
+    close_browser(&profile_id, "release_requested").await;
+  });
+}
+
+/// Closes this device's browser of the profile, through the same stop as
+/// the Stop button: Chromium shuts down and writes its cookies, the upload
+/// is queued, the lease follows. The stop waits for a launch under way, so a
+/// browser that was still starting is closed too.
+async fn close_browser(profile_id: &str, reason: &str) {
+  let was_running = crate::browser_runner::browser_is_running_for(profile_id);
+  if !was_running {
+    let idle = crate::browser_runner::try_lock_profile_launch(profile_id).await;
+    if idle.is_some() {
+      // No browser and no launch: what is left is an upload, or nothing.
+      drop(idle);
+      browser_stopped(profile_id).await;
+      return;
+    }
+  }
+  let (Some(app), Some(profile)) = (APP.get(), find_profile(profile_id)) else {
+    return;
+  };
+  let started = Instant::now();
+  match crate::browser_runner::kill_browser_profile(app.clone(), profile).await {
+    Ok(()) => log::info!(
+      "Browser closed for another device profile={profile_id} reason={reason} was_running={was_running} elapsed_ms={}",
+      started.elapsed().as_millis()
+    ),
+    Err(e) => log::warn!(
+      "Browser close for another device failed profile={profile_id} reason={reason} err=\"{e}\""
+    ),
   }
 }
 
@@ -438,15 +677,16 @@ fn notify_lost(profile_id: &str, reply: &Value) {
     "profile-sync-lease-lost",
     json!({
       "profile_id": profile_id,
-      "profile_name": crate::profile::ProfileManager::instance()
-        .list_profiles()
-        .ok()
-        .and_then(|all| all.into_iter().find(|p| p.id.to_string() == profile_id))
-        .map(|p| p.name)
-        .unwrap_or_default(),
+      "profile_name": profile_name(profile_id),
       "device": reply["holder"]["deviceName"].as_str().unwrap_or(""),
     }),
   );
+  // The other device runs this session now; one that went on here too would
+  // make the site revoke it on both.
+  let profile_id = profile_id.to_string();
+  tauri::async_runtime::spawn(async move {
+    close_browser(&profile_id, "lease_lost").await;
+  });
 }
 
 #[cfg(test)]
@@ -469,6 +709,34 @@ mod tests {
     assert_eq!(parsed["params"]["device"], "Work Mac");
     assert_eq!(parsed["params"]["canTakeOver"], "true");
     assert_eq!(parsed["params"]["expiresAt"], "2026-11-03T10:00:00.000Z");
+  }
+
+  #[test]
+  fn a_holder_reports_closing_then_uploading_and_nothing_unasked() {
+    assert_eq!(release_stage(false, false), None);
+    assert_eq!(release_stage(false, true), None);
+    assert_eq!(release_stage(true, false), Some("closing"));
+    assert_eq!(release_stage(true, true), Some("uploading"));
+    let body = renew_body("profiles/p1/", "t", Some("closing"));
+    assert_eq!(body["releaseStage"], "closing");
+    assert_eq!(body["ttlSeconds"], TTL_SECS);
+    assert!(renew_body("profiles/p1/", "t", None)
+      .get("releaseStage")
+      .is_none());
+  }
+
+  #[test]
+  fn an_unanswered_request_names_the_device() {
+    let parsed: Value = serde_json::from_str(&no_answer("p1", "Work Mac")).unwrap();
+    assert_eq!(parsed["code"], "PROFILE_RELEASE_NO_ANSWER");
+    assert_eq!(parsed["params"]["device"], "Work Mac");
+    assert_eq!(parsed["params"]["profileId"], "p1");
+  }
+
+  #[test]
+  fn a_holder_hears_a_request_well_before_the_waiting_device_gives_up() {
+    assert!(HEARTBEAT * 2 < RELEASE_ANSWER_LIMIT);
+    assert!(HEARTBEAT * 3 < Duration::from_secs(TTL_SECS));
   }
 
   #[test]

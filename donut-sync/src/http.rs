@@ -266,6 +266,7 @@ async fn route(state: &Arc<AppState>, parts: &Parts, body: Body) -> Response<Res
         "acquire" => sync.acquire_lease(&body, &ctx).await,
         "renew" => sync.renew_lease(&body, &ctx).await,
         "release" => sync.release_lease(&body, &ctx).await,
+        "request-release" => sync.request_lease_release(&body, &ctx).await,
         _ => sync.lease_status(&body, &ctx).await,
       };
       match result {
@@ -307,7 +308,7 @@ const OBJECT_ROUTES: [&str; 12] = [
 ];
 
 /// Profile leases (`crate::sync::locks`).
-const LEASE_ROUTES: [&str; 4] = ["acquire", "renew", "release", "status"];
+const LEASE_ROUTES: [&str; 5] = ["acquire", "renew", "release", "request-release", "status"];
 
 /// Headers a proxy in front of this server adds.
 const PROXY_HEADERS: [&str; 7] = [

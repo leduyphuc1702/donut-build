@@ -5632,8 +5632,8 @@ async function restoreStubs(app) {
   );
 }
 
-test("a profile open on another device of the account offers Take over, which takes the lease and launches", async () => {
-  await withApp("ui-lease-take-over", async (app) => {
+test("a profile open on another device of the account is closed there and opened here, or opened from the last synced copy when that device does not answer", async () => {
+  await withApp("ui-lease-hand-over", async (app) => {
     await app.invoke("dismiss_window_resize_warning");
     const profile = await createUiProfile(app, "Leased Elsewhere");
     const held = JSON.stringify({
@@ -5645,12 +5645,24 @@ test("a profile open on another device of the account offers Take over, which ta
         canTakeOver: "true",
       },
     });
+    const noAnswer = JSON.stringify({
+      code: "PROFILE_RELEASE_NO_ANSWER",
+      params: { profileId: profile.id, device: "Work Laptop" },
+    });
+    const calls = (command) =>
+      app.execute(
+        `return (window.__donutStubbedCalls ?? []).filter((call) => call.command === arguments[0]);`,
+        [command],
+      );
+    const control = `[data-launch-control="${profile.id}"]`;
     try {
       await stubCommand(app, "launch_browser_profile", {
-        __replies: [{ __error: held }, profile],
+        __replies: [{ __error: held }, profile, { __error: held }, profile],
+      });
+      await stubCommand(app, "request_profile_release", {
+        __replies: [null, { __error: noAnswer }],
       });
       await stubCommand(app, "take_over_profile_lease", null);
-      const control = `[data-launch-control="${profile.id}"]`;
       await app.waitFor(
         () =>
           app.execute(`return Boolean(document.querySelector(arguments[0]));`, [
@@ -5658,6 +5670,8 @@ test("a profile open on another device of the account offers Take over, which ta
           ]),
         { description: "launch control" },
       );
+
+      // The device answers: the profile is closed there and opens here.
       await app.clickSelector(control);
       await app.waitForText(en.leaseTakeOver.title);
       const dialog = await app.execute(
@@ -5665,34 +5679,52 @@ test("a profile open on another device of the account offers Take over, which ta
       );
       assert.match(dialog, /Work Laptop/);
       assert.match(dialog, /Leased Elsewhere/);
-      // Taking over is the asked-for action, not a delete: the primary button.
+      // Handing over is the asked-for action, not a delete: the primary button.
       const confirmClass = await app.execute(
         `return [...document.querySelectorAll('[role="dialog"] button')].find((b) => b.textContent.trim() === arguments[0])?.className ?? "";`,
         [en.leaseTakeOver.confirm],
       );
       assert.match(confirmClass, /\bbg-primary\b/);
       assert.doesNotMatch(confirmClass, /\bbg-destructive\b/);
-      await app.capture("lease-take-over");
-
+      await app.capture("lease-hand-over");
       await app.clickTextIn('[role="dialog"]', en.leaseTakeOver.confirm, {
         roles: ["button"],
       });
       await app.waitFor(
-        async () =>
-          (await app.execute(
-            `return (window.__donutStubbedCalls ?? []).filter((call) => call.command === 'launch_browser_profile').length;`,
-          )) === 2,
-        { description: "the launch runs again after the take over" },
+        async () => (await calls("launch_browser_profile")).length === 2,
+        { description: "the launch runs again after the hand-over" },
       );
-      const takeOvers = await app.execute(
-        `return (window.__donutStubbedCalls ?? []).filter((call) => call.command === 'take_over_profile_lease');`,
-      );
-      assert.equal(takeOvers.length, 1);
-      assert.equal(takeOvers[0].payload.profileId, profile.id);
+      const asked = await calls("request_profile_release");
+      assert.equal(asked.length, 1);
+      assert.equal(asked[0].payload.profileId, profile.id);
+      assert.equal((await calls("take_over_profile_lease")).length, 0);
       await app.waitFor(
         async () => !(await app.visibleTextIncludes(en.leaseTakeOver.title)),
-        { description: "the confirmation closes" },
+        { description: "the dialog closes" },
       );
+
+      // The device does not answer: the last synced copy is offered instead.
+      await app.clickSelector(control);
+      await app.waitForText(en.leaseTakeOver.title);
+      await app.clickTextIn('[role="dialog"]', en.leaseTakeOver.confirm, {
+        roles: ["button"],
+      });
+      await app.waitForText(en.leaseTakeOver.forceConfirm);
+      const unanswered = await app.execute(
+        `return document.querySelector('[role="dialog"]')?.innerText ?? "";`,
+      );
+      assert.match(unanswered, /Work Laptop/);
+      await app.capture("lease-no-answer");
+      await app.clickTextIn('[role="dialog"]', en.leaseTakeOver.forceConfirm, {
+        roles: ["button"],
+      });
+      await app.waitFor(
+        async () => (await calls("launch_browser_profile")).length === 4,
+        { description: "the launch runs again after the take-over" },
+      );
+      const takeOvers = await calls("take_over_profile_lease");
+      assert.equal(takeOvers.length, 1);
+      assert.equal(takeOvers[0].payload.profileId, profile.id);
     } finally {
       await restoreStubs(app);
     }

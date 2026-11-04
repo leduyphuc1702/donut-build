@@ -225,6 +225,133 @@ async fn force_takes_over_only_within_the_same_account() {
   );
 }
 
+fn ask(device: &str) -> Body {
+  Body(Some(json!({
+    "profileRoot": ROOT, "deviceId": device, "deviceName": format!("Laptop {device}"),
+  })))
+}
+
+fn renew_at_stage(token: &Value, stage: &str) -> Body {
+  Body(Some(
+    json!({ "profileRoot": ROOT, "token": token, "releaseStage": stage }),
+  ))
+}
+
+#[tokio::test]
+async fn the_holder_hears_a_release_request_and_reports_its_progress() {
+  let sync = service(Arc::new(MemoryStore::default()));
+  let me = user("u1");
+  let a = sync
+    .acquire_lease_at(&acquire("dev-a", false), &me, T0)
+    .await
+    .unwrap();
+  assert!(a.get("releaseRequested").is_none());
+
+  let asked = sync
+    .request_lease_release_at(&ask("dev-b"), &me, T0 + 1000)
+    .await
+    .unwrap();
+  assert_eq!(asked["requested"], true);
+  assert_eq!(asked["holder"]["deviceId"], "dev-a");
+  assert_eq!(asked["releaseRequested"]["deviceName"], "Laptop dev-b");
+  assert!(asked["releaseRequested"]["stage"].is_null());
+
+  // The holder learns it on its next renew; the lease stays its own.
+  let renewed = sync
+    .renew_lease_at(&with_token(&a["token"]), &me, T0 + 2000)
+    .await
+    .unwrap();
+  assert_eq!(renewed["token"], a["token"]);
+  assert_eq!(renewed["releaseRequested"]["deviceId"], "dev-b");
+
+  sync
+    .renew_lease_at(&renew_at_stage(&a["token"], "uploading"), &me, T0 + 3000)
+    .await
+    .unwrap();
+  let status = sync
+    .lease_status(&Body(Some(json!({ "profileRoot": ROOT }))), &me)
+    .await
+    .unwrap();
+  assert_eq!(status["releaseRequested"]["stage"], "uploading");
+
+  // An unknown stage is ignored, not refused.
+  sync
+    .renew_lease_at(&renew_at_stage(&a["token"], "dancing"), &me, T0 + 4000)
+    .await
+    .unwrap();
+  let status = sync
+    .lease_status(&Body(Some(json!({ "profileRoot": ROOT }))), &me)
+    .await
+    .unwrap();
+  assert_eq!(status["releaseRequested"]["stage"], "uploading");
+
+  // Asking again keeps the progress; after the release the asker takes it.
+  let again = sync
+    .request_lease_release_at(&ask("dev-b"), &me, T0 + 5000)
+    .await
+    .unwrap();
+  assert_eq!(again["releaseRequested"]["stage"], "uploading");
+  sync
+    .release_lease(&with_token(&a["token"]), &me)
+    .await
+    .unwrap();
+  let b = sync
+    .acquire_lease_at(&acquire("dev-b", false), &me, T0 + 6000)
+    .await
+    .unwrap();
+  assert!(b.get("releaseRequested").is_none());
+}
+
+#[tokio::test]
+async fn nothing_to_ask_of_a_free_lease_or_ones_own_and_no_asking_across_accounts() {
+  let sync = service(Arc::new(MemoryStore::default()));
+  let me = user("u1");
+  let free = sync
+    .request_lease_release_at(&ask("dev-b"), &me, T0)
+    .await
+    .unwrap();
+  assert_eq!(free, json!({ "requested": false }));
+
+  sync
+    .acquire_lease_at(&acquire("dev-a", false), &me, T0)
+    .await
+    .unwrap();
+  let own = sync
+    .request_lease_release_at(&ask("dev-a"), &me, T0 + 1000)
+    .await
+    .unwrap();
+  assert_eq!(own, json!({ "requested": false }));
+
+  let (status, body) = status_of(
+    sync
+      .request_lease_release_at(&ask("dev-c"), &user("u2"), T0 + 1000)
+      .await,
+  );
+  assert_eq!(status, 409);
+  assert_eq!(body["code"], "PROFILE_LEASE_HELD");
+
+  let expired = sync
+    .request_lease_release_at(&ask("dev-b"), &me, T0 + 121_000)
+    .await
+    .unwrap();
+  assert_eq!(expired, json!({ "requested": false }));
+}
+
+#[test]
+fn a_lease_stored_before_release_requests_still_reads() {
+  let stored = json!({
+    "token": "t", "deviceId": "d", "acquiredAtMs": 1, "expiresAtMs": 2,
+  });
+  let lease: Lease = serde_json::from_value(stored).unwrap();
+  assert!(lease.release_request.is_none());
+  assert!(
+    serde_json::to_value(&lease)
+      .unwrap()
+      .get("releaseRequest")
+      .is_none()
+  );
+}
+
 #[tokio::test]
 async fn a_launcher_locks_and_a_member_outside_the_group_does_not() {
   let store = Arc::new(MemoryStore::default());

@@ -2999,6 +2999,7 @@
     "siteStorageIoFailed": "Donut n'a pas pu modifier les données du site : {{detail}}",
     "agentChatNotFound": "Ce chat n’existe plus.",
     "profileLeaseHeld": "Ce profil est ouvert sur {{device}}. Il sera libre à {{time}}, ou quand cet appareil le fermera.",
+    "profileReleaseNoAnswer": "L'appareil qui exécute ce profil n'a pas répondu. Réessayez ou ouvrez la dernière copie synchronisée.",
     "profileStillSyncing": "Ce profil est encore en cours de synchronisation. Réessayez dans un instant."
   },
   "rail": {
@@ -5064,9 +5065,19 @@
     }
   },
   "leaseTakeOver": {
-    "title": "Reprendre ce profil ?",
-    "description": "{{profile}} est ouvert sur {{device}} jusqu'à {{time}}. Si vous le reprenez, cet appareil cesse de le synchroniser et ses modifications depuis l'ouverture sont perdues.",
-    "confirm": "Reprendre",
-    "lost": "{{device}} a repris {{profile}}. Les modifications faites ici ne seront pas synchronisées."
+    "title": "Ouvrir ce profil ici ?",
+    "description": "{{profile}} est ouvert sur {{device}}. Donut va le fermer là-bas, attendre que cet appareil l'ait synchronisé, puis l'ouvrir ici.",
+    "confirm": "Le fermer là-bas et l'ouvrir ici",
+    "lost": "{{device}} a repris {{profile}}, son navigateur ici a donc été fermé. Les modifications faites ici ne seront pas synchronisées.",
+    "waiting": {
+      "asked": "Demande à {{device}} de fermer {{profile}}…",
+      "closing": "{{device}} ferme {{profile}}…",
+      "uploading": "{{device}} synchronise sa dernière copie de {{profile}}. Il s'ouvrira ici dès que ce sera fait."
+    },
+    "noAnswerTitle": "{{device}} n'a pas répondu",
+    "noAnswer": "{{device}} est peut-être éteint ou hors ligne. Vous pouvez plutôt ouvrir la dernière copie synchronisée de {{profile}} : ce qui a changé là-bas depuis est perdu, et les sites peuvent vous demander de vous reconnecter.",
+    "forceConfirm": "Ouvrir la dernière copie synchronisée",
+    "otherDevice": "L'autre appareil",
+    "requested": "{{device}} a besoin de {{profile}}. Fermeture ici et synchronisation vers cet appareil."
   }
 }
