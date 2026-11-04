@@ -11,6 +11,11 @@ Bản fork này dựa trên Donut Browser (AGPL-3.0, giữ nguyên tên và gi�
   - Nhấn Esc hoặc bấm chuột để dừng. Bật/tắt trong Cài đặt → Quyền riêng tư.
   - Mã nguồn: `src-tauri/src/paste_typing.rs`.
 - **Cập nhật tự động từ repo này** (`leduyphuc1702/donutbrowser`), không lấy bản gốc (`src-tauri/src/app_auto_updater.rs`).
+- **Khóa hồ sơ vào một thị trường.** Trong hộp thoại hồ sơ, phần proxy/VPN, chọn **Thị trường** (ví dụ "Hoa Kỳ"). Từ đó hồ sơ chỉ mở được khi lối ra đang ở nước đó.
+  - Trước mỗi lần mở, Donut đo lối ra thật: qua proxy/VPN của hồ sơ, hoặc qua mạng của chính máy (cả IPv4 lẫn IPv6) khi hồ sơ không gắn proxy/VPN.
+  - Lối ra ở nước khác, hoặc không đo được: hồ sơ không mở, không có nút "mở luôn". Tự động hóa cũng bị chặn như người.
+  - Dùng cho máy phải nối WiFi Mỹ: chọn Thị trường = Hoa Kỳ và không gắn proxy/VPN. Chưa nối đúng WiFi thì không mở được.
+  - Mã nguồn: `launch_gate.rs::enforce_exit_country`, `fingerprint_consistency.rs::measure_exits`.
 
 Máy chủ đồng bộ: xem [`vietflow/sync-server/`](../vietflow/sync-server/README.md). Có hai cách: VPS Ubuntu, hoặc một máy trong mạng nội bộ.
 
@@ -60,7 +65,8 @@ Không công cụ nào cam kết kín 100% trước mọi thuật toán: độ t
 
 **Phải làm theo quy tắc:**
 1. **Gắn WireGuard (VPN) vào hồ sơ ngay khi tạo, trước lần mở đầu tiên.** Donut lấy múi giờ, ngôn ngữ và tọa độ của vân tay theo lối ra của hồ sơ lúc tạo, nên lối ra Mỹ phải có trước.
-2. **Bật Cài đặt → Quyền riêng tư → "Chặn khởi chạy khi không có proxy hoặc VPN".** Không hồ sơ nào mở được bằng mạng của máy, kể cả khi WireGuard của nó hỏng hoặc bị xóa. Khi hồ sơ đi qua WireGuard của Donut, DNS, WebRTC và mọi kết nối của trình duyệt đều đi trong tunnel, nên IPv6 hay DNS của mạng máy không lộ ra.
+2. **Khóa mọi hồ sơ mua hàng vào thị trường của nó** (trường "Thị trường"). Hồ sơ gắn WireGuard mà WireGuard hỏng, hay máy chưa nối WiFi Mỹ, đều không mở được. Với hồ sơ chỉ đi qua WireGuard của Donut, bật thêm **Cài đặt → Quyền riêng tư → "Chặn khởi chạy khi không có proxy hoặc VPN"**. Khi hồ sơ đi qua WireGuard của Donut, DNS, WebRTC và mọi kết nối của trình duyệt đều đi trong tunnel, nên IPv6 hay DNS của mạng máy không lộ ra.
+   - Máy nối WiFi Mỹ (hồ sơ không gắn proxy/VPN): tắt IPv6 trên máy, hoặc chắc chắn WiFi đó không cấp IPv6. Donut đo cả IPv6 và chặn khi nó ở nước khác, nhưng tắt từ gốc vẫn hơn.
 3. **Cùng một phiên bản Donut và Wayfern trên mọi máy.**
    - Phiên bản trình duyệt nằm trong User-Agent, và nhiều trang so nó với lúc đăng nhập.
    - Phiên bản tụt lùi (máy B cũ hơn máy A) là bất thường. Cập nhật tất cả các máy cùng lúc.
@@ -89,3 +95,19 @@ Không công cụ nào cam kết kín 100% trước mọi thuật toán: độ t
    - <https://abrahamjuliot.github.io/creepjs/>: mục "lies" (dối trá) càng ít càng tốt; ghi lại để so giữa 2 máy.
    - <https://demo.fingerprint.com/playground>: "Bot: not detected", và mã visitor ID **giống nhau** trên 2 máy.
 2. Nếu hash canvas hoặc WebGL khác nhau giữa 2 máy: hai máy đó không nên dùng chung hồ sơ. Ghép cặp theo phần cứng giống nhau.
+
+## Phụ thuộc vào máy chủ bên ngoài
+
+Khi không đăng nhập tài khoản Donut (cách Vietflow dùng), ứng dụng chỉ gọi ra ngoài các địa chỉ sau:
+
+| Địa chỉ | Để làm gì | Thay được không |
+|---|---|---|
+| `github.com/leduyphuc1702/donutbrowser` | Kiểm tra và tải bản cập nhật | Đã là repo của Vietflow |
+| `donutbrowser.com/wayfern.json` | Biết phiên bản Wayfern mới nhất để tải; kết quả được lưu lại cục bộ | Chưa; nếu địa chỉ này mất, máy mới không biết tải bản Wayfern nào |
+| `download.wayfern.com` | Tải trình duyệt Wayfern (mã đóng, của bên thứ ba) | Không. Wayfern là phụ thuộc cứng duy nhất của Donut |
+| GitHub (cơ sở dữ liệu GeoIP) | Định vị IP lối ra | Có thể tự host, chưa cần |
+| Máy chủ đồng bộ của Vietflow | Đồng bộ hồ sơ và khóa phiên | Đã tự host (`vietflow/sync-server/`) |
+
+`api.donutbrowser.com` và `sync.donutbrowser.com` chỉ được gọi khi đăng nhập tài khoản Donut. Không có gì bắt buộc phải đăng nhập. Những gì tài khoản trả phí mở thêm (vân tay khác hệ điều hành, sửa vân tay, tự động hóa) do Wayfern và máy chủ Donut kiểm soát; bản Vietflow không thay đổi phần đó.
+
+Một giới hạn của bản không đăng nhập đáng biết: khi đang mở **hơn 3 trình duyệt** cùng lúc trên một máy, Donut không tạo được hồ sơ mới (việc sinh thiết bị cần mở thêm một trình duyệt ngầm). Đóng bớt rồi tạo.

@@ -398,6 +398,33 @@ test("profile, group, proxy, tag, metadata, clone, and bulk-delete lifecycle", a
       });
       assert.equal(withDns.dns_server, "https://dns.quad9.net/dns-query");
 
+      // A required exit country is two letters, stored upper case; anything
+      // else is refused, and null clears it.
+      assert.match(
+        await app.invokeError("update_profile_required_exit_country", {
+          profileId: profile.id,
+          country: "USA",
+        }),
+        /EXIT_COUNTRY_INVALID/,
+      );
+      const locked = await app.invoke("update_profile_required_exit_country", {
+        profileId: profile.id,
+        country: " us ",
+      });
+      assert.equal(locked.required_exit_country, "US");
+      const listed = (await app.invoke("list_browser_profiles")).find(
+        (item) => item.id === profile.id,
+      );
+      assert.equal(listed.required_exit_country, "US");
+      const unlocked = await app.invoke(
+        "update_profile_required_exit_country",
+        {
+          profileId: profile.id,
+          country: null,
+        },
+      );
+      assert.equal(unlocked.required_exit_country ?? null, null);
+
       // Statuses: a set the person defines, one per profile, removed from
       // every profile when deleted.
       const warming = await app.invoke("create_profile_status", {

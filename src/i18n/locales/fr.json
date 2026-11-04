@@ -1683,7 +1683,8 @@
       "localDataTransfer": "Transfert de données local",
       "created": "Créé le",
       "windowColor": "Couleur de la fenêtre",
-      "dns": "DNS"
+      "dns": "DNS",
+      "exitCountry": "Marché"
     },
     "values": {
       "none": "Aucun",
@@ -1821,6 +1822,10 @@
       "copyPort": "Copier le port",
       "copyWsUrl": "Copier l'URL WebSocket",
       "copyCode": "Copier le code {{tool}}"
+    },
+    "exitCountry": {
+      "summary": "Verrouille ce profil sur un pays : il ne s'ouvre que tant que sa sortie, via son proxy ou VPN ou la connexion de cet ordinateur, s'y trouve.",
+      "locked": "Ne s'ouvre que depuis {{country}}. Donut mesure la sortie avant chaque lancement ; un autre pays, ou une sortie qu'il ne peut pas situer, garde le profil fermé."
     }
   },
   "profileTransfer": {
@@ -3002,6 +3007,9 @@
     "agentChatNotFound": "Ce chat n’existe plus.",
     "profileLeaseHeld": "Ce profil est ouvert sur {{device}}. Il sera libre à {{time}}, ou quand cet appareil le fermera.",
     "profileReleaseNoAnswer": "L'appareil qui exécute ce profil n'a pas répondu. Réessayez ou ouvrez la dernière copie synchronisée.",
+    "exitCountryMismatch": "Ce profil ne s'ouvre que depuis {{required}}, et la connexion sort en {{actual}} ({{ip}}). Connectez-vous au réseau {{required}}, ou corrigez le proxy ou le VPN du profil, puis réessayez.",
+    "exitCountryUnknown": "Ce profil ne s'ouvre que depuis {{required}}, et Donut n'a pas pu déterminer où sort la connexion : {{detail}}",
+    "exitCountryInvalid": "Saisissez un code pays à deux lettres, comme US ou GB.",
     "pasteTypingEmpty": "Le presse-papiers ne contient aucun texte à taper.",
     "pasteTypingTooLong": "Le presse-papiers contient plus de {{max}} caractères, trop pour être tapé.",
     "pasteTypingKeysHeld": "Relâchez les touches du raccourci pour que Donut commence à taper.",
@@ -4862,6 +4870,7 @@
       "proxyBypassRules": "Exceptions du proxy",
       "dnsBlocklist": "Liste de blocage DNS",
       "dnsServer": "Serveur DNS",
+      "requiredExitCountry": "Pays de sortie requis",
       "startUrls": "Pages de démarrage",
       "status": "Statut",
       "fingerprint": "Empreinte",

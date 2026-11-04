@@ -248,6 +248,13 @@ export type BackendErrorCode =
   // close it and hand it over. `params.device` names it (empty when the sync
   // server has no hand-over).
   | "PROFILE_RELEASE_NO_ANSWER"
+  // The profile requires an exit country and the launch measured another:
+  // `params.required`, `params.actual` (both ISO codes) and `params.ip`.
+  | "EXIT_COUNTRY_MISMATCH"
+  // The exit could not be measured or placed: `params.required`, `params.detail`.
+  | "EXIT_COUNTRY_UNKNOWN"
+  // Not a two-letter country code.
+  | "EXIT_COUNTRY_INVALID"
   // Paste as typing (Ctrl+Alt+V / ⌘⌥V) could not type the clipboard.
   | "PASTE_TYPING_EMPTY"
   // `params.max` is the most characters it types.
@@ -431,6 +438,21 @@ export function leaseExpiryTime(expiresAt: string | undefined): string {
  * Returns null if the string isn't structured (e.g. raw error from a command
  * that doesn't yet emit codes — caller should fall back to showing the raw text).
  */
+/** A country's name in the UI language, from its ISO code; the code when the browser has no name for it. */
+export function countryName(code: string | undefined): string {
+  const upper = (code ?? "").trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(upper)) return upper;
+  try {
+    const names = new Intl.DisplayNames(
+      [typeof navigator === "undefined" ? "en" : navigator.language],
+      { type: "region" },
+    );
+    return names.of(upper) ?? upper;
+  } catch {
+    return upper;
+  }
+}
+
 export function parseBackendError(err: unknown): BackendError | null {
   const raw = err instanceof Error ? err.message : String(err);
   // Some commands still put their own context before a coded error
@@ -1047,6 +1069,19 @@ export function translateBackendError(t: TFunction, err: unknown): string {
       });
     case "PROFILE_RELEASE_NO_ANSWER":
       return t("backendErrors.profileReleaseNoAnswer");
+    case "EXIT_COUNTRY_MISMATCH":
+      return t("backendErrors.exitCountryMismatch", {
+        required: countryName(parsed.params?.required),
+        actual: countryName(parsed.params?.actual),
+        ip: parsed.params?.ip ?? "",
+      });
+    case "EXIT_COUNTRY_UNKNOWN":
+      return t("backendErrors.exitCountryUnknown", {
+        required: countryName(parsed.params?.required),
+        detail: parsed.params?.detail ?? "",
+      });
+    case "EXIT_COUNTRY_INVALID":
+      return t("backendErrors.exitCountryInvalid");
     case "PASTE_TYPING_EMPTY":
       return t("backendErrors.pasteTypingEmpty");
     case "PASTE_TYPING_TOO_LONG":

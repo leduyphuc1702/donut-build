@@ -1672,7 +1672,8 @@
       "localDataTransfer": "Truyền dữ liệu cục bộ",
       "created": "Đã tạo",
       "windowColor": "Màu cửa sổ",
-      "dns": "DNS"
+      "dns": "DNS",
+      "exitCountry": "Thị trường"
     },
     "values": {
       "none": "Không có",
@@ -1810,6 +1811,10 @@
       "copyPort": "Sao chép cổng",
       "copyWsUrl": "Sao chép URL WebSocket",
       "copyCode": "Sao chép mã {{tool}}"
+    },
+    "exitCountry": {
+      "summary": "Khóa hồ sơ này vào một quốc gia: chỉ mở được khi lối ra (qua proxy/VPN của hồ sơ, hoặc mạng của chính máy này) đang ở quốc gia đó.",
+      "locked": "Chỉ mở từ {{country}}. Donut đo lối ra trước mỗi lần mở; lối ra ở nước khác, hoặc không xác định được, thì hồ sơ không mở."
     }
   },
   "profileTransfer": {
@@ -2982,6 +2987,9 @@
     "agentChatNotFound": "Cuộc trò chuyện này không còn nữa.",
     "profileLeaseHeld": "Hồ sơ này đang mở trên {{device}}. Hồ sơ sẽ trống lúc {{time}} hoặc khi thiết bị đó đóng nó.",
     "profileReleaseNoAnswer": "Máy đang chạy hồ sơ này không phản hồi. Hãy thử lại, hoặc mở bản đồng bộ gần nhất.",
+    "exitCountryMismatch": "Hồ sơ này chỉ mở từ {{required}}, nhưng kết nối đang ra ở {{actual}} ({{ip}}). Hãy kết nối mạng {{required}}, hoặc sửa proxy/VPN của hồ sơ, rồi thử lại.",
+    "exitCountryUnknown": "Hồ sơ này chỉ mở từ {{required}}, nhưng Donut không xác định được kết nối đang ra ở đâu: {{detail}}",
+    "exitCountryInvalid": "Nhập mã quốc gia hai chữ cái, ví dụ US hoặc GB.",
     "pasteTypingEmpty": "Bộ nhớ tạm không có chữ để gõ.",
     "pasteTypingTooLong": "Bộ nhớ tạm có hơn {{max}} ký tự, quá dài để gõ.",
     "pasteTypingKeysHeld": "Hãy nhả các phím tắt ra để Donut bắt đầu gõ.",
@@ -4809,6 +4817,7 @@
       "proxyBypassRules": "Quy tắc bỏ qua proxy",
       "dnsBlocklist": "Danh sách chặn DNS",
       "dnsServer": "Máy chủ DNS",
+      "requiredExitCountry": "Quốc gia lối ra bắt buộc",
       "startUrls": "Trang bắt đầu",
       "status": "Trạng thái",
       "fingerprint": "Dấu vân tay",

@@ -1683,7 +1683,8 @@
       "localDataTransfer": "Transferência de dados local",
       "created": "Criado em",
       "windowColor": "Cor da janela",
-      "dns": "DNS"
+      "dns": "DNS",
+      "exitCountry": "Mercado"
     },
     "values": {
       "none": "Nenhum",
@@ -1821,6 +1822,10 @@
       "copyPort": "Copiar porta",
       "copyWsUrl": "Copiar URL do WebSocket",
       "copyCode": "Copiar código do {{tool}}"
+    },
+    "exitCountry": {
+      "summary": "Prende este perfil a um país: ele só abre enquanto a saída, pelo proxy ou VPN dele ou pela conexão deste computador, estiver lá.",
+      "locked": "Só abre a partir de {{country}}. O Donut mede a saída antes de cada abertura; outro país, ou uma saída que ele não consegue localizar, mantém o perfil fechado."
     }
   },
   "profileTransfer": {
@@ -3002,6 +3007,9 @@
     "agentChatNotFound": "Este chat não existe mais.",
     "profileLeaseHeld": "Este perfil está aberto em {{device}}. Fica livre às {{time}} ou quando esse dispositivo o fechar.",
     "profileReleaseNoAnswer": "O dispositivo que executa este perfil não respondeu. Tente de novo ou abra a última cópia sincronizada.",
+    "exitCountryMismatch": "Este perfil só abre a partir de {{required}}, e a conexão sai em {{actual}} ({{ip}}). Conecte-se à rede de {{required}}, ou corrija o proxy ou a VPN do perfil, e tente de novo.",
+    "exitCountryUnknown": "Este perfil só abre a partir de {{required}}, e o Donut não conseguiu saber por onde a conexão sai: {{detail}}",
+    "exitCountryInvalid": "Digite um código de país de duas letras, como US ou GB.",
     "pasteTypingEmpty": "Não há texto na área de transferência para digitar.",
     "pasteTypingTooLong": "A área de transferência tem mais de {{max}} caracteres, demais para digitar.",
     "pasteTypingKeysHeld": "Solte as teclas do atalho para o Donut começar a digitar.",
@@ -4862,6 +4870,7 @@
       "proxyBypassRules": "Exceções do proxy",
       "dnsBlocklist": "Lista de bloqueio DNS",
       "dnsServer": "Servidor DNS",
+      "requiredExitCountry": "País de saída exigido",
       "startUrls": "Páginas iniciais",
       "status": "Status",
       "fingerprint": "Impressão digital",

@@ -70,6 +70,7 @@ const FIELD_KEYS: Record<string, string> = {
   proxy_bypass_rules: "proxyBypassRules",
   dns_blocklist: "dnsBlocklist",
   dns_server: "dnsServer",
+  required_exit_country: "requiredExitCountry",
   start_urls: "startUrls",
   status: "status",
   fingerprint: "fingerprint",

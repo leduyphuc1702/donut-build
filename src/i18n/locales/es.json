@@ -1683,7 +1683,8 @@
       "localDataTransfer": "Transferencia de datos local",
       "created": "Creado",
       "windowColor": "Color de ventana",
-      "dns": "DNS"
+      "dns": "DNS",
+      "exitCountry": "Mercado"
     },
     "values": {
       "none": "Ninguno",
@@ -1821,6 +1822,10 @@
       "copyPort": "Copiar puerto",
       "copyWsUrl": "Copiar URL de WebSocket",
       "copyCode": "Copiar código de {{tool}}"
+    },
+    "exitCountry": {
+      "summary": "Fija este perfil a un país: solo se abre mientras su salida, por su proxy o VPN o por la conexión de este equipo, esté allí.",
+      "locked": "Solo se abre desde {{country}}. Donut mide la salida antes de cada inicio; otro país, o una salida que no puede ubicar, mantiene el perfil cerrado."
     }
   },
   "profileTransfer": {
@@ -3002,6 +3007,9 @@
     "agentChatNotFound": "Este chat ya no existe.",
     "profileLeaseHeld": "Este perfil está abierto en {{device}}. Quedará libre a las {{time}} o cuando ese dispositivo lo cierre.",
     "profileReleaseNoAnswer": "El dispositivo que ejecuta este perfil no respondió. Inténtalo de nuevo o abre la última copia sincronizada.",
+    "exitCountryMismatch": "Este perfil solo se abre desde {{required}}, y la conexión sale en {{actual}} ({{ip}}). Conéctate a la red de {{required}}, o corrige el proxy o la VPN del perfil, e inténtalo de nuevo.",
+    "exitCountryUnknown": "Este perfil solo se abre desde {{required}}, y Donut no pudo saber por dónde sale la conexión: {{detail}}",
+    "exitCountryInvalid": "Escribe un código de país de dos letras, como US o GB.",
     "pasteTypingEmpty": "No hay texto en el portapapeles para escribir.",
     "pasteTypingTooLong": "El portapapeles tiene más de {{max}} caracteres, demasiado para escribir.",
     "pasteTypingKeysHeld": "Suelta las teclas del atajo para que Donut empiece a escribir.",
@@ -4862,6 +4870,7 @@
       "proxyBypassRules": "Excepciones del proxy",
       "dnsBlocklist": "Lista de bloqueo DNS",
       "dnsServer": "Servidor DNS",
+      "requiredExitCountry": "País de salida requerido",
       "startUrls": "Páginas de inicio",
       "status": "Estado",
       "fingerprint": "Huella digital",

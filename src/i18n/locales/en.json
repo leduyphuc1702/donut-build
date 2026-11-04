@@ -1672,7 +1672,8 @@
       "localDataTransfer": "Local data transfer",
       "created": "Created",
       "windowColor": "Window color",
-      "dns": "DNS"
+      "dns": "DNS",
+      "exitCountry": "Market"
     },
     "values": {
       "none": "None",
@@ -1810,6 +1811,10 @@
       "copyPort": "Copy port",
       "copyWsUrl": "Copy WebSocket URL",
       "copyCode": "Copy {{tool}} code"
+    },
+    "exitCountry": {
+      "summary": "Lock this profile to a country: it opens only while its exit, through its proxy or VPN, or this computer's own connection, is there.",
+      "locked": "Opens only from {{country}}. Donut measures the exit before every launch; another country, or an exit it cannot place, keeps the profile closed."
     }
   },
   "profileTransfer": {
@@ -2982,6 +2987,9 @@
     "agentChatNotFound": "This chat no longer exists.",
     "profileLeaseHeld": "This profile is open on {{device}}. It becomes free at {{time}}, or when that device closes it.",
     "profileReleaseNoAnswer": "The device running this profile did not answer. Try again, or open the last synced copy.",
+    "exitCountryMismatch": "This profile opens only from {{required}}, and the connection comes out in {{actual}} ({{ip}}). Connect to the {{required}} network, or fix the profile's proxy or VPN, and try again.",
+    "exitCountryUnknown": "This profile opens only from {{required}}, and Donut could not tell where the connection comes out: {{detail}}",
+    "exitCountryInvalid": "Enter a two-letter country code, such as US or GB.",
     "pasteTypingEmpty": "There is no text on the clipboard to type.",
     "pasteTypingTooLong": "The clipboard holds more than {{max}} characters, too much to type.",
     "pasteTypingKeysHeld": "Let go of the shortcut keys so Donut can start typing.",
@@ -4809,6 +4817,7 @@
       "proxyBypassRules": "Proxy bypass rules",
       "dnsBlocklist": "DNS blocklist",
       "dnsServer": "DNS server",
+      "requiredExitCountry": "Required exit country",
       "startUrls": "Start pages",
       "status": "Status",
       "fingerprint": "Fingerprint",

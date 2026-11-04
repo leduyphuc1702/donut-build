@@ -79,6 +79,12 @@ pub struct BrowserProfile {
   /// or VPN (see `profile_dns`). `None` lets the proxy resolve them.
   #[serde(default)]
   pub dns_server: Option<String>,
+  /// The country (ISO 3166-1 alpha-2, upper case) the profile's exit must be
+  /// in, or it does not launch: measured before every launch, through the
+  /// profile's proxy or VPN, or on this machine's own route when it has none.
+  /// A profile for a market whose network the machine must be on.
+  #[serde(default)]
+  pub required_exit_country: Option<String>,
   /// The profile's status (see `profile_statuses`), by id.
   #[serde(default)]
   pub status_id: Option<String>,

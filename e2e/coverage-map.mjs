@@ -61,6 +61,7 @@ export const commandCoverage = {
       "update_profile_proxy_bypass_rules",
       "update_profile_dns_blocklist",
       "update_profile_dns_server",
+      "update_profile_required_exit_country",
       "update_profile_start_urls",
       "bulk_update_profiles",
       "profile_statuses::list_profile_statuses",

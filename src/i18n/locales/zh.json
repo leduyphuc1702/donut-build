@@ -1672,7 +1672,8 @@
       "localDataTransfer": "本地数据传输",
       "created": "创建时间",
       "windowColor": "窗口颜色",
-      "dns": "DNS"
+      "dns": "DNS",
+      "exitCountry": "市场"
     },
     "values": {
       "none": "无",
@@ -1810,6 +1811,10 @@
       "copyPort": "复制端口",
       "copyWsUrl": "复制 WebSocket URL",
       "copyCode": "复制 {{tool}} 代码"
+    },
+    "exitCountry": {
+      "summary": "把此配置文件锁定到一个国家：只有当它的出口（经由其代理或 VPN，或本机自己的连接）位于该国时才能打开。",
+      "locked": "只能从{{country}}打开。Donut 在每次启动前都会测量出口；若出口在其他国家，或无法确定位置，配置文件将保持关闭。"
     }
   },
   "profileTransfer": {
@@ -2982,6 +2987,9 @@
     "agentChatNotFound": "此对话已不存在。",
     "profileLeaseHeld": "此配置文件已在 {{device}} 上打开。它将在 {{time}} 或该设备关闭它时释放。",
     "profileReleaseNoAnswer": "运行此配置文件的设备没有响应。请重试，或打开最后一次同步的副本。",
+    "exitCountryMismatch": "此配置文件只能从{{required}}打开，但连接从{{actual}}（{{ip}}）出去。请连接{{required}}的网络，或修正该配置文件的代理或 VPN，然后重试。",
+    "exitCountryUnknown": "此配置文件只能从{{required}}打开，而 Donut 无法确定连接从哪里出去：{{detail}}",
+    "exitCountryInvalid": "请输入两个字母的国家代码，例如 US 或 GB。",
     "pasteTypingEmpty": "剪贴板中没有可输入的文本。",
     "pasteTypingTooLong": "剪贴板中的内容超过 {{max}} 个字符，太长无法输入。",
     "pasteTypingKeysHeld": "请松开快捷键，Donut 才能开始输入。",
@@ -4809,6 +4817,7 @@
       "proxyBypassRules": "代理例外规则",
       "dnsBlocklist": "DNS 拦截列表",
       "dnsServer": "DNS 服务器",
+      "requiredExitCountry": "必需的出口国家",
       "startUrls": "起始页",
       "status": "状态",
       "fingerprint": "指纹",

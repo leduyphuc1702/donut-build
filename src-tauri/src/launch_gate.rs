@@ -210,6 +210,92 @@ fn extension_warning_disabled() -> bool {
     .unwrap_or(false)
 }
 
+/// Whether every exit is in the country the profile requires. The verdict of
+/// `enforce_exit_country`, kept pure for its tests.
+fn exit_country_verdict(
+  required: &str,
+  exits: &[fingerprint_consistency::MeasuredExit],
+) -> Result<(), String> {
+  for exit in exits {
+    match exit.country_code.as_deref() {
+      Some(country) if country.eq_ignore_ascii_case(required) => {}
+      Some(country) => {
+        return Err(
+          serde_json::json!({
+            "code": "EXIT_COUNTRY_MISMATCH",
+            "params": { "required": required, "actual": country, "ip": exit.ip },
+          })
+          .to_string(),
+        )
+      }
+      None => {
+        return Err(exit_country_unknown(
+          required,
+          "the exit's country is not known",
+        ))
+      }
+    }
+  }
+  Ok(())
+}
+
+fn exit_country_unknown(required: &str, detail: impl std::fmt::Display) -> String {
+  serde_json::json!({
+    "code": "EXIT_COUNTRY_UNKNOWN",
+    "params": { "required": required, "detail": detail.to_string() },
+  })
+  .to_string()
+}
+
+/// A profile that requires an exit country launches only from one: the exit
+/// is measured now, and anything short of a match in that country refuses
+/// the launch. No consent, no cache of the machine's own route, and no
+/// advisory mode: a profile made for one market's network is not to be
+/// opened from another, by a person or by automation.
+pub async fn enforce_exit_country(
+  profile: &BrowserProfile,
+  upstream: Option<&crate::browser::ProxySettings>,
+) -> Result<(), String> {
+  let Some(required) = profile
+    .required_exit_country
+    .as_deref()
+    .filter(|country| !country.is_empty())
+  else {
+    return Ok(());
+  };
+  let started = std::time::Instant::now();
+  let exits = fingerprint_consistency::measure_exits(profile, upstream)
+    .await
+    .map_err(|detail| {
+      log::warn!(
+        "Launch refused, exit not measured for the required country profile={} required={required} err=\"{}\"",
+        profile.id,
+        crate::log_redaction::text(&detail)
+      );
+      exit_country_unknown(required, detail)
+    })?;
+  let verdict = exit_country_verdict(required, &exits);
+  let countries: Vec<&str> = exits
+    .iter()
+    .map(|exit| exit.country_code.as_deref().unwrap_or("?"))
+    .collect();
+  match &verdict {
+    Ok(()) => log::info!(
+      "Exit country confirmed profile={} required={required} exits={} elapsed_ms={}",
+      profile.id,
+      countries.join(","),
+      started.elapsed().as_millis()
+    ),
+    Err(_) => log::warn!(
+      "Launch refused, exit outside the required country profile={} required={required} exits={} elapsed_ms={}",
+      profile.id,
+      countries.join(","),
+      started.elapsed().as_millis()
+    ),
+  }
+  verdict
+}
+
 /// Identity used for consent and acknowledgement when the browser will connect
 /// directly. Distinct from any proxy identity, so accepting a direct-exit
 /// mismatch never disarms the gate for a proxied one.
@@ -793,6 +879,44 @@ mod tests {
     let token = mint_consent(&profile, DIRECT_EXIT_IDENTITY);
     let result = enforce_fingerprint_gate(&profile, None, &FingerprintGate::Consented(token)).await;
     assert!(result.is_ok(), "{result:?}");
+  }
+
+  #[tokio::test]
+  async fn a_profile_without_a_required_country_is_not_measured_for_one() {
+    let profile = profile_with(r#"{"timezone":"Europe/Berlin"}"#);
+    assert!(enforce_exit_country(&profile, None).await.is_ok());
+  }
+
+  #[test]
+  fn every_exit_must_be_in_the_required_country() {
+    use fingerprint_consistency::MeasuredExit;
+    let exit = |ip: &str, country: Option<&str>| MeasuredExit {
+      ip: ip.to_string(),
+      country_code: country.map(str::to_string),
+    };
+    assert!(exit_country_verdict("US", &[exit("71.236.224.43", Some("US"))]).is_ok());
+    assert!(exit_country_verdict("us", &[exit("71.236.224.43", Some("US"))]).is_ok());
+
+    // The IPv4 goes out through the tunnel, the IPv6 through the home line.
+    let refused = exit_country_verdict(
+      "US",
+      &[
+        exit("71.236.224.43", Some("US")),
+        exit("2001:db8::1", Some("VN")),
+      ],
+    )
+    .unwrap_err();
+    let parsed: serde_json::Value = serde_json::from_str(&refused).unwrap();
+    assert_eq!(parsed["code"], "EXIT_COUNTRY_MISMATCH");
+    assert_eq!(parsed["params"]["required"], "US");
+    assert_eq!(parsed["params"]["actual"], "VN");
+    assert_eq!(parsed["params"]["ip"], "2001:db8::1");
+
+    // An exit nobody can place is refused, not waved through.
+    let unknown = exit_country_verdict("US", &[exit("10.0.0.1", None)]).unwrap_err();
+    let parsed: serde_json::Value = serde_json::from_str(&unknown).unwrap();
+    assert_eq!(parsed["code"], "EXIT_COUNTRY_UNKNOWN");
+    assert_eq!(parsed["params"]["required"], "US");
   }
 
   #[tokio::test]

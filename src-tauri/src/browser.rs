@@ -735,6 +735,7 @@ mod tests {
       created_by_email: None,
       dns_blocklist: None,
       dns_server: None,
+      required_exit_country: None,
       status_id: None,
       start_urls: Vec::new(),
       password_protected: false,

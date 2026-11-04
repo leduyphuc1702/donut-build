@@ -38,6 +38,7 @@ const TEAM_DATA_COMMANDS: &[&str] = &[
   "update_profile_proxy_bypass_rules",
   "update_profile_dns_blocklist",
   "update_profile_dns_server",
+  "update_profile_required_exit_country",
   "update_profile_start_urls",
   "update_wayfern_config",
   "match_profile_fingerprint_to_exit",

@@ -296,8 +296,8 @@ use profile::manager::{
   delete_profile, list_browser_profiles, rename_profile, update_profile_clear_on_close,
   update_profile_dns_blocklist, update_profile_dns_server, update_profile_launch_hook,
   update_profile_note, update_profile_proxy, update_profile_proxy_bypass_rules,
-  update_profile_start_urls, update_profile_tags, update_profile_vpn, update_profile_window_color,
-  update_wayfern_config,
+  update_profile_required_exit_country, update_profile_start_urls, update_profile_tags,
+  update_profile_vpn, update_profile_window_color, update_wayfern_config,
 };
 
 use profile::trash::{
@@ -2143,6 +2143,7 @@ async fn generate_sample_fingerprint(
     created_by_email: None,
     dns_blocklist: None,
     dns_server: None,
+    required_exit_country: None,
     status_id: None,
     start_urls: Vec::new(),
     password_protected: false,
@@ -3628,6 +3629,7 @@ pub fn run_with_builder(
       update_profile_proxy_bypass_rules,
       update_profile_dns_blocklist,
       update_profile_dns_server,
+      update_profile_required_exit_country,
       update_profile_start_urls,
       bulk_update_profiles,
       profile_dns::describe_dns_server,

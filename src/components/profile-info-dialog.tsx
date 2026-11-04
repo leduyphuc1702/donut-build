@@ -117,7 +117,7 @@ import { WindowDragArea } from "@/components/window-drag-area";
 import { useInputModality } from "@/hooks/use-input-modality";
 import { useMotionAllowed } from "@/hooks/use-motion-allowed";
 import { confirmLeave, useUnsavedChanges } from "@/hooks/use-unsaved-changes";
-import { translateBackendError } from "@/lib/backend-errors";
+import { countryName, translateBackendError } from "@/lib/backend-errors";
 import { getProfileIcon, getProfileNativeOs } from "@/lib/browser-utils";
 import { DNS_BLOCKLIST_LEVELS } from "@/lib/dns-blocklist-levels";
 import { formatRelativeTime } from "@/lib/flag-utils";
@@ -2047,6 +2047,12 @@ function NetworkSectionInline({
   const rotatableProxy = storedProxies.find(
     (p) => p.id === proxyId && p.rotation_url,
   );
+  const [exitCountry, setExitCountry] = React.useState(
+    profile.required_exit_country ?? null,
+  );
+  React.useEffect(() => {
+    setExitCountry(profile.required_exit_country ?? null);
+  }, [profile.required_exit_country]);
   const dnsServerId = React.useId();
   const [savedDnsServer, setSavedDnsServer] = React.useState(
     profile.dns_server ?? "",
@@ -2098,6 +2104,24 @@ function NetworkSectionInline({
     discard: () => setDnsServer(savedDnsServer),
     label: t("profileInfo.fields.dns"),
   });
+
+  const onExitCountryChange = async (value: string) => {
+    const next = value === "__none__" ? null : value;
+    setIsSaving(true);
+    setError(null);
+    try {
+      const updated = await invoke<BrowserProfile>(
+        "update_profile_required_exit_country",
+        { profileId: profile.id, country: next },
+      );
+      setExitCountry(updated.required_exit_country ?? null);
+      flash();
+    } catch (e) {
+      setError(translateBackendError(t as never, e));
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const onProxyChange = async (value: string) => {
     const nextId = value === "__none__" ? null : value;
@@ -2225,6 +2249,44 @@ function NetworkSectionInline({
         </Select>
       </div>
 
+      <div className="flex items-center gap-2">
+        <span className="w-12 shrink-0 text-xs font-medium text-muted-foreground">
+          {t("profileInfo.fields.exitCountry")}
+        </span>
+        <Select
+          value={exitCountry ?? "__none__"}
+          disabled={isDisabled || isSaving}
+          onValueChange={(v) => {
+            void onExitCountryChange(v);
+          }}
+        >
+          <SelectTrigger
+            aria-label={t("profileInfo.fields.exitCountry")}
+            className="h-8 min-w-0 flex-1 text-xs"
+            data-slot="profile-exit-country"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">
+              {t("profileInfo.values.none")}
+            </SelectItem>
+            {EXIT_COUNTRIES.map((code) => (
+              <SelectItem key={code} value={code}>
+                {countryName(code)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {exitCountry
+          ? t("profileInfo.exitCountry.locked", {
+              country: countryName(exitCountry),
+            })
+          : t("profileInfo.exitCountry.summary")}
+      </p>
+
       <form
         className="flex items-start gap-2"
         onSubmit={(event) => {
@@ -2264,6 +2326,23 @@ function NetworkSectionInline({
     </div>
   );
 }
+
+/** The markets a profile can be locked to, as ISO codes; the names come from the browser. */
+const EXIT_COUNTRIES = [
+  "US",
+  "GB",
+  "DE",
+  "FR",
+  "IT",
+  "ES",
+  "NL",
+  "CA",
+  "AU",
+  "JP",
+  "KR",
+  "SG",
+  "VN",
+] as const;
 
 /// Explains why a section has nothing to offer on an ephemeral profile.
 /// Mirrors the locked-fingerprint empty state so the two read as one pattern.

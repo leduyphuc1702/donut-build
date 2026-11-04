@@ -1672,7 +1672,8 @@
       "localDataTransfer": "Yerel veri aktarımı",
       "created": "Oluşturulma",
       "windowColor": "Pencere rengi",
-      "dns": "DNS"
+      "dns": "DNS",
+      "exitCountry": "Pazar"
     },
     "values": {
       "none": "Yok",
@@ -1810,6 +1811,10 @@
       "copyPort": "Bağlantı noktasını kopyala",
       "copyWsUrl": "WebSocket URL'sini kopyala",
       "copyCode": "{{tool}} kodunu kopyala"
+    },
+    "exitCountry": {
+      "summary": "Bu profili bir ülkeye kilitler: Yalnızca çıkışı, proxy'si ya da VPN'i üzerinden veya bu bilgisayarın kendi bağlantısıyla, orada olduğu sürece açılır.",
+      "locked": "Yalnızca {{country}} içinden açılır. Donut her başlatmadan önce çıkışı ölçer; başka bir ülke ya da yerini belirleyemediği bir çıkış profili kapalı tutar."
     }
   },
   "profileTransfer": {
@@ -2982,6 +2987,9 @@
     "agentChatNotFound": "Bu sohbet artık yok.",
     "profileLeaseHeld": "Bu profil {{device}} üzerinde açık. {{time}} saatinde veya o cihaz kapattığında serbest kalır.",
     "profileReleaseNoAnswer": "Bu profili çalıştıran cihaz yanıt vermedi. Yeniden deneyin ya da son eşitlenen kopyayı açın.",
+    "exitCountryMismatch": "Bu profil yalnızca {{required}} içinden açılır, bağlantı ise {{actual}} ({{ip}}) üzerinden çıkıyor. {{required}} ağına bağlanın ya da profilin proxy'sini veya VPN'ini düzeltin ve yeniden deneyin.",
+    "exitCountryUnknown": "Bu profil yalnızca {{required}} içinden açılır ve Donut bağlantının nereden çıktığını belirleyemedi: {{detail}}",
+    "exitCountryInvalid": "US ya da GB gibi iki harfli bir ülke kodu girin.",
     "pasteTypingEmpty": "Panoda yazılacak metin yok.",
     "pasteTypingTooLong": "Panoda {{max}} karakterden fazlası var, yazmak için çok uzun.",
     "pasteTypingKeysHeld": "Donut'un yazmaya başlaması için kısayol tuşlarını bırakın.",
@@ -4809,6 +4817,7 @@
       "proxyBypassRules": "Proxy istisna kuralları",
       "dnsBlocklist": "DNS engel listesi",
       "dnsServer": "DNS sunucusu",
+      "requiredExitCountry": "Gerekli çıkış ülkesi",
       "startUrls": "Başlangıç sayfaları",
       "status": "Durum",
       "fingerprint": "Parmak izi",

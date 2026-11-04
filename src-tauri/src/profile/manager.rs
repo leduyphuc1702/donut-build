@@ -485,6 +485,7 @@ impl ProfileManager {
           created_by_email: None,
           dns_blocklist: None,
           dns_server: None,
+          required_exit_country: None,
           status_id: None,
           start_urls: Vec::new(),
           password_protected: false,
@@ -619,6 +620,7 @@ impl ProfileManager {
           .unwrap_or(0),
       ),
       updated_at: Some(crate::proxy_manager::now_secs()),
+      required_exit_country: None,
     };
 
     // Save profile info
@@ -1528,6 +1530,33 @@ impl ProfileManager {
     Ok(profile)
   }
 
+  /// Takes effect at the next launch: the exit is measured then.
+  pub fn update_profile_required_exit_country(
+    &self,
+    profile_id: &str,
+    country: Option<String>,
+  ) -> Result<BrowserProfile, Box<dyn std::error::Error>> {
+    let country = normalize_exit_country(country)?;
+    let mut profile = self.find_profile(profile_id)?;
+    if profile.required_exit_country == country {
+      return Ok(profile);
+    }
+
+    profile.required_exit_country = country;
+    profile.updated_at = Some(crate::proxy_manager::now_secs());
+
+    self.save_profile(&profile)?;
+
+    crate::sync::queue_profile_sync_if_eligible(&profile);
+    report_team_edit(&profile, "profile.update", &["required_exit_country"]);
+
+    if let Err(e) = events::emit_empty("profiles-changed") {
+      log::warn!("Event emit failed event=profiles-changed err=\"{e}\"");
+    }
+
+    Ok(profile)
+  }
+
   /// Takes effect at the next launch, like every launch setting.
   pub fn update_profile_start_urls(
     &self,
@@ -1800,6 +1829,7 @@ impl ProfileManager {
       created_by_email: None,
       dns_blocklist: source.dns_blocklist,
       dns_server: source.dns_server,
+      required_exit_country: None,
       status_id: source.status_id,
       start_urls: source.start_urls,
       password_protected: false,
@@ -2803,6 +2833,22 @@ const MAX_START_URL_CHARS: usize = 2000;
 
 /// The start pages to store: trimmed, blanks dropped, a bare host given
 /// `https://`, and only http(s) pages, which is all a launch may open.
+/// The exit country a profile may require: two letters, upper case, or
+/// nothing. Anything else is refused rather than stored and never matched.
+pub fn normalize_exit_country(country: Option<String>) -> Result<Option<String>, String> {
+  let Some(country) = country else {
+    return Ok(None);
+  };
+  let country = country.trim().to_ascii_uppercase();
+  if country.is_empty() {
+    return Ok(None);
+  }
+  if country.len() != 2 || !country.bytes().all(|b| b.is_ascii_uppercase()) {
+    return Err(crate::backend_error("EXIT_COUNTRY_INVALID"));
+  }
+  Ok(Some(country))
+}
+
 pub fn checked_start_urls(urls: Vec<String>) -> Result<Vec<String>, String> {
   let urls: Vec<String> = urls
     .into_iter()
@@ -3107,6 +3153,19 @@ pub async fn update_profile_dns_server(
     ProfileManager::instance()
       .update_profile_dns_server(&profile_id, dns_server)
       .map_err(|e| crate::wrap_backend_error(e, "Failed to update DNS server"))
+  })
+  .await
+}
+
+#[tauri::command]
+pub async fn update_profile_required_exit_country(
+  profile_id: String,
+  country: Option<String>,
+) -> Result<BrowserProfile, String> {
+  edit_off_main_thread(move || {
+    ProfileManager::instance()
+      .update_profile_required_exit_country(&profile_id, country)
+      .map_err(|e| crate::wrap_backend_error(e, "Failed to update the exit country"))
   })
   .await
 }

@@ -1672,7 +1672,8 @@
       "localDataTransfer": "Lokale Datenübertragung",
       "created": "Erstellt",
       "windowColor": "Fensterfarbe",
-      "dns": "DNS"
+      "dns": "DNS",
+      "exitCountry": "Markt"
     },
     "values": {
       "none": "Keine",
@@ -1810,6 +1811,10 @@
       "copyPort": "Port kopieren",
       "copyWsUrl": "WebSocket-URL kopieren",
       "copyCode": "{{tool}}-Code kopieren"
+    },
+    "exitCountry": {
+      "summary": "Bindet dieses Profil an ein Land: Es öffnet sich nur, solange sein Ausgang, über Proxy oder VPN oder die eigene Verbindung dieses Computers, dort liegt.",
+      "locked": "Öffnet sich nur aus {{country}}. Donut misst den Ausgang vor jedem Start; ein anderes Land, oder ein Ausgang, den es nicht einordnen kann, hält das Profil geschlossen."
     }
   },
   "profileTransfer": {
@@ -2982,6 +2987,9 @@
     "agentChatNotFound": "Dieser Chat existiert nicht mehr.",
     "profileLeaseHeld": "Dieses Profil ist auf {{device}} geöffnet. Es wird um {{time}} frei oder wenn dieses Gerät es schließt.",
     "profileReleaseNoAnswer": "Das Gerät, auf dem dieses Profil läuft, hat nicht geantwortet. Versuche es erneut oder öffne die zuletzt synchronisierte Kopie.",
+    "exitCountryMismatch": "Dieses Profil öffnet sich nur aus {{required}}, die Verbindung kommt aber in {{actual}} heraus ({{ip}}). Verbinde dich mit dem Netz in {{required}} oder korrigiere Proxy oder VPN des Profils und versuche es erneut.",
+    "exitCountryUnknown": "Dieses Profil öffnet sich nur aus {{required}}, und Donut konnte nicht feststellen, wo die Verbindung herauskommt: {{detail}}",
+    "exitCountryInvalid": "Gib einen Ländercode aus zwei Buchstaben ein, etwa US oder GB.",
     "pasteTypingEmpty": "In der Zwischenablage ist kein Text zum Tippen.",
     "pasteTypingTooLong": "Die Zwischenablage enthält mehr als {{max}} Zeichen, zu viel zum Tippen.",
     "pasteTypingKeysHeld": "Lass die Tasten des Kürzels los, damit Donut mit dem Tippen beginnen kann.",
@@ -4809,6 +4817,7 @@
       "proxyBypassRules": "Proxy-Ausnahmen",
       "dnsBlocklist": "DNS-Sperrliste",
       "dnsServer": "DNS-Server",
+      "requiredExitCountry": "Erforderliches Ausgangsland",
       "startUrls": "Startseiten",
       "status": "Status",
       "fingerprint": "Fingerabdruck",

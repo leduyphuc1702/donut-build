@@ -36,6 +36,8 @@ pub struct ProfilePatch {
   pub dns_blocklist: Option<Option<String>>,
   #[serde(default, deserialize_with = "present")]
   pub dns_server: Option<Option<String>>,
+  #[serde(default, deserialize_with = "present")]
+  pub required_exit_country: Option<Option<String>>,
   #[serde(default)]
   pub proxy_bypass_rules: Option<Vec<String>>,
   #[serde(default)]
@@ -122,6 +124,9 @@ impl ProfilePatch {
     if let Some(dns_server) = self.dns_server.take() {
       self.dns_server = Some(crate::profile_dns::normalize_dns_server(dns_server)?);
     }
+    if let Some(country) = self.required_exit_country.take() {
+      self.required_exit_country = Some(super::manager::normalize_exit_country(country)?);
+    }
     if let Some(start_urls) = self.start_urls.take() {
       self.start_urls = Some(super::manager::checked_start_urls(start_urls)?);
     }
@@ -199,6 +204,9 @@ impl ProfilePatch {
     }
     if let Some(dns_server) = &self.dns_server {
       profile.dns_server = dns_server.clone();
+    }
+    if let Some(country) = &self.required_exit_country {
+      profile.required_exit_country = country.clone();
     }
     if let Some(rules) = &self.proxy_bypass_rules {
       profile.proxy_bypass_rules = rules.clone();

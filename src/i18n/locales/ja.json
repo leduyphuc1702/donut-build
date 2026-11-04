@@ -1672,7 +1672,8 @@
       "localDataTransfer": "ローカルデータ転送量",
       "created": "作成日",
       "windowColor": "ウィンドウの色",
-      "dns": "DNS"
+      "dns": "DNS",
+      "exitCountry": "市場"
     },
     "values": {
       "none": "なし",
@@ -1810,6 +1811,10 @@
       "copyPort": "ポートをコピー",
       "copyWsUrl": "WebSocket URL をコピー",
       "copyCode": "{{tool}} のコードをコピー"
+    },
+    "exitCountry": {
+      "summary": "このプロファイルを国に固定します。プロキシや VPN、またはこのパソコン自身の回線の出口がその国にある間だけ開けます。",
+      "locked": "{{country}} からのみ開けます。Donut は起動のたびに出口を測定し、別の国、または場所を特定できない出口の場合はプロファイルを開きません。"
     }
   },
   "profileTransfer": {
@@ -2982,6 +2987,9 @@
     "agentChatNotFound": "このチャットはもう存在しません。",
     "profileLeaseHeld": "このプロファイルは {{device}} で開かれています。{{time}} またはそのデバイスが閉じると使用できます。",
     "profileReleaseNoAnswer": "このプロファイルを実行している端末から応答がありません。もう一度試すか、最後に同期したコピーを開いてください。",
+    "exitCountryMismatch": "このプロファイルは {{required}} からのみ開けますが、接続は {{actual}}（{{ip}}）から出ています。{{required}} のネットワークに接続するか、プロファイルのプロキシや VPN を直してから、もう一度お試しください。",
+    "exitCountryUnknown": "このプロファイルは {{required}} からのみ開けますが、Donut は接続の出口を特定できませんでした: {{detail}}",
+    "exitCountryInvalid": "US や GB のような 2 文字の国コードを入力してください。",
     "pasteTypingEmpty": "クリップボードに入力するテキストがありません。",
     "pasteTypingTooLong": "クリップボードの内容が {{max}} 文字を超えているため、入力できません。",
     "pasteTypingKeysHeld": "ショートカットのキーを離すと、Donut が入力を始めます。",
@@ -4809,6 +4817,7 @@
       "proxyBypassRules": "プロキシの除外ルール",
       "dnsBlocklist": "DNS ブロックリスト",
       "dnsServer": "DNS サーバー",
+      "requiredExitCountry": "必須の出口の国",
       "startUrls": "スタートページ",
       "status": "ステータス",
       "fingerprint": "フィンガープリント",

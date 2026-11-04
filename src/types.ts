@@ -42,6 +42,8 @@ export interface BrowserProfile {
   created_at?: number;
   dns_blocklist?: string;
   dns_server?: string | null;
+  /** ISO country the exit must be in for the profile to launch. */
+  required_exit_country?: string | null;
   status_id?: string | null;
   start_urls?: string[];
   password_protected?: boolean;
@@ -408,6 +410,7 @@ export interface TemplateSettings {
   extension_group_id?: string | null;
   dns_blocklist?: string | null;
   dns_server?: string | null;
+  required_exit_country?: string | null;
   proxy_bypass_rules?: string[];
   start_urls?: string[];
   launch_hook?: string | null;

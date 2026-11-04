@@ -413,16 +413,7 @@ pub async fn probe_and_check_consistency(
     Ok(geo) => {
       let tz = Some(geo.timezone);
       let cc = geo.locale.region.clone();
-      exit_cache().insert(
-        key.scope.clone(),
-        CachedExit {
-          fetched_at: crate::proxy_manager::now_secs(),
-          identity: key.identity.clone(),
-          timezone: tz.clone(),
-          country_code: cc.clone(),
-          ip: Some(exit_ip.clone()),
-        },
-      );
+      remember_exit(key, &exit_ip, tz.clone(), cc.clone());
       Ok(compare_exit_to_fingerprint(profile, tz, cc, Some(exit_ip)))
     }
     // Reached the exit but couldn't place it (database missing, or a private
@@ -436,6 +427,83 @@ pub async fn probe_and_check_consistency(
       Ok(ConsistencyResult::skip())
     }
   }
+}
+
+fn remember_exit(key: &ExitCacheKey, ip: &str, timezone: Option<String>, country: Option<String>) {
+  exit_cache().insert(
+    key.scope.clone(),
+    CachedExit {
+      fetched_at: crate::proxy_manager::now_secs(),
+      identity: key.identity.clone(),
+      timezone,
+      country_code: country,
+      ip: Some(ip.to_string()),
+    },
+  );
+}
+
+/// An exit the browser will come out of, placed by the bundled database
+/// when it can be.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MeasuredExit {
+  pub ip: String,
+  pub country_code: Option<String>,
+}
+
+fn place(ip: String) -> MeasuredExit {
+  let country_code = crate::geolocation::get_geolocation(&ip)
+    .ok()
+    .and_then(|geo| geo.locale.region);
+  MeasuredExit { ip, country_code }
+}
+
+/// Every exit the browser will come out of: the route's, from the gate's
+/// cache while fresh, else probed now; with no route, this machine's own
+/// IPv4 and, when it has one, IPv6, since a dual-stack site is reached over
+/// the latter. `Err` names what kept an exit from being measured.
+pub async fn measure_exits(
+  profile: &BrowserProfile,
+  upstream: Option<&crate::browser::ProxySettings>,
+) -> Result<Vec<MeasuredExit>, String> {
+  let Some(settings) = upstream else {
+    let (fetched, ipv6) = tokio::join!(
+      tokio::time::timeout(PROBE_TIMEOUT, crate::ip_utils::fetch_public_ip(None)),
+      crate::ip_utils::fetch_direct_public_ipv6(),
+    );
+    let ipv4 = fetched
+      .map_err(|_| "direct exit probe timed out".to_string())?
+      .map_err(|e| e.to_string())?;
+    let mut exits = vec![place(ipv4)];
+    exits.extend(ipv6.map(place));
+    return Ok(exits);
+  };
+  let key = exit_cache_key(profile);
+  if let Some(cached) = key.as_ref().and_then(cached_exit) {
+    if let Some(ip) = cached.ip {
+      return Ok(vec![MeasuredExit {
+        ip,
+        country_code: cached.country_code,
+      }]);
+    }
+  }
+  let url = probe_url(settings).ok_or_else(|| {
+    format!(
+      "a {} route cannot be probed from this machine",
+      settings.proxy_type
+    )
+  })?;
+  let ip = tokio::time::timeout(PROBE_TIMEOUT, crate::ip_utils::fetch_public_ip(Some(&url)))
+    .await
+    .map_err(|_| "exit probe timed out".to_string())?
+    .map_err(|e| e.to_string())?;
+  let exit = place(ip);
+  if let (Some(key), Some(country)) = (&key, &exit.country_code) {
+    let timezone = crate::geolocation::get_geolocation(&exit.ip)
+      .ok()
+      .map(|geo| geo.timezone);
+    remember_exit(key, &exit.ip, timezone, Some(country.clone()));
+  }
+  Ok(vec![exit])
 }
 
 /// Measure the exit this machine reaches without any proxy, and compare it to
