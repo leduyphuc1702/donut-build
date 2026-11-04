@@ -16,6 +16,12 @@ use tokio::net::{TcpListener, TcpStream};
 const SMOLTCP_TCP_RX_BUF: usize = 65536;
 const SMOLTCP_TCP_TX_BUF: usize = 65536;
 const SMOLTCP_UDP_BUF: usize = 65536;
+/// The TTL this machine's own network stack starts packets with: 128 on
+/// Windows, 64 on macOS and Linux. This worker builds the browser's packets
+/// itself, and they leave the tunnel's far end with their TTL intact, so a
+/// site reading it (a common way to tell the OS behind a connection) must see
+/// the OS the browser runs on, not smoltcp's default of 64.
+const HOST_TTL: u8 = if cfg!(windows) { 128 } else { 64 };
 
 /// How often boringtun's timers run: handshake renewal, keepalives.
 const WG_TIMER_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
@@ -663,7 +669,8 @@ impl WireGuardSocks5Server {
         active = true;
         let tcp_rx = SocketBuffer::new(vec![0u8; SMOLTCP_TCP_RX_BUF]);
         let tcp_tx = SocketBuffer::new(vec![0u8; SMOLTCP_TCP_TX_BUF]);
-        let tcp_socket = TcpSocket::new(tcp_rx, tcp_tx);
+        let mut tcp_socket = TcpSocket::new(tcp_rx, tcp_tx);
+        tcp_socket.set_hop_limit(Some(HOST_TTL));
         let handle = sockets.add(tcp_socket);
 
         connections.push(Connection {
@@ -1019,6 +1026,7 @@ impl WireGuardSocks5Server {
                 vec![0u8; SMOLTCP_UDP_BUF],
               );
               let mut udp_socket = udp::Socket::new(udp_rx, udp_tx);
+              udp_socket.set_hop_limit(Some(HOST_TTL));
               let local_port = 20000 + (rand::random::<u16>() % 40000);
               if udp_socket.bind(local_port).is_err() {
                 completed.push(idx);
@@ -1240,6 +1248,18 @@ impl WireGuardSocks5Server {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn tunnel_packets_carry_the_ttl_of_this_machines_os() {
+    let expected = if cfg!(windows) { 128 } else { 64 };
+    assert_eq!(HOST_TTL, expected);
+    let mut socket = TcpSocket::new(
+      SocketBuffer::new(vec![0u8; 16]),
+      SocketBuffer::new(vec![0u8; 16]),
+    );
+    socket.set_hop_limit(Some(HOST_TTL));
+    assert_eq!(socket.hop_limit(), Some(expected));
+  }
 
   #[test]
   fn test_parse_cidr_ipv4() {
