@@ -9,6 +9,8 @@ extend-exclude = [
     "CHANGELOG.md",
     # Upstream patches for the Flatpak's tray libraries, applied verbatim.
     "packaging/flatpak/patches/",
+    # The Vietflow fork's guide is written in Vietnamese.
+    "docs/VIETFLOW.md",
 ]
 
 [default.extend-words]
