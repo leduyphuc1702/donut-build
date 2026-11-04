@@ -113,12 +113,17 @@ fn null_as_empty<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<St
   Ok(Option::<String>::deserialize(deserializer)?.unwrap_or_default())
 }
 
-/// GitHub's API for this repository.
-const GITHUB_REPO_API: &str = "https://api.github.com/repos/donutbrowser/donutbrowser";
-/// Donut's copy of the newest stable and nightly releases, which the cloud
-/// reads from GitHub with a token. It still answers when GitHub refuses an
-/// address that many installs share (60 unauthenticated requests an hour).
-const DONUT_RELEASES_URL: &str = "https://api.donutbrowser.com/api/app-releases";
+/// The repository this build updates from: the Vietflow fork, so an update
+/// never replaces this build with an upstream one that lacks its changes.
+macro_rules! release_repo {
+  () => {
+    "leduyphuc1702/donutbrowser"
+  };
+}
+/// GitHub's API for the release repository.
+const GITHUB_REPO_API: &str = concat!("https://api.github.com/repos/", release_repo!());
+/// A release's page, before its tag.
+const RELEASE_PAGE_URL: &str = concat!("https://github.com/", release_repo!(), "/releases/tag/");
 /// One release list is small; a source slower than this is skipped.
 const SOURCE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 /// How long after a check the next one runs.
@@ -336,10 +341,7 @@ impl AppAutoUpdater {
       return (None, latest, "none".to_string());
     }
 
-    let release_page_url = format!(
-      "https://github.com/donutbrowser/donutbrowser/releases/tag/{}",
-      latest_release.tag_name
-    );
+    let release_page_url = format!("{RELEASE_PAGE_URL}{}", latest_release.tag_name);
 
     let download_url = self.get_download_url_for_platform(&latest_release.assets);
     let asset = download_url
@@ -429,42 +431,23 @@ impl AppAutoUpdater {
     }
   }
 
-  /// The releases of this build's channel from every source that answers,
-  /// newest first: GitHub and Donut's copy, asked at the same time. Fails
-  /// only when neither answers.
+  /// The releases of this build's channel, newest first, from the release
+  /// repository's GitHub releases only. Donut's own copy of the upstream
+  /// releases is not asked: it would offer upstream builds over this one.
   async fn fetch_app_releases(
     &self,
     nightly: bool,
   ) -> Result<Vec<AppRelease>, Box<dyn std::error::Error + Send + Sync>> {
-    let (github, donut) = tokio::join!(
-      self.fetch_github_releases(nightly),
-      self.fetch_donut_releases()
-    );
-    let mut lists = Vec::new();
-    let mut failures = Vec::new();
-    for (source, fetched) in [("github", github), ("donutbrowser.com", donut)] {
-      match fetched {
-        Ok(releases) => lists.push((source, releases)),
-        Err(e) => failures.push((source, e.to_string())),
+    match self.fetch_github_releases(nightly).await {
+      Ok(releases) => {
+        APP_UPDATE_SOURCE_STREAK.succeeded("github");
+        Ok(merge_releases([releases]))
+      }
+      Err(e) => {
+        APP_UPDATE_SOURCE_STREAK.failed("github", e.to_string());
+        Err(format!("github: {e}").into())
       }
     }
-    if lists.is_empty() {
-      let all = failures
-        .iter()
-        .map(|(source, e)| format!("{source}: {e}"))
-        .collect::<Vec<_>>()
-        .join("; ");
-      return Err(all.into());
-    }
-    for (source, _) in &lists {
-      APP_UPDATE_SOURCE_STREAK.succeeded(source);
-    }
-    for (source, e) in &failures {
-      APP_UPDATE_SOURCE_STREAK.failed(source, e);
-    }
-    Ok(merge_releases(
-      lists.into_iter().map(|(_, releases)| releases),
-    ))
   }
 
   /// The latest stable release alone (a few kilobytes), or the newest ten
@@ -495,26 +478,6 @@ impl AppAutoUpdater {
     } else {
       Ok(vec![response.json().await?])
     }
-  }
-
-  async fn fetch_donut_releases(
-    &self,
-  ) -> Result<Vec<AppRelease>, Box<dyn std::error::Error + Send + Sync>> {
-    let response = self
-      .client
-      .get()
-      .get(DONUT_RELEASES_URL)
-      .header(
-        "User-Agent",
-        format!("DonutBrowser/{}", Self::get_current_version()),
-      )
-      .timeout(SOURCE_TIMEOUT)
-      .send()
-      .await?;
-    if !response.status().is_success() {
-      return Err(format!("Donut releases request failed: {}", response.status()).into());
-    }
-    Ok(response.json().await?)
   }
 
   /// Determine if an update should be performed

@@ -56,7 +56,8 @@ import { cn } from "@/lib/utils";
 import { Logo } from "./icons/logo";
 
 const WEBSITE_URL = "https://donutbrowser.com";
-const REPOSITORY_URL = "https://github.com/donutbrowser/donutbrowser";
+// The source of this build (AGPL-3.0): the Vietflow fork it updates from.
+const REPOSITORY_URL = "https://github.com/leduyphuc1702/donutbrowser";
 const RELEASES_URL = `${REPOSITORY_URL}/releases`;
 /** A check older than this runs again when About opens. */
 const CHECK_TTL_MS = 10 * 60 * 1000;

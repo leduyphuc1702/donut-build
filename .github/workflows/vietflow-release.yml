@@ -1,0 +1,178 @@
+name: Vietflow release
+
+# Builds the macOS (Apple Silicon and Intel) and Windows installers of this
+# fork and publishes them as a GitHub release of this repository, which is
+# where the app's updater looks (src-tauri/src/app_auto_updater.rs).
+#
+# Release: bump nothing by hand, just push a tag `vX.Y.Z` newer than the last
+# one, or run this workflow from the Actions tab with that tag.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. v0.36.1 (created on the chosen branch if missing)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  # Compiled in: this build is a stable release, not a nightly.
+  STABLE_RELEASE: "true"
+
+jobs:
+  prepare:
+    if: github.repository == 'leduyphuc1702/donutbrowser'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the tag
+        shell: bash
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "The tag must look like v1.2.3, got '$TAG'"
+            exit 1
+          fi
+      - name: Create the release once, before the parallel builds upload to it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG exists"
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Donut Browser (Vietflow) $TAG" \
+              --notes "Vietflow build of Donut Browser. Download the file for your computer below: .dmg for macOS (aarch64 = Apple Silicon, x64 = Intel), -setup.exe for Windows."
+          fi
+
+  build:
+    needs: [prepare]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+          - platform: macos-latest
+            target: x86_64-apple-darwin
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.platform }}
+    env:
+      # build.rs reads the app version from here (BUILD_VERSION).
+      BUILD_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 #v6.1.0
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 #v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: "pnpm"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 #master
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 #v2.9.3
+        with:
+          workdir: ./src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Stamp the version from the tag
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs");
+            const file = "src-tauri/tauri.conf.json";
+            const conf = JSON.parse(fs.readFileSync(file, "utf8"));
+            conf.version = process.env.TAG.replace(/^v/, "");
+            fs.writeFileSync(file, JSON.stringify(conf, null, 2) + "\n");
+            console.log("version", conf.version);
+          '
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Build the donut-proxy sidecar
+        shell: bash
+        working-directory: ./src-tauri
+        run: cargo build --bin donut-proxy --target ${{ matrix.target }} --release
+
+      - name: Copy sidecar binaries
+        shell: bash
+        run: |
+          mkdir -p src-tauri/binaries
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            cp src-tauri/target/${{ matrix.target }}/release/donut-proxy.exe src-tauri/binaries/donut-proxy-${{ matrix.target }}.exe
+          else
+            cp src-tauri/target/${{ matrix.target }}/release/donut-proxy src-tauri/binaries/donut-proxy-${{ matrix.target }}
+            chmod +x src-tauri/binaries/donut-proxy-${{ matrix.target }}
+          fi
+
+      - name: Download verified Xray-core sidecar
+        run: node src-tauri/download-xray.mjs --target ${{ matrix.target }}
+
+      - name: Build and upload the installer
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f #v1.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No Apple Developer ID yet: "-" signs the app ad hoc, so macOS
+          # sees one consistent signature (open it once with right-click >
+          # Open, or `xattr -dr com.apple.quarantine /Applications/Donut.app`).
+          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && '-' || '' }}
+        with:
+          projectPath: ./src-tauri
+          tagName: ${{ env.TAG }}
+          releaseName: "Donut Browser (Vietflow) ${{ env.TAG }}"
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}
+
+      - name: Create and upload the portable Windows ZIP
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${TAG#v}"
+          PORTABLE_DIR="Donut-Portable"
+          mkdir -p "$PORTABLE_DIR/licenses"
+          cp "src-tauri/target/${{ matrix.target }}/release/donutbrowser.exe" "$PORTABLE_DIR/Donut.exe"
+          cp "src-tauri/target/${{ matrix.target }}/release/donut-proxy.exe" "$PORTABLE_DIR/"
+          cp "src-tauri/binaries/xray-${{ matrix.target }}.exe" "$PORTABLE_DIR/xray.exe"
+          cp "src-tauri/binaries/xray-LICENSE.txt" "$PORTABLE_DIR/licenses/Xray-core-LICENSE.txt"
+          if [ -f "src-tauri/target/${{ matrix.target }}/release/WebView2Loader.dll" ]; then
+            cp "src-tauri/target/${{ matrix.target }}/release/WebView2Loader.dll" "$PORTABLE_DIR/"
+          fi
+          touch "$PORTABLE_DIR/.portable"
+          7z a "Donut_${VERSION}_x64-portable.zip" "$PORTABLE_DIR"
+          gh release upload "$TAG" "Donut_${VERSION}_x64-portable.zip" --clobber --repo "$GITHUB_REPOSITORY"
+
+  # The updater installs only what it can verify against SHA256SUMS.txt.
+  checksums:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 #v7.0.1
+      - name: Generate and upload SHA256SUMS.txt
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash .github/scripts/release-checksums.sh "$TAG"
