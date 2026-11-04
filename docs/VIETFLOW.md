@@ -12,7 +12,7 @@ Bản fork này dựa trên Donut Browser (AGPL-3.0, giữ nguyên tên và gi�
   - Mã nguồn: `src-tauri/src/paste_typing.rs`.
 - **Cập nhật tự động từ repo này** (`leduyphuc1702/donutbrowser`), không lấy bản gốc (`src-tauri/src/app_auto_updater.rs`).
 
-Máy chủ đồng bộ: xem repo `d2-us-tunnel`, thư mục `sync-server/` (mini PC) hoặc `sync-server/vps/` (VPS Ubuntu).
+Máy chủ đồng bộ: xem [`vietflow/sync-server/`](../vietflow/sync-server/README.md). Có hai cách: VPS Ubuntu, hoặc một máy trong mạng nội bộ.
 
 ## Cài đặt lần đầu
 
@@ -51,16 +51,16 @@ Lưu ý:
 Không công cụ nào cam kết kín 100% trước mọi thuật toán: độ trễ mạng, cách nhiều tài khoản dùng chung một IP, hay nhịp thao tác đều đo được. Mục tiêu là không để lộ khác biệt nào kiểm soát được.
 
 **Donut bản Vietflow tự chặn:**
-- **Mở hồ sơ không dùng proxy (đi thẳng qua D2) khi lối ra không khớp vân tay.**
-  - Ví dụ: laptop đang ở WiFi VNPT, hoặc ở nhà nhưng quên bật ZeroTier.
+- **Mở hồ sơ khi lối ra không khớp vân tay.**
+  - Hồ sơ gắn WireGuard hoặc proxy vốn đã được đo lối ra. Hồ sơ không có proxy/VPN nào (đi thẳng bằng mạng của máy) giờ cũng được đo. Ví dụ: một hồ sơ Mỹ lỡ bị gỡ WireGuard sẽ không mở bằng IP Việt Nam.
   - Donut đo cả IPv4 lẫn IPv6 trước khi mở, rồi hỏi lại thay vì mở luôn. Tắt kiểm tra này ở Cài đặt → Quyền riêng tư → "Chặn khi dấu vân tay không khớp" (không nên tắt).
 - **Hai máy chạy cùng một phiên**: xem phần "Đóng ở máy kia".
 - **Mỗi máy tự sinh một thiết bị khác nhau cho cùng hồ sơ**: thiết bị sinh lúc mở giờ được đồng bộ sang các máy khác.
 - **"Tạo ngẫu nhiên khi khởi chạy" trên hồ sơ đồng bộ**: tùy chọn này bị bỏ qua, vì nó biến mỗi lần mở thành một thiết bị lạ.
 
 **Phải làm theo quy tắc:**
-1. **Tạo hồ sơ khi máy đang ở mạng D2**, để múi giờ, ngôn ngữ và tọa độ là Portland (Mỹ). Không tạo hồ sơ tài khoản Mỹ khi đang ở mạng Việt Nam.
-2. **Ở nhà: tắt IPv6 và đặt DNS qua D2.** Xem `docs/HOME-ACCESS.md` trong repo `d2-us-tunnel`.
+1. **Gắn WireGuard (VPN) vào hồ sơ ngay khi tạo, trước lần mở đầu tiên.** Donut lấy múi giờ, ngôn ngữ và tọa độ của vân tay theo lối ra của hồ sơ lúc tạo, nên lối ra Mỹ phải có trước.
+2. **Bật Cài đặt → Quyền riêng tư → "Chặn khởi chạy khi không có proxy hoặc VPN".** Không hồ sơ nào mở được bằng mạng của máy, kể cả khi WireGuard của nó hỏng hoặc bị xóa. Khi hồ sơ đi qua WireGuard của Donut, DNS, WebRTC và mọi kết nối của trình duyệt đều đi trong tunnel, nên IPv6 hay DNS của mạng máy không lộ ra.
 3. **Cùng một phiên bản Donut và Wayfern trên mọi máy.**
    - Phiên bản trình duyệt nằm trong User-Agent, và nhiều trang so nó với lúc đăng nhập.
    - Phiên bản tụt lùi (máy B cũ hơn máy A) là bất thường. Cập nhật tất cả các máy cùng lúc.
@@ -71,10 +71,11 @@ Không công cụ nào cam kết kín 100% trước mọi thuật toán: độ t
    - Log của Donut cảnh báo `Claimed screen larger than the display` khi màn hình khai báo lớn hơn màn hình thật.
 7. **Gỡ AnyDesk/TeamViewer** khỏi máy dùng để mua. Một số trang từng dò cổng của chúng.
 8. **Gõ thay vì dán** (Ctrl+Alt+V / ⌘⌥V). Với Shopify, đừng đi thẳng link → giỏ hàng → thanh toán trong vài chục giây: xem thêm 1–2 trang trước.
-9. **Hạn chế số tài khoản trên cùng một IP.** Mọi máy ở văn phòng ra cùng một IP Comcast. Vài tài khoản trên một IP nhà dân là bình thường; vài chục tài khoản cùng một IP, cùng thẻ, cùng kho nhận hàng thì bị liên kết với nhau. Khi số tài khoản tăng, cần thêm lối ra Mỹ thứ hai, thứ ba.
+9. **Hạn chế số tài khoản trên cùng một IP.** Mọi hồ sơ dùng chung một WireGuard thì ra cùng một IP. Vài tài khoản trên một IP nhà dân là bình thường; vài chục tài khoản cùng một IP, cùng thẻ, cùng kho nhận hàng thì bị liên kết với nhau. Khi số tài khoản tăng, cần thêm lối ra Mỹ thứ hai, thứ ba.
 
 **Còn hở, không phần mềm nào vá được:**
-- **Độ trễ khoảng 200 ms** từ Việt Nam sang Mỹ. Trang có thể đo được, và nó lệch với một IP nhà dân ở Portland. Chỉ trình duyệt chạy ngay trên máy ở Mỹ mới hết.
+- **Độ trễ khoảng 200 ms** từ Việt Nam sang Mỹ. Trang có thể đo được, và nó lệch với một IP nhà dân ở Mỹ. Chỉ trình duyệt chạy ngay trên máy ở Mỹ mới hết.
+- **Dấu TCP của WireGuard trong Donut.** WireGuard của Donut tự dựng gói TCP bằng một bộ TCP chạy trong ứng dụng (smoltcp), không qua Windows hay macOS. Bản Vietflow đã cho gói tin mang TTL đúng của hệ điều hành máy (128 trên Windows, 64 trên Mac). Kích thước cửa sổ và thứ tự tùy chọn TCP vẫn khác của Windows hay macOS thật. Chỉ công cụ dò hệ điều hành theo gói tin (p0f) mới đọc được chi tiết này.
 - **MSS 1340** (gói TCP nhỏ hơn bình thường, do tunnel). Đây là dấu hiệu "đang dùng VPN" của cả văn phòng.
 - **Kết quả vẽ đồ họa** (canvas, WebGL) vẫn do GPU và driver thật tạo ra rồi được Wayfern làm nhiễu. Hai máy khác GPU có thể ra kết quả khác nhau.
 - **Thông số máy giả lập khác máy thật:** số nhân CPU và RAM khai báo có thể lệch với tốc độ chạy thật đo bằng JavaScript.

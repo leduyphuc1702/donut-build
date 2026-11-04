@@ -114,6 +114,7 @@ donutbrowser/
 │   │                               # at_rest.rs + sealed_store.rs + transfer.rs (optional encryption at rest, SYNC_AT_REST_KEY), migrate.rs (migrate/verify-at-rest)
 │   └── tests/                      # End-to-end tests: the binary against the compose S3 server
 │   └── src/                        # Controllers, services, auth, S3 sync
+├── vietflow/sync-server/           # Vietflow fork: donut-sync deploy (VPS with Caddy HTTPS, or LAN) and its Vietnamese guide
 ├── e2e/                            # Isolated native UI/sync/Wayfern E2E system
 │   ├── app/                        # Test-only Tauri harness that injects the private driver
 │   ├── lib/                        # WebDriver, CDP, fixtures, app-session helpers

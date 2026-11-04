@@ -1,0 +1,66 @@
+# Donut sync server on an Ubuntu VPS, behind Caddy (HTTPS).
+#
+# - Only Caddy listens on the internet (80/443). Storage (rclone S3) and
+#   donut-sync stay on the compose network.
+# - SYNC_AT_REST_KEY is required here: with it, every upload and download goes
+#   through donut-sync (/v1/transfer), so storage never needs a public port,
+#   and every stored file is encrypted with the server's key.
+# - donut-sync is built from this repository (hand-over of profiles).
+services:
+  s3:
+    image: rclone/rclone:latest
+    restart: unless-stopped
+    command:
+      - serve
+      - s3
+      - /data
+      - --addr
+      - :9000
+      - --auth-key
+      - ${S3_ACCESS_KEY_ID},${S3_SECRET_ACCESS_KEY}
+      - --force-path-style
+      - --vfs-cache-mode
+      - writes
+    volumes:
+      - ./data:/data
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "9000"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  donut-sync:
+    build: ../../donut-sync
+    restart: unless-stopped
+    depends_on:
+      s3:
+        condition: service_healthy
+    environment:
+      SYNC_TOKEN: ${SYNC_TOKEN}
+      PORT: "12342"
+      S3_ENDPOINT: http://s3:9000
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: donut-sync
+      S3_FORCE_PATH_STYLE: "true"
+      SYNC_AT_REST_KEY: ${SYNC_AT_REST_KEY:?SYNC_AT_REST_KEY is required}
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - donut-sync
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SYNC_DOMAIN: ${SYNC_DOMAIN:?SYNC_DOMAIN is required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

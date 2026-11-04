@@ -70,3 +70,7 @@ HANDOFF.md
 .claude/quota-blocked.json
 session-recover.yaml
 # Claude Code session-recovery state
+
+# Vietflow sync server data
+vietflow/sync-server/data/
+vietflow/sync-server/lan/data/

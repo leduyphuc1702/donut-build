@@ -1,0 +1,4 @@
+{$SYNC_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy donut-sync:12342
+}
