@@ -248,6 +248,15 @@ export type BackendErrorCode =
   // close it and hand it over. `params.device` names it (empty when the sync
   // server has no hand-over).
   | "PROFILE_RELEASE_NO_ANSWER"
+  // Paste as typing (Ctrl+Alt+V / ⌘⌥V) could not type the clipboard.
+  | "PASTE_TYPING_EMPTY"
+  // `params.max` is the most characters it types.
+  | "PASTE_TYPING_TOO_LONG"
+  | "PASTE_TYPING_KEYS_HELD"
+  // macOS: Donut has no Accessibility permission to type.
+  | "PASTE_TYPING_PERMISSION"
+  // `params.detail` is the OS error.
+  | "PASTE_TYPING_FAILED"
   // The pull before a launch timed out and its download had not stopped.
   | "PROFILE_STILL_SYNCING"
   | "NOT_TEAM_MEMBER"
@@ -1038,6 +1047,20 @@ export function translateBackendError(t: TFunction, err: unknown): string {
       });
     case "PROFILE_RELEASE_NO_ANSWER":
       return t("backendErrors.profileReleaseNoAnswer");
+    case "PASTE_TYPING_EMPTY":
+      return t("backendErrors.pasteTypingEmpty");
+    case "PASTE_TYPING_TOO_LONG":
+      return t("backendErrors.pasteTypingTooLong", {
+        max: parsed.params?.max ?? "",
+      });
+    case "PASTE_TYPING_KEYS_HELD":
+      return t("backendErrors.pasteTypingKeysHeld");
+    case "PASTE_TYPING_PERMISSION":
+      return t("backendErrors.pasteTypingPermission");
+    case "PASTE_TYPING_FAILED":
+      return t("backendErrors.pasteTypingFailed", {
+        detail: parsed.params?.detail ?? "",
+      });
     case "PROFILE_STILL_SYNCING":
       return t("backendErrors.profileStillSyncing");
     case "PROFILE_LOCK_UNAVAILABLE":

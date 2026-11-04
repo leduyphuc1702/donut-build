@@ -224,7 +224,9 @@
       "requireRoute": "阻止未使用代理或 VPN 的启动",
       "requireRouteDescription": "配置文件绝不会使用您自己的 IP 地址启动：无论是没有代理或 VPN，还是其代理或 VPN 已被删除或无响应。",
       "recordSites": "记录访问过的网站",
-      "recordSitesDescription": "流量统计会列出每个配置文件访问过的网站。关闭后仅保留数据总量。受密码保护的配置文件和临时配置文件从不记录网站。"
+      "recordSitesDescription": "流量统计会列出每个配置文件访问过的网站。关闭后仅保留数据总量。受密码保护的配置文件和临时配置文件从不记录网站。",
+      "pasteTyping": "以输入方式粘贴",
+      "pasteTypingDescription": "{{keys}} 会把复制的内容像人一样逐键输入到当前输入框，而不是直接粘贴。按 Esc 或点击鼠标即可停止。请先把越南语输入工具（Unikey、EVKey）切换到英文模式；卡号不受影响。"
     },
     "trashRetention": "已删除配置文件的保留时间",
     "trashRetentionDescription": "已删除的配置文件会保留在回收站中，在此期间可以恢复。之后将被永久删除。",
@@ -2980,6 +2982,11 @@
     "agentChatNotFound": "此对话已不存在。",
     "profileLeaseHeld": "此配置文件已在 {{device}} 上打开。它将在 {{time}} 或该设备关闭它时释放。",
     "profileReleaseNoAnswer": "运行此配置文件的设备没有响应。请重试，或打开最后一次同步的副本。",
+    "pasteTypingEmpty": "剪贴板中没有可输入的文本。",
+    "pasteTypingTooLong": "剪贴板中的内容超过 {{max}} 个字符，太长无法输入。",
+    "pasteTypingKeysHeld": "请松开快捷键，Donut 才能开始输入。",
+    "pasteTypingPermission": "Donut 需要辅助功能权限才能输入。请打开系统设置 > 隐私与安全性 > 辅助功能，开启 Donut 后重试。",
+    "pasteTypingFailed": "无法输入：{{detail}}",
     "profileStillSyncing": "此配置文件仍在同步。请稍后再试。"
   },
   "rail": {

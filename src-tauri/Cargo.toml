@@ -43,6 +43,10 @@ tauri-plugin-dialog = "2"
 tauri-plugin-macos-permissions = "2"
 tauri-plugin-log = "2"
 tauri-plugin-clipboard-manager = "2"
+# The "paste as typing" shortcut works while a browser window has the focus.
+tauri-plugin-global-shortcut = "2"
+# Types pasted text as key presses the OS delivers, like a keyboard does.
+enigo = "0.6"
 tauri-plugin-window-state = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
@@ -184,6 +188,9 @@ windows = { version = "0.62", features = [
   # installed WinFsp DLL by full path.
   "Win32_Security_Authorization",
   "Win32_System_LibraryLoader",
+  # GetAsyncKeyState: paste-as-typing waits for the shortcut's modifiers to
+  # be let go, and stops on Escape or a click.
+  "Win32_UI_Input_KeyboardAndMouse",
 ] }
 # aws-lc (through shadowsocks) assembles its Windows code with NASM. The objects
 # AWS ships in the crate spare every build machine that tool.

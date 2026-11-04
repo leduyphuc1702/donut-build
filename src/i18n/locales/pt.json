@@ -224,7 +224,9 @@
       "requireRoute": "Bloquear inicializações sem proxy ou VPN",
       "requireRouteDescription": "Um perfil nunca inicia a partir do seu próprio endereço IP: nem quando não tem proxy ou VPN, nem quando o proxy ou a VPN sumiu ou não responde.",
       "recordSites": "Registrar sites visitados",
-      "recordSitesDescription": "As estatísticas de tráfego listam os sites que cada perfil acessou. Desativado, só os totais de dados são mantidos. Perfis protegidos por senha e efêmeros nunca registram sites."
+      "recordSitesDescription": "As estatísticas de tráfego listam os sites que cada perfil acessou. Desativado, só os totais de dados são mantidos. Perfis protegidos por senha e efêmeros nunca registram sites.",
+      "pasteTyping": "Colar digitando",
+      "pasteTypingDescription": "{{keys}} digita o que você copiou no campo ativo, tecla por tecla como uma pessoa, em vez de colar. Esc ou um clique interrompe. Mude antes para inglês uma ferramenta de teclado vietnamita (Unikey, EVKey); números de cartão não são afetados."
     },
     "trashRetention": "Manter perfis excluídos por",
     "trashRetentionDescription": "Os perfis excluídos ficam na lixeira e podem ser restaurados até lá. Depois disso, são removidos permanentemente.",
@@ -3000,6 +3002,11 @@
     "agentChatNotFound": "Este chat não existe mais.",
     "profileLeaseHeld": "Este perfil está aberto em {{device}}. Fica livre às {{time}} ou quando esse dispositivo o fechar.",
     "profileReleaseNoAnswer": "O dispositivo que executa este perfil não respondeu. Tente de novo ou abra a última cópia sincronizada.",
+    "pasteTypingEmpty": "Não há texto na área de transferência para digitar.",
+    "pasteTypingTooLong": "A área de transferência tem mais de {{max}} caracteres, demais para digitar.",
+    "pasteTypingKeysHeld": "Solte as teclas do atalho para o Donut começar a digitar.",
+    "pasteTypingPermission": "O Donut precisa da permissão de Acessibilidade para digitar. Abra Ajustes do Sistema > Privacidade e Segurança > Acessibilidade, ative o Donut e tente de novo.",
+    "pasteTypingFailed": "Não foi possível digitar: {{detail}}",
     "profileStillSyncing": "Este perfil ainda está a sincronizar. Tente novamente daqui a pouco."
   },
   "rail": {

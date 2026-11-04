@@ -342,6 +342,10 @@ pub struct AppSettings {
   /// byte counts only, so nothing on disk lists where a profile went.
   #[serde(default = "default_record_traffic_domains")]
   pub record_traffic_domains: bool,
+  /// Ctrl+Alt+V (⌘⌥V) types the clipboard into the focused field like a
+  /// person would, instead of pasting it (`paste_typing`).
+  #[serde(default = "default_paste_typing_enabled")]
+  pub paste_typing_enabled: bool,
   /// Soft interface sounds: the master switch over the fields below.
   #[serde(default = "default_ui_sounds")]
   pub ui_sounds: bool,
@@ -466,6 +470,10 @@ fn default_record_traffic_domains() -> bool {
   true
 }
 
+fn default_paste_typing_enabled() -> bool {
+  true
+}
+
 fn default_ui_sounds() -> bool {
   true
 }
@@ -535,6 +543,7 @@ impl Default for AppSettings {
       require_route_for_launch: false,
       trash_retention_days: DEFAULT_TRASH_RETENTION_DAYS,
       record_traffic_domains: true,
+      paste_typing_enabled: true,
       ui_sounds: true,
       ui_sound_volume: DEFAULT_UI_SOUND_VOLUME,
       ui_sound_interface: true,
@@ -971,6 +980,8 @@ pub async fn save_app_settings(
     let launch_at_login = settings.launch_at_login;
     tauri::async_runtime::spawn_blocking(move || crate::autostart::apply(&handle, launch_at_login));
   }
+  #[cfg(not(feature = "e2e"))]
+  crate::paste_typing::apply(&app_handle, settings.paste_typing_enabled);
 
   // A shorter retention applies to what is already in the trash. Sweep now
   // rather than at the next six-hourly pass, so "delete after 1 day" does not
@@ -2116,6 +2127,7 @@ mod tests {
       require_route_for_launch: true,
       trash_retention_days: 7,
       record_traffic_domains: false,
+      paste_typing_enabled: true,
       ui_sounds: false,
       ui_sound_volume: 25,
       ui_sound_interface: false,

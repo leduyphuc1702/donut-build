@@ -198,6 +198,7 @@ mod group_bookmarks;
 mod group_manager;
 mod human_hold;
 mod human_typing;
+// An E2E build takes no global shortcut, so nothing calls into it there.
 mod indexed_db;
 mod ip_utils;
 mod launch_gate;
@@ -206,6 +207,8 @@ mod legacy_autostart;
 mod log_redaction;
 pub mod log_streak;
 mod log_viewer;
+#[cfg_attr(feature = "e2e", allow(dead_code))]
+mod paste_typing;
 mod platform_browser;
 mod portable_update;
 mod process_report;
@@ -2637,6 +2640,14 @@ pub fn run_with_builder(
     .plugin(tauri_plugin_macos_permissions::init())
     .plugin(tauri_plugin_clipboard_manager::init());
 
+  // Nor take a global shortcut from the desktop that runs it.
+  #[cfg(not(feature = "e2e"))]
+  let builder = builder.plugin(
+    tauri_plugin_global_shortcut::Builder::new()
+      .with_handler(paste_typing::on_shortcut)
+      .build(),
+  );
+
   // A headless E2E session must not post real notifications or write a login
   // item on the machine that runs it.
   #[cfg(not(feature = "e2e"))]
@@ -2887,6 +2898,14 @@ pub fn run_with_builder(
       }
       agent_tasks::init(&handle);
       sync::lease::init(&handle);
+      #[cfg(not(feature = "e2e"))]
+      paste_typing::apply(
+        &handle,
+        settings_manager::SettingsManager::instance()
+          .load_settings()
+          .map(|s| s.paste_typing_enabled)
+          .unwrap_or(true),
+      );
 
       #[cfg(all(windows, not(feature = "e2e")))]
       {

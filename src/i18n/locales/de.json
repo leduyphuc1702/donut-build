@@ -224,7 +224,9 @@
       "requireRoute": "Starts ohne Proxy oder VPN blockieren",
       "requireRouteDescription": "Ein Profil startet nie über Ihre eigene IP-Adresse: weder ohne Proxy oder VPN noch wenn sein Proxy oder VPN fehlt oder nicht antwortet.",
       "recordSites": "Besuchte Websites aufzeichnen",
-      "recordSitesDescription": "Die Traffic-Statistik listet die Websites, die jedes Profil erreicht hat. Wenn deaktiviert, werden nur Datenmengen gespeichert. Passwortgeschützte und flüchtige Profile zeichnen nie Websites auf."
+      "recordSitesDescription": "Die Traffic-Statistik listet die Websites, die jedes Profil erreicht hat. Wenn deaktiviert, werden nur Datenmengen gespeichert. Passwortgeschützte und flüchtige Profile zeichnen nie Websites auf.",
+      "pasteTyping": "Einfügen als Tippen",
+      "pasteTypingDescription": "{{keys}} tippt das Kopierte Taste für Taste wie ein Mensch in das aktive Feld, statt es einzufügen. Escape oder ein Klick stoppt es. Stelle ein vietnamesisches Tastaturtool (Unikey, EVKey) vorher auf Englisch; Kartennummern sind nicht betroffen."
     },
     "trashRetention": "Gelöschte Profile aufbewahren für",
     "trashRetentionDescription": "Gelöschte Profile bleiben im Papierkorb und können bis dahin wiederhergestellt werden. Danach werden sie endgültig entfernt.",
@@ -2980,6 +2982,11 @@
     "agentChatNotFound": "Dieser Chat existiert nicht mehr.",
     "profileLeaseHeld": "Dieses Profil ist auf {{device}} geöffnet. Es wird um {{time}} frei oder wenn dieses Gerät es schließt.",
     "profileReleaseNoAnswer": "Das Gerät, auf dem dieses Profil läuft, hat nicht geantwortet. Versuche es erneut oder öffne die zuletzt synchronisierte Kopie.",
+    "pasteTypingEmpty": "In der Zwischenablage ist kein Text zum Tippen.",
+    "pasteTypingTooLong": "Die Zwischenablage enthält mehr als {{max}} Zeichen, zu viel zum Tippen.",
+    "pasteTypingKeysHeld": "Lass die Tasten des Kürzels los, damit Donut mit dem Tippen beginnen kann.",
+    "pasteTypingPermission": "Donut braucht die Bedienungshilfen-Berechtigung zum Tippen. Öffne Systemeinstellungen > Datenschutz & Sicherheit > Bedienungshilfen, aktiviere Donut und versuche es erneut.",
+    "pasteTypingFailed": "Tippen fehlgeschlagen: {{detail}}",
     "profileStillSyncing": "Dieses Profil wird noch synchronisiert. Versuchen Sie es gleich erneut."
   },
   "rail": {

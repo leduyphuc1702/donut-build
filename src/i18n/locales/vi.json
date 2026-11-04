@@ -224,7 +224,9 @@
       "requireRoute": "Chặn khởi chạy khi không có proxy hoặc VPN",
       "requireRouteDescription": "Hồ sơ không bao giờ khởi chạy từ địa chỉ IP của bạn: kể cả khi không có proxy hoặc VPN, hoặc khi proxy hay VPN của nó đã mất hoặc không phản hồi.",
       "recordSites": "Ghi lại trang đã truy cập",
-      "recordSitesDescription": "Thống kê lưu lượng liệt kê các trang mà mỗi hồ sơ đã truy cập. Khi tắt, chỉ lưu tổng dung lượng dữ liệu. Hồ sơ có mật khẩu và hồ sơ tạm thời không bao giờ ghi lại trang."
+      "recordSitesDescription": "Thống kê lưu lượng liệt kê các trang mà mỗi hồ sơ đã truy cập. Khi tắt, chỉ lưu tổng dung lượng dữ liệu. Hồ sơ có mật khẩu và hồ sơ tạm thời không bao giờ ghi lại trang.",
+      "pasteTyping": "Dán bằng cách gõ",
+      "pasteTypingDescription": "{{keys}} gõ nội dung đã copy vào ô đang chọn, từng phím như người nhập tay, thay vì dán. Nhấn Esc hoặc bấm chuột để dừng. Chuyển bộ gõ tiếng Việt (Unikey, EVKey) sang chế độ tiếng Anh trước; số thẻ không bị ảnh hưởng."
     },
     "trashRetention": "Giữ hồ sơ đã xóa trong",
     "trashRetentionDescription": "Hồ sơ đã xóa được giữ trong thùng rác và có thể khôi phục cho đến lúc đó. Sau đó chúng sẽ bị xóa vĩnh viễn.",
@@ -2980,6 +2982,11 @@
     "agentChatNotFound": "Cuộc trò chuyện này không còn nữa.",
     "profileLeaseHeld": "Hồ sơ này đang mở trên {{device}}. Hồ sơ sẽ trống lúc {{time}} hoặc khi thiết bị đó đóng nó.",
     "profileReleaseNoAnswer": "Máy đang chạy hồ sơ này không phản hồi. Hãy thử lại, hoặc mở bản đồng bộ gần nhất.",
+    "pasteTypingEmpty": "Bộ nhớ tạm không có chữ để gõ.",
+    "pasteTypingTooLong": "Bộ nhớ tạm có hơn {{max}} ký tự, quá dài để gõ.",
+    "pasteTypingKeysHeld": "Hãy nhả các phím tắt ra để Donut bắt đầu gõ.",
+    "pasteTypingPermission": "Donut cần quyền Trợ năng để gõ. Mở Cài đặt hệ thống > Quyền riêng tư & Bảo mật > Trợ năng, bật Donut rồi thử lại.",
+    "pasteTypingFailed": "Không gõ được: {{detail}}",
     "profileStillSyncing": "Hồ sơ này vẫn đang đồng bộ. Hãy thử lại sau ít phút."
   },
   "rail": {

@@ -224,7 +224,9 @@
       "requireRoute": "Bloquer les lancements sans proxy ni VPN",
       "requireRouteDescription": "Un profil ne démarre jamais depuis votre propre adresse IP : ni sans proxy ou VPN, ni lorsque son proxy ou VPN a disparu ou ne répond pas.",
       "recordSites": "Enregistrer les sites visités",
-      "recordSitesDescription": "Les statistiques de trafic listent les sites atteints par chaque profil. Désactivé, seuls les volumes de données sont conservés. Les profils protégés par mot de passe et éphémères n'enregistrent jamais de sites."
+      "recordSitesDescription": "Les statistiques de trafic listent les sites atteints par chaque profil. Désactivé, seuls les volumes de données sont conservés. Les profils protégés par mot de passe et éphémères n'enregistrent jamais de sites.",
+      "pasteTyping": "Coller en tapant",
+      "pasteTypingDescription": "{{keys}} tape ce que vous avez copié dans le champ actif, touche par touche comme une personne, au lieu de le coller. Échap ou un clic l'arrête. Passez d'abord un outil de saisie vietnamien (Unikey, EVKey) en anglais ; les numéros de carte ne sont pas concernés."
     },
     "trashRetention": "Conserver les profils supprimés pendant",
     "trashRetentionDescription": "Les profils supprimés attendent dans la corbeille et peuvent être restaurés jusque-là. Ensuite, ils sont supprimés définitivement.",
@@ -3000,6 +3002,11 @@
     "agentChatNotFound": "Ce chat n’existe plus.",
     "profileLeaseHeld": "Ce profil est ouvert sur {{device}}. Il sera libre à {{time}}, ou quand cet appareil le fermera.",
     "profileReleaseNoAnswer": "L'appareil qui exécute ce profil n'a pas répondu. Réessayez ou ouvrez la dernière copie synchronisée.",
+    "pasteTypingEmpty": "Le presse-papiers ne contient aucun texte à taper.",
+    "pasteTypingTooLong": "Le presse-papiers contient plus de {{max}} caractères, trop pour être tapé.",
+    "pasteTypingKeysHeld": "Relâchez les touches du raccourci pour que Donut commence à taper.",
+    "pasteTypingPermission": "Donut a besoin de l'autorisation Accessibilité pour taper. Ouvrez Réglages Système > Confidentialité et sécurité > Accessibilité, activez Donut, puis réessayez.",
+    "pasteTypingFailed": "Échec de la saisie : {{detail}}",
     "profileStillSyncing": "Ce profil est encore en cours de synchronisation. Réessayez dans un instant."
   },
   "rail": {

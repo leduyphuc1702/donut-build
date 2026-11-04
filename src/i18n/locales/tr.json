@@ -224,7 +224,9 @@
       "requireRoute": "Proxy veya VPN olmadan başlatmayı engelle",
       "requireRouteDescription": "Bir profil asla kendi IP adresinizden başlamaz: proxy veya VPN yoksa da, proxy veya VPN kaldırıldıysa ya da yanıt vermiyorsa da.",
       "recordSites": "Ziyaret edilen siteleri kaydet",
-      "recordSitesDescription": "Trafik istatistikleri her profilin ulaştığı siteleri listeler. Kapalıyken yalnızca veri toplamları tutulur. Parola korumalı ve geçici profiller hiçbir zaman site kaydetmez."
+      "recordSitesDescription": "Trafik istatistikleri her profilin ulaştığı siteleri listeler. Kapalıyken yalnızca veri toplamları tutulur. Parola korumalı ve geçici profiller hiçbir zaman site kaydetmez.",
+      "pasteTyping": "Yazarak yapıştır",
+      "pasteTypingDescription": "{{keys}} kopyaladığınızı yapıştırmak yerine bir insan gibi tuş tuş etkin alana yazar. Escape ya da bir tıklama durdurur. Vietnamca klavye aracını (Unikey, EVKey) önce İngilizceye alın; kart numaraları etkilenmez."
     },
     "trashRetention": "Silinen profilleri şu süre boyunca sakla",
     "trashRetentionDescription": "Silinen profiller çöp kutusunda bekler ve o zamana kadar geri yüklenebilir. Sonrasında kalıcı olarak kaldırılır.",
@@ -2980,6 +2982,11 @@
     "agentChatNotFound": "Bu sohbet artık yok.",
     "profileLeaseHeld": "Bu profil {{device}} üzerinde açık. {{time}} saatinde veya o cihaz kapattığında serbest kalır.",
     "profileReleaseNoAnswer": "Bu profili çalıştıran cihaz yanıt vermedi. Yeniden deneyin ya da son eşitlenen kopyayı açın.",
+    "pasteTypingEmpty": "Panoda yazılacak metin yok.",
+    "pasteTypingTooLong": "Panoda {{max}} karakterden fazlası var, yazmak için çok uzun.",
+    "pasteTypingKeysHeld": "Donut'un yazmaya başlaması için kısayol tuşlarını bırakın.",
+    "pasteTypingPermission": "Donut'un yazabilmesi için Erişilebilirlik izni gerekir. Sistem Ayarları > Gizlilik ve Güvenlik > Erişilebilirlik bölümünde Donut'u açın ve yeniden deneyin.",
+    "pasteTypingFailed": "Yazılamadı: {{detail}}",
     "profileStillSyncing": "Bu profil hâlâ eşitleniyor. Birazdan yeniden deneyin."
   },
   "rail": {

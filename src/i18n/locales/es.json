@@ -224,7 +224,9 @@
       "requireRoute": "Bloquear inicios sin proxy ni VPN",
       "requireRouteDescription": "Un perfil nunca se inicia desde tu propia dirección IP: ni cuando no tiene proxy o VPN, ni cuando su proxy o VPN ya no existe o no responde.",
       "recordSites": "Registrar sitios visitados",
-      "recordSitesDescription": "Las estadísticas de tráfico muestran los sitios a los que llegó cada perfil. Si se desactiva, solo se guardan los totales de datos. Los perfiles con contraseña y los efímeros nunca registran sitios."
+      "recordSitesDescription": "Las estadísticas de tráfico muestran los sitios a los que llegó cada perfil. Si se desactiva, solo se guardan los totales de datos. Los perfiles con contraseña y los efímeros nunca registran sitios.",
+      "pasteTyping": "Pegar escribiendo",
+      "pasteTypingDescription": "{{keys}} escribe lo que copiaste en el campo activo, tecla a tecla como una persona, en lugar de pegarlo. Escape o un clic lo detiene. Cambia antes a inglés una herramienta de teclado vietnamita (Unikey, EVKey); los números de tarjeta no se ven afectados."
     },
     "trashRetention": "Conservar perfiles eliminados durante",
     "trashRetentionDescription": "Los perfiles eliminados esperan en la papelera y se pueden restaurar hasta entonces. Después se eliminan definitivamente.",
@@ -3000,6 +3002,11 @@
     "agentChatNotFound": "Este chat ya no existe.",
     "profileLeaseHeld": "Este perfil está abierto en {{device}}. Quedará libre a las {{time}} o cuando ese dispositivo lo cierre.",
     "profileReleaseNoAnswer": "El dispositivo que ejecuta este perfil no respondió. Inténtalo de nuevo o abre la última copia sincronizada.",
+    "pasteTypingEmpty": "No hay texto en el portapapeles para escribir.",
+    "pasteTypingTooLong": "El portapapeles tiene más de {{max}} caracteres, demasiado para escribir.",
+    "pasteTypingKeysHeld": "Suelta las teclas del atajo para que Donut empiece a escribir.",
+    "pasteTypingPermission": "Donut necesita el permiso de Accesibilidad para escribir. Abre Ajustes del Sistema > Privacidad y seguridad > Accesibilidad, activa Donut e inténtalo de nuevo.",
+    "pasteTypingFailed": "No se pudo escribir: {{detail}}",
     "profileStillSyncing": "Este perfil aún se está sincronizando. Inténtalo de nuevo en breve."
   },
   "rail": {

@@ -129,6 +129,7 @@ interface AppSettings extends SoundFields {
   require_route_for_launch?: boolean;
   trash_retention_days?: number;
   record_traffic_domains?: boolean;
+  paste_typing_enabled?: boolean;
   bulk_launch_delay_ms?: number;
   bulk_launch_concurrency?: number;
   system_notifications?: boolean;
@@ -927,6 +928,12 @@ export function SettingsDialog({
       section: "privacy",
     },
     {
+      key: "paste_typing_enabled",
+      changed: flagChanged("paste_typing_enabled", true),
+      label: t("settings.privacy.pasteTyping"),
+      section: "privacy",
+    },
+    {
       key: "trash_retention_days",
       changed:
         (settings.trash_retention_days ?? DEFAULT_TRASH_RETENTION_DAYS) !==
@@ -1680,6 +1687,18 @@ export function SettingsDialog({
                     checked={settings.record_traffic_domains ?? true}
                     onCheckedChange={(v) =>
                       updateSetting("record_traffic_domains", v)
+                    }
+                  />
+                  <SwitchRow
+                    id="settings-paste-typing"
+                    label={t("settings.privacy.pasteTyping")}
+                    description={t("settings.privacy.pasteTypingDescription", {
+                      keys: isMacOS ? "⌘⌥V" : "Ctrl+Alt+V",
+                    })}
+                    changed={isChanged("paste_typing_enabled")}
+                    checked={settings.paste_typing_enabled ?? true}
+                    onCheckedChange={(v) =>
+                      updateSetting("paste_typing_enabled", v)
                     }
                   />
                   <SettingRow

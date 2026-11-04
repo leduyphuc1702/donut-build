@@ -224,7 +224,9 @@
       "requireRoute": "프록시나 VPN 없는 실행 차단",
       "requireRouteDescription": "프로필이 내 IP 주소로 시작되지 않습니다. 프록시나 VPN이 없을 때도, 프록시나 VPN이 사라졌거나 응답하지 않을 때도 마찬가지입니다.",
       "recordSites": "방문한 사이트 기록",
-      "recordSitesDescription": "트래픽 통계에는 각 프로필이 접속한 사이트가 표시됩니다. 끄면 데이터 합계만 보관됩니다. 비밀번호로 보호된 프로필과 임시 프로필은 사이트를 기록하지 않습니다."
+      "recordSitesDescription": "트래픽 통계에는 각 프로필이 접속한 사이트가 표시됩니다. 끄면 데이터 합계만 보관됩니다. 비밀번호로 보호된 프로필과 임시 프로필은 사이트를 기록하지 않습니다.",
+      "pasteTyping": "타이핑으로 붙여넣기",
+      "pasteTypingDescription": "{{keys}}를 누르면 복사한 내용을 붙여넣지 않고, 사람이 치듯 한 키씩 현재 입력란에 입력합니다. Esc 키나 클릭으로 멈춥니다. 베트남어 입력 도구(Unikey, EVKey)는 먼저 영어 모드로 바꾸세요. 카드 번호에는 영향이 없습니다."
     },
     "trashRetention": "삭제한 프로필 보관 기간",
     "trashRetentionDescription": "삭제한 프로필은 휴지통에 보관되며 그때까지 복원할 수 있습니다. 이후에는 영구 삭제됩니다.",
@@ -2980,6 +2982,11 @@
     "agentChatNotFound": "이 채팅은 더 이상 없습니다.",
     "profileLeaseHeld": "이 프로필은 {{device}}에서 열려 있습니다. {{time}}에 또는 해당 기기가 닫으면 사용할 수 있습니다.",
     "profileReleaseNoAnswer": "이 프로필을 실행 중인 기기가 응답하지 않았습니다. 다시 시도하거나 마지막으로 동기화된 사본을 여세요.",
+    "pasteTypingEmpty": "클립보드에 입력할 텍스트가 없습니다.",
+    "pasteTypingTooLong": "클립보드 내용이 {{max}}자를 넘어 입력하기에 너무 깁니다.",
+    "pasteTypingKeysHeld": "Donut이 입력을 시작하도록 단축키를 떼세요.",
+    "pasteTypingPermission": "입력하려면 Donut에 손쉬운 사용 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용에서 Donut을 켠 뒤 다시 시도하세요.",
+    "pasteTypingFailed": "입력하지 못했습니다: {{detail}}",
     "profileStillSyncing": "이 프로필은 아직 동기화 중입니다. 잠시 후 다시 시도하세요."
   },
   "rail": {

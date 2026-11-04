@@ -1988,6 +1988,24 @@ export default function Home() {
     };
   }, []);
 
+  // Paste as typing runs while a browser has the focus; a failure, such as a
+  // missing macOS Accessibility permission, is told here.
+  useEffect(() => {
+    const unlisten = listen<{ error: string }>(
+      "paste-typing-failed",
+      (event) => {
+        showErrorToast(translateBackendError(t, event.payload.error), {
+          id: "paste-typing-failed",
+        });
+      },
+    );
+    return () => {
+      void unlisten.then((fn) => {
+        fn();
+      });
+    };
+  }, [t]);
+
   useEffect(() => {
     const unlisten = listen<{
       profile_id: string;

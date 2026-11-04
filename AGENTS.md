@@ -66,6 +66,7 @@ donutbrowser/
 │   │   ├── navigation_watch.rs      # Whether a CDP action navigated, so a click waits only for a load that comes
 │   │   ├── network_capture.rs       # MCP network capture: one browser-level socket per profile, in memory, credentials redacted
 │   │   ├── agent_uploads.rs         # Files an agent sends to file_upload, kept until the browser stops
+│   │   ├── paste_typing.rs          # Ctrl+Alt+V / ⌘⌥V types the clipboard into the focused field as OS key presses with human timing
 │   │   ├── mcp_remote.rs            # Remote MCP bridge: outbound websocket to Donut cloud (Enterprise remote control)
 │   │   ├── mcp_integrations.rs      # 20-client MCP installer: remote endpoint with bearer, format-preserving JSONC/TOML edits
 │   │   ├── automation_rate_limiter.rs # Shared REST/MCP automation quota
