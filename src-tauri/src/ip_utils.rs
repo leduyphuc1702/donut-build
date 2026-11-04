@@ -17,6 +17,36 @@ pub fn validate_ip(ip: &str) -> bool {
   IpAddr::from_str(ip).is_ok()
 }
 
+/// This machine's public IPv6 address when it has its own IPv6 route to the
+/// internet, else `None`. The endpoints have IPv6 addresses only, so without
+/// such a route the dial fails at once. A browser going direct prefers IPv6
+/// for every dual-stack site, so this address is an exit too, and it can be
+/// in another country than the IPv4 one (a tunnel that carries IPv4 only).
+pub async fn fetch_direct_public_ipv6() -> Option<String> {
+  const URLS: [&str; 2] = ["https://api6.ipify.org", "https://ipv6.icanhazip.com"];
+  let client = reqwest::Client::builder()
+    .no_proxy()
+    .timeout(std::time::Duration::from_secs(4))
+    .build()
+    .ok()?;
+  for url in URLS {
+    let Ok(response) = client.get(url).send().await else {
+      continue;
+    };
+    if !response.status().is_success() {
+      continue;
+    }
+    let Ok(text) = response.text().await else {
+      continue;
+    };
+    let ip = text.trim();
+    if ip.parse::<std::net::Ipv6Addr>().is_ok() {
+      return Some(ip.to_string());
+    }
+  }
+  None
+}
+
 /// Fetch public IP address, optionally through a proxy.
 pub async fn fetch_public_ip(proxy: Option<&str>) -> Result<String, IpError> {
   let urls = [

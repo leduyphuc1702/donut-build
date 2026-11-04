@@ -446,24 +446,47 @@ pub async fn probe_and_check_consistency(
 /// Deliberately NOT cached — a direct exit belongs to this machine's network,
 /// not to any stored proxy, and it changes without a config edit.
 pub async fn probe_direct_and_check(profile: &BrowserProfile) -> Result<ConsistencyResult, String> {
-  let fetched = tokio::time::timeout(PROBE_TIMEOUT, crate::ip_utils::fetch_public_ip(None))
-    .await
-    .map_err(|_| crate::backend_error("EXIT_PROBE_FAILED"))?;
+  let (fetched, ipv6) = tokio::join!(
+    tokio::time::timeout(PROBE_TIMEOUT, crate::ip_utils::fetch_public_ip(None)),
+    crate::ip_utils::fetch_direct_public_ipv6(),
+  );
+  let fetched = fetched.map_err(|_| crate::backend_error("EXIT_PROBE_FAILED"))?;
   let exit_ip = fetched.map_err(|e| crate::backend_error_with_detail("EXIT_PROBE_FAILED", e))?;
 
+  let ipv4_result = compare_direct_exit(profile, exit_ip);
+  if ipv4_result.is_mismatch() {
+    return Ok(ipv4_result);
+  }
+  // The browser reaches dual-stack sites (Amazon, eBay, Google) over this
+  // machine's own IPv6 route when it has one, whatever carries its IPv4.
+  if let Some(ipv6) = ipv6 {
+    let ipv6_result = compare_direct_exit(profile, ipv6);
+    if ipv6_result.is_mismatch() {
+      log::warn!(
+        "Direct IPv6 exit does not match the fingerprint profile={} mismatches={}",
+        profile.id,
+        ipv6_result.mismatches.join(",")
+      );
+      return Ok(ipv6_result);
+    }
+  }
+  Ok(ipv4_result)
+}
+
+fn compare_direct_exit(profile: &BrowserProfile, exit_ip: String) -> ConsistencyResult {
   match crate::geolocation::get_geolocation(&exit_ip) {
-    Ok(geo) => Ok(compare_exit_to_fingerprint(
+    Ok(geo) => compare_exit_to_fingerprint(
       profile,
       Some(geo.timezone),
       geo.locale.region.clone(),
       Some(exit_ip),
-    )),
+    ),
     Err(e) => {
       log::debug!(
         "Consistency check skipped, direct exit not geolocated err=\"{}\"",
         crate::log_redaction::text(&e.to_string())
       );
-      Ok(ConsistencyResult::skip())
+      ConsistencyResult::skip()
     }
   }
 }

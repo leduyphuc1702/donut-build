@@ -45,3 +45,46 @@ Từ lần sau, Donut tự kiểm tra bản mới trên repo này mỗi giờ.
 Lưu ý:
 - Lần đầu cần bật GitHub Actions cho repo fork: tab **Actions** → "I understand my workflows, go ahead and enable them".
 - Số phiên bản do tag quyết định; không cần sửa tay `tauri.conf.json`.
+
+## Độ kín: những gì Donut tự lo, những gì phải làm tay
+
+Không công cụ nào cam kết kín 100% trước mọi thuật toán: độ trễ mạng, cách nhiều tài khoản dùng chung một IP, hay nhịp thao tác đều đo được. Mục tiêu là không để lộ khác biệt nào kiểm soát được.
+
+**Donut bản Vietflow tự chặn:**
+- **Mở hồ sơ không dùng proxy (đi thẳng qua D2) khi lối ra không khớp vân tay.**
+  - Ví dụ: laptop đang ở WiFi VNPT, hoặc ở nhà nhưng quên bật ZeroTier.
+  - Donut đo cả IPv4 lẫn IPv6 trước khi mở, rồi hỏi lại thay vì mở luôn. Tắt kiểm tra này ở Cài đặt → Quyền riêng tư → "Chặn khi dấu vân tay không khớp" (không nên tắt).
+- **Hai máy chạy cùng một phiên**: xem phần "Đóng ở máy kia".
+- **Mỗi máy tự sinh một thiết bị khác nhau cho cùng hồ sơ**: thiết bị sinh lúc mở giờ được đồng bộ sang các máy khác.
+- **"Tạo ngẫu nhiên khi khởi chạy" trên hồ sơ đồng bộ**: tùy chọn này bị bỏ qua, vì nó biến mỗi lần mở thành một thiết bị lạ.
+
+**Phải làm theo quy tắc:**
+1. **Tạo hồ sơ khi máy đang ở mạng D2**, để múi giờ, ngôn ngữ và tọa độ là Portland (Mỹ). Không tạo hồ sơ tài khoản Mỹ khi đang ở mạng Việt Nam.
+2. **Ở nhà: tắt IPv6 và đặt DNS qua D2.** Xem `docs/HOME-ACCESS.md` trong repo `d2-us-tunnel`.
+3. **Cùng một phiên bản Donut và Wayfern trên mọi máy.**
+   - Phiên bản trình duyệt nằm trong User-Agent, và nhiều trang so nó với lúc đăng nhập.
+   - Phiên bản tụt lùi (máy B cũ hơn máy A) là bất thường. Cập nhật tất cả các máy cùng lúc.
+4. **Không bật "Danh sách chặn DNS" (chặn quảng cáo) trên hồ sơ dùng để mua.** Nó chặn luôn script chống gian lận của Amazon, eBay và Shopify; trang không đo được thiết bị sẽ chấm rủi ro cao hơn.
+5. **Không cài tiện ích (extension) vào hồ sơ mua hàng**, trừ khi thật cần. Tiện ích bị trang đo được.
+6. **Không phóng to cửa sổ lớn hơn màn hình mà vân tay khai báo.**
+   - Hồ sơ dùng chung nên chạy trên các máy có màn hình cỡ gần nhau.
+   - Log của Donut cảnh báo `Claimed screen larger than the display` khi màn hình khai báo lớn hơn màn hình thật.
+7. **Gỡ AnyDesk/TeamViewer** khỏi máy dùng để mua. Một số trang từng dò cổng của chúng.
+8. **Gõ thay vì dán** (Ctrl+Alt+V / ⌘⌥V). Với Shopify, đừng đi thẳng link → giỏ hàng → thanh toán trong vài chục giây: xem thêm 1–2 trang trước.
+9. **Hạn chế số tài khoản trên cùng một IP.** Mọi máy ở văn phòng ra cùng một IP Comcast. Vài tài khoản trên một IP nhà dân là bình thường; vài chục tài khoản cùng một IP, cùng thẻ, cùng kho nhận hàng thì bị liên kết với nhau. Khi số tài khoản tăng, cần thêm lối ra Mỹ thứ hai, thứ ba.
+
+**Còn hở, không phần mềm nào vá được:**
+- **Độ trễ khoảng 200 ms** từ Việt Nam sang Mỹ. Trang có thể đo được, và nó lệch với một IP nhà dân ở Portland. Chỉ trình duyệt chạy ngay trên máy ở Mỹ mới hết.
+- **MSS 1340** (gói TCP nhỏ hơn bình thường, do tunnel). Đây là dấu hiệu "đang dùng VPN" của cả văn phòng.
+- **Kết quả vẽ đồ họa** (canvas, WebGL) vẫn do GPU và driver thật tạo ra rồi được Wayfern làm nhiễu. Hai máy khác GPU có thể ra kết quả khác nhau.
+- **Thông số máy giả lập khác máy thật:** số nhân CPU và RAM khai báo có thể lệch với tốc độ chạy thật đo bằng JavaScript.
+- **Cổng gỡ lỗi (CDP) của trình duyệt** mở trên 127.0.0.1. Chromium mới đã chặn trang công khai dò cổng localhost, nhưng đây vẫn là bề mặt cần biết.
+
+**Tự kiểm tra (nên làm với mỗi máy mới, và khi thấy bị bắt đăng nhập lại):**
+1. Mở cùng một hồ sơ lần lượt trên 2 máy, mỗi lần chạy các trang dưới đây và **so kết quả giữa 2 máy**. Mọi mục phải giống nhau, trừ những gì đã nêu ở phần "còn hở":
+   - <https://browserleaks.com/ip>, <https://browserleaks.com/webrtc>, <https://browserleaks.com/dns>: IP, WebRTC và DNS đều ở Mỹ, không có IPv6.
+   - <https://browserleaks.com/canvas>, <https://browserleaks.com/webgl>, <https://browserleaks.com/fonts>: hash canvas, WebGL và danh sách font.
+   - <https://pixelscan.net>: báo "consistent" (nhất quán), không có "masking detected".
+   - <https://abrahamjuliot.github.io/creepjs/>: mục "lies" (dối trá) càng ít càng tốt; ghi lại để so giữa 2 máy.
+   - <https://demo.fingerprint.com/playground>: "Bot: not detected", và mã visitor ID **giống nhau** trên 2 máy.
+2. Nếu hash canvas hoặc WebGL khác nhau giữa 2 máy: hai máy đó không nên dùng chung hồ sơ. Ghép cặp theo phần cứng giống nhau.

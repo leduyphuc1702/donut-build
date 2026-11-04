@@ -215,8 +215,8 @@ fn extension_warning_disabled() -> bool {
 /// mismatch never disarms the gate for a proxied one.
 const DIRECT_EXIT_IDENTITY: &str = "direct";
 
-/// Gate a launch that will connect directly despite the profile declaring a
-/// route. Measures the exit the browser will really use.
+/// Gate a launch that will connect directly: a profile with no route, or one
+/// whose route did not come up. Measures the exit the browser will really use.
 async fn enforce_direct_exit(
   profile: &BrowserProfile,
   gate: &FingerprintGate,
@@ -315,16 +315,18 @@ async fn gate_exit(
   upstream: Option<&crate::browser::ProxySettings>,
   gate: &FingerprintGate,
 ) -> Result<(), String> {
-  // A profile that declares no route is genuinely direct: the browser's exit is
-  // this machine, which is what an un-proxied fingerprint should describe.
+  // A profile that declares no route goes out through this machine's own
+  // network, and a synced profile does that from whichever machine opens it:
+  // the office router's US exit one day, a home connection in another country
+  // the next. Its exit is measured like any other, IPv6 included.
   //
-  // But a profile that DOES declare one and still arrives here with no upstream
+  // A profile that DOES declare one and still arrives here with no upstream
   // is about to go direct anyway — a deleted or unresolvable proxy resolves to
   // `None` and the launch continues. That is the exact leak this gate exists to
   // stop, so it must be measured, not waved through.
   let declares_route = profile.proxy_id.is_some() || profile.vpn_id.is_some();
   if upstream.is_none() && !declares_route {
-    return Ok(());
+    return enforce_direct_exit(profile, gate).await;
   }
   if gate_disabled() {
     return Ok(());
@@ -782,23 +784,22 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn gate_allows_a_direct_connection_without_measuring() {
+  async fn a_direct_profile_is_gated_on_its_exit_and_launch_anyway_redeems() {
+    // A synced profile with no route can be opened from another network than
+    // the one it was made on, so its direct exit is measured, and "Launch
+    // anyway" for it is consent under the direct identity. Redeeming it needs
+    // no network.
     let profile = profile_with(r#"{"timezone":"Europe/Berlin"}"#);
-    assert!(
-      enforce_fingerprint_gate(&profile, None, &FingerprintGate::Enforce)
-        .await
-        .is_ok()
-    );
+    let token = mint_consent(&profile, DIRECT_EXIT_IDENTITY);
+    let result = enforce_fingerprint_gate(&profile, None, &FingerprintGate::Consented(token)).await;
+    assert!(result.is_ok(), "{result:?}");
   }
 
   #[tokio::test]
-  async fn gate_allows_a_profile_with_no_proxy_or_vpn() {
-    // A profile that declares no route has no upstream either — that pairing is
-    // the only one the launcher can actually produce. It must return without
-    // measuring anything, so this stays a pure unit test with no network.
+  async fn automation_starts_a_direct_profile_without_measuring() {
     let profile = profile_with(r#"{"timezone":"Europe/Berlin"}"#);
     assert!(
-      enforce_fingerprint_gate(&profile, None, &FingerprintGate::Enforce)
+      enforce_fingerprint_gate(&profile, None, &FingerprintGate::Advisory)
         .await
         .is_ok()
     );

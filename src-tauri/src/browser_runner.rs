@@ -588,7 +588,17 @@ impl BrowserRunner {
       wayfern_config.proxy = Some(proxy_url);
 
       let mut updated_profile = profile.clone();
-      let randomize_requested = wayfern_config.randomize_fingerprint_on_launch == Some(true);
+      // A synced profile is one device that several machines open in turn,
+      // and its sessions belong to that device: a new one at every launch
+      // would make each site see a stranger holding the login.
+      let randomize_set = wayfern_config.randomize_fingerprint_on_launch == Some(true);
+      let randomize_requested = randomize_set && !profile.is_sync_enabled();
+      if randomize_set && !randomize_requested {
+        log::info!(
+          "New device on launch skipped, the profile syncs profile={}",
+          profile.id
+        );
+      }
       let needs_device = crate::wayfern_identity_storage::stored_shape(&wayfern_config)
         == crate::wayfern_identity_storage::StoredShape::Empty;
       let fingerprint_generated = randomize_requested || needs_device;
@@ -665,6 +675,12 @@ impl BrowserRunner {
           None
         };
         updated_profile.wayfern_config = Some(updated_wayfern_config);
+        if needs_device && !randomize_requested {
+          // A device minted here is the profile's from now on, on every
+          // machine. Without an edit time the metadata sync sees nothing new
+          // to upload, and the next machine mints a device of its own.
+          updated_profile.updated_at = Some(crate::proxy_manager::now_secs());
+        }
       }
       // A non-randomize profile keeps its configured fingerprint verbatim, even
       // when its proxy/VPN routing has changed since the fingerprint was built.
