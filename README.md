@@ -14,7 +14,7 @@
     <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat" alt="PRs Welcome">
   </a>
   <a style="text-decoration: none;" href="https://github.com/donutbrowser/donutbrowser/blob/main/LICENSE" target="_blank">
-    <img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="License">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
   </a>
   <a style="text-decoration: none;" href="https://github.com/donutbrowser/donutbrowser/network/members" target="_blank">
     <img src="https://img.shields.io/github/forks/donutbrowser/donutbrowser?style=social" alt="GitHub forks">
@@ -182,4 +182,4 @@ For urgent questions or security vulnerability reports, email [contact@donutbrow
 
 ## License
 
-This project is licensed under the AGPL-3.0 License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

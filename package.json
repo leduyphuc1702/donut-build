@@ -1,7 +1,7 @@
 {
   "name": "donutbrowser",
   "private": true,
-  "license": "AGPL-3.0",
+  "license": "MIT",
   "version": "0.36.0",
   "type": "module",
   "scripts": {
@@ -153,7 +153,7 @@
       "bash -c 'cd src-tauri && cargo test --lib'"
     ],
     "**/*.{rs,ts,tsx,js,jsx,md}": [
-      "typos"
+      "typos --force-exclude"
     ]
   }
 }

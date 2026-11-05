@@ -13990,7 +13990,7 @@ mod tests {
 
   // Enrolment carries only the user's own scalars. Anything describing what a
   // run actually does appearing in the schema would mean the browsing model had
-  // leaked out of the server and into this AGPL client.
+  // leaked out of the server and into this MIT client.
   #[test]
   fn the_bot_tools_expose_choices_not_behaviour() {
     let server = McpServer::new();

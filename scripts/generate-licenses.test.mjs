@@ -39,7 +39,7 @@ test("normalizes legacy dual-license metadata into SPDX expressions", () => {
 test("collects only normal Rust dependencies reachable from the app", () => {
   const metadata = {
     packages: [
-      { id: "app", name: "app", license: "AGPL-3.0" },
+      { id: "app", name: "app", license: "MIT" },
       { id: "runtime", name: "runtime", license: "MIT" },
       { id: "nested", name: "nested", license: "Apache-2.0" },
       { id: "build", name: "build", license: "MIT" },
@@ -146,8 +146,7 @@ test("generated inventory includes the bundled sidecar and Tauri opener", async 
 
   assert.ok(
     inventory.some(
-      (entry) =>
-        entry.name === "Donut Browser" && entry.license === "AGPL-3.0-only",
+      (entry) => entry.name === "Donut Browser" && entry.license === "MIT",
     ),
   );
   assert.ok(

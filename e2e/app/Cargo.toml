@@ -3,6 +3,7 @@ name = "donutbrowser-e2e"
 version = "0.1.0"
 edition = "2021"
 publish = false
+license = "MIT"
 
 [dependencies]
 donutbrowser-lib = { package = "donutbrowser", path = "../../src-tauri", features = ["e2e"] }

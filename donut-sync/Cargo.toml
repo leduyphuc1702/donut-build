@@ -2,7 +2,7 @@
 name = "donut-sync"
 version = "0.1.0"
 edition = "2024"
-license = "AGPL-3.0"
+license = "MIT"
 publish = false
 description = "Donut Browser sync server: S3-backed storage for profiles and settings"
 

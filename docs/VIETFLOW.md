@@ -1,6 +1,6 @@
 # Bản Donut của Vietflow
 
-Bản fork này dựa trên Donut Browser (AGPL-3.0, giữ nguyên tên và giấy phép). So với bản gốc, nó có thêm:
+Bản fork này dựa trên Donut Browser và chuyển sang giấy phép MIT. So với bản gốc, nó có thêm:
 
 - **"Đóng ở máy kia và mở ở đây".** Một profile đồng bộ chỉ chạy trên một máy tại một thời điểm.
   - Máy muốn dùng profile gửi yêu cầu. Máy đang giữ đóng trình duyệt sao cho cookie kịp ghi xuống đĩa, đẩy bản mới nhất lên rồi nhả khóa. Sau đó máy yêu cầu mới mở.

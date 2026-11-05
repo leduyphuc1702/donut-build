@@ -12,7 +12,7 @@ name: donutbrowser
 title: Donut Browser
 base: core24
 adopt-info: donutbrowser
-license: AGPL-3.0-only
+license: MIT
 grade: stable
 confinement: strict
 compression: lzo

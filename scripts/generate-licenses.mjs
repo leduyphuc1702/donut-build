@@ -25,7 +25,7 @@ export const RELEASE_TARGETS = [
 export const MANUAL_LICENSES = [
   {
     name: "Donut Browser",
-    license: "AGPL-3.0-only",
+    license: "MIT",
   },
   {
     name: "Xray-core",

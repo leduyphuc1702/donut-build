@@ -2,16 +2,6 @@
 
 Contributions are welcome. Don't open a PR just to get added to the contributors list. Reviewing PRs takes time, so open one only if you believe the change improves Donut for yourself and others. For a significant change, get in touch with the maintainer first.
 
-## AI Policy
-
-AI can write your code. It cannot speak for you, and it cannot be a co-author.
-
-- Disclose it, always. Every PR must say whether AI was used. The template has two boxes and exactly one must be ticked. Neither ticked, both ticked, or the section deleted, and a bot closes the PR. Issues carry the same question.
-- No AI co-authors. A commit carrying a `Co-Authored-By:` trailer naming an AI tool, or a "Generated with ..." attribution, closes the PR. Strip them before pushing; `git commit --amend` or a rebase is enough. Most coding agents add these by default, so check.
-- Write your own words. Commit messages, PR descriptions, and replies in review must be yours. Broken English is welcome here; people contribute from everywhere and I would much rather read theirs. AI English is not welcome: it is long, evenly confident, and costs a reviewer time in proportion to how good it sounds.
-
-Disclosing AI use is never held against you. Hiding it is what gets a PR closed.
-
 ## Before Starting
 
 - Search existing PRs related to that issue
@@ -20,7 +10,7 @@ Disclosing AI use is never held against you. Hiding it is what gets a PR closed.
 
 ## Contributor License Agreement
 
-By contributing, you agree your contributions will be licensed under the same terms as the project. See [Contributor License Agreement](CONTRIBUTOR_LICENSE_AGREEMENT.md). This lets contributions be used in the open source version (AGPL-3.0) and commercially licensed. You retain all rights to use your contributions elsewhere.
+By contributing, you agree your contributions will be licensed under the same terms as the project. See [Contributor License Agreement](CONTRIBUTOR_LICENSE_AGREEMENT.md). This lets contributions be used in the open source version and in closed or commercial versions. You retain all rights to use your contributions elsewhere.
 
 ## Development Setup
 
@@ -87,7 +77,7 @@ codeql database analyze /tmp/codeql-rust --format=sarifv2.1.0 --output=/tmp/rust
 - Tauri commands: If you modify Tauri commands, the `test_no_unused_tauri_commands` test will catch unused ones
 - No hardcoded colors: Use theme CSS variables (see `src/lib/themes.ts`), never Tailwind color classes like `text-red-500`
 - No lock file changes: Don't update `pnpm-lock.yaml` or `Cargo.lock` unless updating dependencies is the purpose of the PR
-- AGPL-3.0: This project is AGPL-licensed. Derivatives must be open source with the same license
+- MIT: This project is MIT-licensed. Derivatives may stay closed source
 
 ## Pull Request Guidelines
 

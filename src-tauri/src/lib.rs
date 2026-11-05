@@ -1398,7 +1398,7 @@ fn add_mcp_to_claude_desktop_internal(target: &mcp_integrations::McpTarget) -> R
         "env": {}
       }
     },
-    "license": "AGPL-3.0"
+    "license": "MIT"
   });
   std::fs::write(
     ext_dir.join("manifest.json"),

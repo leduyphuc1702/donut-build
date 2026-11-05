@@ -2923,8 +2923,7 @@ test("About exposes a searchable, responsive third-party license inventory", asy
     );
     assert.ok(
       inventory.rows.some(
-        ([name, license]) =>
-          name === "Donut Browser" && license === "AGPL-3.0-only",
+        ([name, license]) => name === "Donut Browser" && license === "MIT",
       ),
     );
     assert.ok(
