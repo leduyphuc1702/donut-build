@@ -93,7 +93,7 @@ import {
   updateCookieBotUserTemplate,
 } from "@/lib/cookie-bot";
 import { SCHEDULE_BOUNDS } from "@/lib/cookie-bot-limits";
-import { canUseCookieBot } from "@/lib/entitlements";
+import { canUseCookieBot, isSelfHostedAccount } from "@/lib/entitlements";
 import { MOTION_SPRING_POSITION } from "@/lib/motion";
 import {
   MIN_SLOT_GAP_MINUTES,
@@ -794,7 +794,11 @@ export function CookieBotEnrolDialog({
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
-            {t("cookieBot.enrol.description")}
+            {t(
+              isSelfHostedAccount()
+                ? "cookieBot.local.enrolDescription"
+                : "cookieBot.enrol.description",
+            )}
           </DialogDescription>
         </DialogHeader>
 

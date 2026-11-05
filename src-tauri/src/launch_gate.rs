@@ -296,6 +296,51 @@ pub async fn enforce_exit_country(
   verdict
 }
 
+/// A fingerprint describes the machine the browser runs on: its fonts, media
+/// APIs and, below every engine patch, its TCP/IP stack. A profile claiming
+/// another OS therefore leaks at the first SYN even when the browser lies
+/// about every JavaScript-visible value. Refuse the launch instead of opening
+/// a window the destination can disprove.
+///
+/// A Windows identity is still possible on another host: run Donut itself in
+/// Windows (a VM with bridged or kernel NAT, never user-mode NAT), and this
+/// machine reports Windows. Launching a Windows browser from macOS is not a
+/// fingerprint problem software can patch away.
+pub fn enforce_host_os(profile: &BrowserProfile) -> Result<(), String> {
+  let claimed = claimed_fingerprint_os(profile);
+  let host = crate::profile::types::get_host_os();
+  if claimed == host {
+    return Ok(());
+  }
+  log::warn!(
+    "Launch refused, fingerprint OS does not match this machine profile={} claimed={} host={}",
+    profile.id,
+    claimed,
+    host
+  );
+  Err(
+    serde_json::json!({
+      "code": "FINGERPRINT_HOST_OS_MISMATCH",
+      "params": { "claimed": claimed, "host": host },
+    })
+    .to_string(),
+  )
+}
+
+/// The OS a profile's fingerprint claims. `wayfern_config.os` is the claim
+/// when it was generated for one; otherwise the fingerprint belongs to the
+/// machine that created the profile (`native_os`). A profile made here with no
+/// explicit OS therefore claims this machine.
+fn claimed_fingerprint_os(profile: &BrowserProfile) -> String {
+  profile
+    .wayfern_config
+    .as_ref()
+    .and_then(|config| config.os.as_deref())
+    .filter(|os| !os.is_empty())
+    .map(str::to_string)
+    .unwrap_or_else(|| profile.native_os())
+}
+
 /// Identity used for consent and acknowledgement when the browser will connect
 /// directly. Distinct from any proxy identity, so accepting a direct-exit
 /// mismatch never disarms the gate for a proxied one.
@@ -680,6 +725,58 @@ mod tests {
       ..Default::default()
     });
     profile
+  }
+
+  #[test]
+  fn a_fingerprint_of_this_machine_s_os_is_allowed() {
+    let host = crate::profile::types::get_host_os();
+    let mut profile = profile_with(r#"{"timezone":"Europe/Berlin"}"#);
+    profile.wayfern_config.as_mut().unwrap().os = Some(host);
+    assert!(enforce_host_os(&profile).is_ok());
+  }
+
+  #[test]
+  fn a_fingerprint_of_another_os_is_refused_before_spawn() {
+    let host = crate::profile::types::get_host_os();
+    let claimed = if host == "windows" {
+      "macos"
+    } else {
+      "windows"
+    };
+    let mut profile = profile_with(r#"{"timezone":"Europe/Berlin"}"#);
+    profile.wayfern_config.as_mut().unwrap().os = Some(claimed.to_string());
+
+    let error = enforce_host_os(&profile).unwrap_err();
+    let parsed: serde_json::Value = serde_json::from_str(&error).unwrap();
+    assert_eq!(parsed["code"], "FINGERPRINT_HOST_OS_MISMATCH");
+    assert_eq!(parsed["params"]["claimed"], claimed);
+    assert_eq!(parsed["params"]["host"], host.as_str());
+  }
+
+  #[test]
+  fn a_profile_without_an_explicit_os_claims_the_machine_that_made_it() {
+    let host = crate::profile::types::get_host_os();
+    let other = if host == "windows" {
+      "macos"
+    } else {
+      "windows"
+    };
+    let mut profile = profile_with(r#"{"timezone":"Europe/Berlin"}"#);
+    profile.wayfern_config.as_mut().unwrap().os = None;
+
+    profile.host_os = Some(other.to_string());
+    assert!(enforce_host_os(&profile).is_err());
+
+    profile.host_os = Some(host);
+    assert!(enforce_host_os(&profile).is_ok());
+  }
+
+  #[test]
+  fn a_mobile_fingerprint_on_a_desktop_is_refused() {
+    let mut profile = profile_with(r#"{"timezone":"Europe/Berlin"}"#);
+    profile.wayfern_config.as_mut().unwrap().os = Some("android".into());
+    let error = enforce_host_os(&profile).unwrap_err();
+    assert!(error.contains("FINGERPRINT_HOST_OS_MISMATCH"), "{error}");
   }
 
   #[test]

@@ -1797,7 +1797,8 @@
       "runRemote": "{{name}} in der Cloud ausführen",
       "moreActions": "Weitere Aktionen für {{name}}",
       "close": "Details von {{name}} schließen",
-      "copyId": "ID von {{name}} kopieren"
+      "copyId": "ID von {{name}} kopieren",
+      "runLocal": "{{name}} auf diesem Rechner ausführen"
     },
     "runningBanner": "Stoppen Sie das Profil, um es zu bearbeiten.",
     "debug": {
@@ -2479,7 +2480,8 @@
       "runRemote": "In der Cloud ausführen",
       "lockNow": "Jetzt sperren",
       "moveToTrash": "In den Papierkorb",
-      "askAgent": "Agenten fragen"
+      "askAgent": "Agenten fragen",
+      "runLocal": "Auf diesem Rechner ausführen"
     },
     "emptyGroupTitle": "Diese Gruppe ist leer",
     "emptyGroupHint": "Erstellen Sie ein Profil in dieser Gruppe oder verschieben Sie vorhandene Profile hierher.",
@@ -2737,6 +2739,7 @@
     "profileLockedElsewhere": "Dieses Profil wird auf einem anderen Gerät verwendet.",
     "profileLockUnavailable": "Es konnte nicht geprüft werden, ob dieses Profil an anderer Stelle verwendet wird. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
     "fingerprintExitMismatch": "Der Exit-Node des Proxys passt nicht zum Fingerprint dieses Profils.",
+    "fingerprintHostOsMismatch": "Dieses Profil gibt {{claimed}} an, aber Donut läuft auf {{host}}. Starte es auf einem {{claimed}}-Rechner oder einer virtuellen Maschine.",
     "launchConsentExpired": "Diese Bestätigung ist nicht mehr gültig. Starten Sie erneut.",
     "vpnWorkerStartFailed": "Die VPN-Verbindung konnte nicht gestartet werden: {{detail}}",
     "exitProbeFailed": "Der Exit-Node des Proxys war nicht erreichbar, um seinen Standort zu prüfen.",
@@ -2995,7 +2998,9 @@
     "pasteTypingKeysHeld": "Lass die Tasten des Kürzels los, damit Donut mit dem Tippen beginnen kann.",
     "pasteTypingPermission": "Donut braucht die Bedienungshilfen-Berechtigung zum Tippen. Öffne Systemeinstellungen > Datenschutz & Sicherheit > Bedienungshilfen, aktiviere Donut und versuche es erneut.",
     "pasteTypingFailed": "Tippen fehlgeschlagen: {{detail}}",
-    "profileStillSyncing": "Dieses Profil wird noch synchronisiert. Versuchen Sie es gleich erneut."
+    "profileStillSyncing": "Dieses Profil wird noch synchronisiert. Versuchen Sie es gleich erneut.",
+    "cloudApiUrlInvalid": "Eine vollständige http://- oder https://-Adresse eingeben.",
+    "cookieBotRequiresWayfern": "Der lokale Cookie-Bot kann nur Wayfern-Profile steuern, da er die DevTools-Verbindung des Browsers nutzt."
   },
   "rail": {
     "profiles": "Profile",
@@ -3086,7 +3091,8 @@
       "selfHosted": "Selbst gehostet",
       "teamUsage": "Team-Nutzung",
       "teamActivity": "Teamaktivität",
-      "teamAccess": "Teamzugriff"
+      "teamAccess": "Teamzugriff",
+      "server": "Server"
     },
     "selfHosted": {
       "title": "Selbst gehosteter Sync-Server",
@@ -3112,6 +3118,14 @@
       "removed": "Sync-Server entfernt.",
       "switched": "Synchronisiert mit {{server}}.",
       "tokenServer": "{{host}} (Sync-Token)"
+    },
+    "server": {
+      "title": "Kontoserver",
+      "description": "Anmeldung, Tarif und Berechtigungen kommen von diesem Server. Standardmäßig Donut Cloud; oder die eigene selbst gehostete Control Plane eintragen.",
+      "urlLabel": "Control-Plane-URL",
+      "urlPlaceholder": "https://control.example.com",
+      "saved": "Kontoserver gespeichert. Bitte erneut anmelden.",
+      "reset": "Donut Cloud verwenden"
     }
   },
   "shortcutsPage": {
@@ -3650,7 +3664,9 @@
       "fixProxy": "Proxy verknüpfen",
       "fixFailed": "Diese Korrektur konnte nicht angewendet werden.",
       "exitNodeHint": "Ohne Proxy oder VPN geht der Durchlauf von der eigenen Rechenzentrumsadresse der Remote-Rechner aus. Stundenlanger Datenverkehr aus einem Hosting-Netz schadet der Identität des Profils mehr, als es gar nicht aufzuwärmen.",
-      "reasonSyncPassword": "Passwort der Sync-Verschlüsselung ist festgelegt"
+      "reasonSyncPassword": "Passwort der Sync-Verschlüsselung ist festgelegt",
+      "reasonLocalBrowser": "Der lokale Cookie-Bot benötigt ein Wayfern-Profil",
+      "reasonEphemeral": "Dieses Profil ist flüchtig; seine Cookies wären beim Schließen wieder weg"
     },
     "conflict": {
       "title": "{{email}} wärmt dieses Profil bereits um {{time}} auf",
@@ -3742,6 +3758,11 @@
       "dueSoon_other": "{{count}} Profile in den nächsten 24 h",
       "nothingScheduled": "Nichts geplant",
       "blocked": "Kein Profil kann laufen. Siehe die Liste unten."
+    },
+    "local": {
+      "description": "Wärmt Profile auf diesem Rechner nach deinem Zeitplan auf.",
+      "emptyHint": "Wähle ein Profil aus, und der Bot wärmt es auf diesem Rechner zu den von dir festgelegten Zeiten auf. Donut muss geöffnet bleiben.",
+      "enrolDescription": "Der Bot öffnet das Profil auf diesem Rechner und besucht die von dir aufgeführten Seiten. Donut muss geöffnet bleiben."
     }
   },
   "prelaunchGate": {

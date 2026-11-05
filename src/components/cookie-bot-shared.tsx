@@ -37,7 +37,9 @@ import {
   isCookieBotPlatform,
   type RemoteHoursQuota,
 } from "@/lib/cookie-bot";
+import { isSelfHostedAccount } from "@/lib/entitlements";
 import { MOTION_EASE_OUT } from "@/lib/motion";
+import { getCurrentOS } from "@/lib/platform";
 import type { RemoteSessionState } from "@/lib/remote-sessions";
 import { cn } from "@/lib/utils";
 import type { BrowserProfile, WayfernFingerprintConfig } from "@/types";
@@ -434,7 +436,9 @@ export type PreflightCode =
   | "syncPassword"
   | "unknownPlatform"
   | "unsupportedPlatform"
-  | "noExitNode";
+  | "noExitNode"
+  | "localBrowser"
+  | "ephemeral";
 
 /** The one-click repairs a failed preflight can name. */
 export type PreflightFix = "sync" | "syncSettings" | "proxy";
@@ -470,6 +474,35 @@ export function preflight(
   profile: BrowserProfile,
   syncPasswordSet: boolean,
 ): PreflightResult {
+  // A self-hosted account has no remote host: the bot drives this machine.
+  // Sync, a proxy and a remotely reachable exit are therefore not conditions,
+  // but the profile has to be one this machine can launch and drive over CDP.
+  if (isSelfHostedAccount()) {
+    const os = resolvedOs(profile);
+    if (!os) {
+      return {
+        eligible: false,
+        code: "unknownPlatform",
+        params: {},
+        fix: null,
+      };
+    }
+    if (os !== getCurrentOS()) {
+      return {
+        eligible: false,
+        code: "unsupportedPlatform",
+        params: { os },
+        fix: null,
+      };
+    }
+    if (profile.browser !== "wayfern") {
+      return { eligible: false, code: "localBrowser", params: {}, fix: null };
+    }
+    if (profile.ephemeral) {
+      return { eligible: false, code: "ephemeral", params: {}, fix: null };
+    }
+    return ELIGIBLE;
+  }
   const syncMode = profile.sync_mode ?? "Disabled";
   if (syncMode === "Disabled") {
     return { eligible: false, code: "syncOff", params: {}, fix: "sync" };
@@ -524,6 +557,10 @@ export function preflightReason(t: TFunction, result: PreflightResult): string {
       });
     case "noExitNode":
       return t("cookieBot.preflight.reasonNoExitNode");
+    case "localBrowser":
+      return t("cookieBot.preflight.reasonLocalBrowser");
+    case "ephemeral":
+      return t("cookieBot.preflight.reasonEphemeral");
     default:
       return "";
   }

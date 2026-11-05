@@ -3720,11 +3720,15 @@ async fn run_profile_remote(
     .find(|p| p.id.to_string() == id)
     .ok_or((StatusCode::NOT_FOUND, "profile not found".to_string()))?;
 
-  // The profile must exist in cloud storage before a remote host can open it —
+  // The profile must exist in cloud storage before a leased host can open it —
   // the VM pulls it from donut-sync, and a profile that has never synced would
   // launch an empty browser and then push that emptiness back over the real one.
-  if let Err(reason) = remote_launch_precondition(profile).await {
-    return Err((StatusCode::BAD_REQUEST, reason));
+  // A self-hosted session runs on this machine, where the local copy IS the
+  // profile, so those cloud-storage rules do not apply.
+  if !crate::cloud_auth::is_self_hosted_account() {
+    if let Err(reason) = remote_launch_precondition(profile).await {
+      return Err((StatusCode::BAD_REQUEST, reason));
+    }
   }
 
   // Same allowlist the MCP surface enforces, from the same predicate so the two

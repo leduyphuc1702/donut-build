@@ -247,7 +247,9 @@ export function CreateProfileDialog({
   }, [isOpen, allowance, loadAllowance]);
 
   const overAllowance =
-    allowance !== null && allowance.used >= allowance.per_hour;
+    allowance !== null &&
+    !allowance.unlimited &&
+    allowance.used >= allowance.per_hour;
   const hourlyCapReached = overAllowance && allowance.enforcement === "hard";
   const creatingQuickly = overAllowance && allowance.enforcement === "soft";
   const closeABrowser = allowance?.close_a_browser === true;
@@ -363,6 +365,7 @@ export function CreateProfileDialog({
   // the allowance even where a single profile past it is only a warning.
   const batchRefused =
     allowance !== null &&
+    !allowance.unlimited &&
     (many || appliedTemplate !== null) &&
     count > allowance.remaining;
   const isCreateDisabled =
@@ -667,7 +670,7 @@ export function CreateProfileDialog({
       }),
     });
   }
-  if (allowance !== null && allowance.remaining > 0) {
+  if (allowance !== null && !allowance.unlimited && allowance.remaining > 0) {
     countHint.push({
       text: t("templates.allowanceLeft", { count: allowance.remaining }),
       limit: maxCount < MAX_BULK_CREATE,
@@ -1651,6 +1654,7 @@ interface ProfileCreationAllowance {
   retry_after_secs: number | null;
   remaining: number;
   close_a_browser: boolean;
+  unlimited: boolean;
 }
 
 const STATUS_CLASS =

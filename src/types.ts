@@ -234,6 +234,10 @@ export interface CloudUser {
   deviceOrdinal?: number | null;
   deviceCount?: number | null;
   isPrimaryDevice?: boolean | null;
+  // The account is served by a control plane this deployment runs, not Donut
+  // cloud. Services the cloud performs remotely (remote sessions, cookie bot)
+  // then run on this machine instead, so their sync/exit rules do not apply.
+  selfHosted?: boolean;
   // Plan-derived capabilities. The desktop resolves this before handing CloudUser
   // to the UI; optional to stay safe on older cached state.
   entitlements?: ServerEntitlements;

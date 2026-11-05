@@ -57,7 +57,7 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::handshake::client::Request as WsRequest;
 use tokio_tungstenite::tungstenite::Message;
 
-use crate::cloud_auth::{CLOUD_API_URL, CLOUD_AUTH};
+use crate::cloud_auth::CLOUD_AUTH;
 use crate::mcp_server::{McpOutcome, McpServer};
 
 /// The wire contract's version. Bumped only for a change a current desktop
@@ -574,7 +574,7 @@ type BridgeStream =
 fn bridge_url() -> String {
   format!(
     "{}{BRIDGE_PATH}",
-    CLOUD_API_URL.replacen("https://", "wss://", 1)
+    crate::cloud_auth::cloud_api_base().replacen("https://", "wss://", 1)
   )
 }
 

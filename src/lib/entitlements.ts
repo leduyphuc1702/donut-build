@@ -237,3 +237,21 @@ export function canViewTeamActivity(
     (user?.teamRole === "owner" || user?.teamRole === "admin")
   );
 }
+
+/**
+ * The signed-in account is served by a control plane this deployment runs.
+ * A few cloud-only services (remote sessions, the Cookie Bot) then run on this
+ * machine instead, so their cloud rules about a sync server and a remotely
+ * reachable exit node are not preflight conditions.
+ */
+let selfHostedAccount = false;
+
+export function rememberSelfHostedAccount(
+  user: CloudUser | null | undefined,
+): void {
+  selfHostedAccount = user?.selfHosted === true;
+}
+
+export function isSelfHostedAccount(): boolean {
+  return selfHostedAccount;
+}

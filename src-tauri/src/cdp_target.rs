@@ -279,6 +279,13 @@ pub async fn connect_local_browser(profile: &BrowserProfile) -> Option<CdpConnec
   dial(request, None).await.ok().map(CdpConnection::new)
 }
 
+/// A page-level socket on a locally running browser, waiting for one that is
+/// still starting. Used by a self-hosted remote session, whose host is this
+/// machine and whose CDP endpoint is therefore the browser's own.
+pub async fn local_ws_url(profile: &BrowserProfile) -> Option<String> {
+  local_page_ws_url(profile, Patience::WaitForLaunch).await
+}
+
 /// A page-level socket on a locally running browser.
 ///
 /// Returns `None` rather than an error: a miss is how the resolver decides the

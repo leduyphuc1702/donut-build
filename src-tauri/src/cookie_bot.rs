@@ -612,6 +612,19 @@ pub struct CookieBotUsage {
 /// [`bot_precondition`] for this device as it is now: also refused while the
 /// account syncs with its own server, which the bot's hosts cannot reach.
 pub fn run_precondition(profile: &BrowserProfile) -> Result<(), String> {
+  // A self-hosted account has no remote host: the run happens on this machine.
+  // Sync, a proxy and a remotely reachable exit are conditions of a host that
+  // has to obtain the profile over the network, not of a local launch. What
+  // remains is that this machine can launch and drive the profile at all.
+  if crate::cloud_auth::is_self_hosted_account() {
+    if profile.ephemeral {
+      return Err(error("PROFILE_EPHEMERAL", &[]));
+    }
+    if profile.browser != "wayfern" {
+      return Err(error("COOKIE_BOT_REQUIRES_WAYFERN", &[]));
+    }
+    return Ok(());
+  }
   if let Some(refusal) = crate::sync::account_server::cloud_run_refusal() {
     return Err(refusal);
   }
@@ -847,6 +860,9 @@ fn base() -> String {
 
 /// Every enrolment the caller can see.
 pub async fn list_schedules(scope: Option<&str>) -> Result<CookieBotScheduleList, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return crate::cookie_bot_local::list_schedules(scope).await;
+  }
   let query = scope
     .map(|s| vec![("scope".to_string(), s.to_string())])
     .unwrap_or_default();
@@ -871,6 +887,9 @@ pub async fn list_schedules(scope: Option<&str>) -> Result<CookieBotScheduleList
 /// "Not enrolled" is a state the UI renders, not a failure it reports, so the
 /// 404 is folded into `Ok(None)` here rather than at every call site.
 pub async fn get_schedule(profile_id: &str) -> Result<Option<CookieBotSchedule>, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return crate::cookie_bot_local::get_schedule(profile_id);
+  }
   let result: Result<ScheduleEnvelope, CookieBotError> = request(
     reqwest::Method::GET,
     format!("{}/schedules/{}", base(), urlencoding::encode(profile_id)),
@@ -911,6 +930,9 @@ pub async fn save_schedule(
   input: &CookieBotScheduleInput,
   acknowledge_conflict: bool,
 ) -> Result<CookieBotScheduleSaved, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return crate::cookie_bot_local::save_schedule(profile_id, input, acknowledge_conflict).await;
+  }
   let mut body = serde_json::to_value(input).map_err(|e| {
     CookieBotError(cloud_errors::transport_failure(&format!(
       "encode schedule: {e}"
@@ -945,6 +967,9 @@ pub async fn update_profile_state(
   state: ProfileState,
   identity: &ProfileIdentity,
 ) -> Result<CookieBotSchedule, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return crate::cookie_bot_local::update_profile_state(profile_id, state, identity);
+  }
   let body = profile_state_body(state, identity);
 
   let envelope: ScheduleEnvelope = request(
@@ -1165,6 +1190,9 @@ fn record_own_schedules(enrolled: &mut Option<HashSet<String>>, list: &CookieBot
 /// Turn the bot off for this profile. Safe to repeat: deleting an enrolment
 /// that is already gone succeeds with `deleted: false`.
 pub async fn delete_schedule(profile_id: &str) -> Result<CookieBotScheduleDeleted, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return Ok(crate::cookie_bot_local::delete_schedule(profile_id));
+  }
   let deleted: CookieBotScheduleDeleted = request(
     reqwest::Method::DELETE,
     format!("{}/schedules/{}", base(), urlencoding::encode(profile_id)),
@@ -1184,6 +1212,14 @@ pub async fn check_conflicts(
   timezone: Option<&str>,
   days_mask: Option<u8>,
 ) -> Result<CookieBotConflictCheck, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return Ok(crate::cookie_bot_local::check_conflicts(
+      profile_id,
+      run_at_minute,
+      timezone,
+      days_mask,
+    ));
+  }
   let mut query = vec![("profile_id".to_string(), profile_id.to_string())];
   if let Some(minute) = run_at_minute {
     query.push(("run_at_minute".to_string(), minute.to_string()));
@@ -1212,6 +1248,11 @@ pub async fn list_runs(
   limit: Option<u32>,
   before: Option<&str>,
 ) -> Result<CookieBotRunPage, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return Ok(crate::cookie_bot_local::list_runs(
+      profile_id, scope, limit, before,
+    ));
+  }
   let mut query = Vec::new();
   if let Some(id) = profile_id {
     query.push(("profile_id".to_string(), id.to_string()));
@@ -1245,6 +1286,9 @@ pub async fn run_now(
   profile_id: &str,
   max_minutes: Option<u32>,
 ) -> Result<CookieBotRunStarted, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return crate::cookie_bot_local::run_now(profile_id, max_minutes);
+  }
   let mut body = serde_json::Map::new();
   body.insert(
     "profile_id".to_string(),
@@ -1271,6 +1315,9 @@ pub async fn run_now(
 /// under a live browser — retiring a row while something is still writing the
 /// cookie jar is the two-writer case the profile lock exists to prevent.
 pub async fn cancel_run(run_id: &str) -> Result<CookieBotRun, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return crate::cookie_bot_local::cancel_run(run_id);
+  }
   let envelope: RunEnvelope = request(
     reqwest::Method::DELETE,
     format!("{}/runs/{}", base(), urlencoding::encode(run_id)),
@@ -1289,6 +1336,9 @@ struct RunEnvelope {
 
 /// The intensities the server offers today.
 pub async fn list_presets() -> Result<CookieBotPresetList, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return Ok(crate::cookie_bot_local::list_presets());
+  }
   request(
     reqwest::Method::GET,
     format!("{}/presets", base()),
@@ -1325,6 +1375,9 @@ struct UserTemplateDeleted {
 
 /// Every site list this user has saved, most recently edited first.
 pub async fn list_user_templates() -> Result<Vec<CookieBotUserTemplate>, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return Ok(crate::cookie_bot_local::list_user_templates());
+  }
   let envelope: UserTemplateListEnvelope = request(
     reqwest::Method::GET,
     format!("{}/user-templates", base()),
@@ -1341,6 +1394,9 @@ pub async fn create_user_template(
   name: &str,
   sites: &[String],
 ) -> Result<CookieBotUserTemplate, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return crate::cookie_bot_local::create_user_template(name, sites);
+  }
   let body = serde_json::json!({ "name": name, "sites": sites });
   let envelope: UserTemplateEnvelope = request(
     reqwest::Method::POST,
@@ -1364,6 +1420,9 @@ pub async fn update_user_template(
   name: Option<&str>,
   sites: Option<&[String]>,
 ) -> Result<CookieBotUserTemplate, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return crate::cookie_bot_local::update_user_template(id, name, sites);
+  }
   let mut body = serde_json::Map::new();
   if let Some(name) = name {
     body.insert(
@@ -1392,6 +1451,9 @@ pub async fn update_user_template(
 /// Safe to repeat: deleting a list that is already gone answers `false` rather
 /// than 404, which is what makes a retry after a dropped response harmless.
 pub async fn delete_user_template(id: &str) -> Result<bool, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return Ok(crate::cookie_bot_local::delete_user_template(id));
+  }
   let deleted: UserTemplateDeleted = request(
     reqwest::Method::DELETE,
     format!("{}/user-templates/{}", base(), urlencoding::encode(id)),
@@ -1466,6 +1528,9 @@ pub async fn delete_cookie_bot_user_template(id: String) -> Result<bool, String>
 
 /// Per-member and per-profile spend for a calendar month (`YYYY-MM`).
 pub async fn team_usage(period: Option<&str>) -> Result<CookieBotUsage, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return Ok(crate::cookie_bot_local::team_usage(period).await);
+  }
   let query = period
     .map(|p| vec![("period".to_string(), p.to_string())])
     .unwrap_or_default();
@@ -1484,6 +1549,9 @@ pub async fn team_usage(period: Option<&str>) -> Result<CookieBotUsage, CookieBo
 /// Being refused a launch must not be the only way to learn a limit exists,
 /// which is what this route has been for as long as nothing called it.
 pub async fn remote_hours_quota() -> Result<RemoteHoursQuota, CookieBotError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return Ok(crate::cookie_bot_local::remote_hours_quota().await);
+  }
   request(
     reqwest::Method::GET,
     format!(

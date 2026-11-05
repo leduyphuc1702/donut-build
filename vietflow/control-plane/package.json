@@ -1,0 +1,15 @@
+{
+  "name": "donut-control-plane",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted account and entitlement control plane for the Vietflow Donut build",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/server.test.mjs",
+    "check": "node --check server.mjs"
+  }
+}

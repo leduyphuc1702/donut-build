@@ -50,6 +50,9 @@ pub struct Allowance {
   pub remaining: u64,
   /// No fingerprint can be generated until a running browser is closed.
   pub close_a_browser: bool,
+  /// The account asked for no cap (a self-hosted control plane sends
+  /// `requestsPerHour: 0`). `per_hour`/`remaining` are then not meaningful.
+  pub unlimited: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -118,6 +121,7 @@ impl GenerationLog {
       retry_after_secs,
       remaining: per_hour.saturating_sub(used),
       close_a_browser: false,
+      unlimited: false,
     }
   }
 
@@ -145,6 +149,7 @@ struct Policy {
   /// The profile count a free allowance was read at.
   profiles: Option<usize>,
   running_browsers: Option<usize>,
+  unlimited: bool,
 }
 
 async fn policy() -> Policy {
@@ -152,12 +157,33 @@ async fn policy() -> Policy {
     // A team member's effective plan is the owner's, so Team is capped as Pro.
     Some(state) if state.user.entitlements().active => {
       let solo = state.user.effective_plan() == "solo";
+      // A server that sends `requestsPerHour: 0` is saying "no cap"; the
+      // self-hosted control plane does exactly that. The window is still
+      // recorded for the usage display, but it never refuses a creation.
+      let unlimited = state.user.entitlements().requests_per_hour == 0;
       Policy {
-        enforcement: Enforcement::Hard,
-        per_hour: if solo { SOLO_PER_HOUR } else { PRO_PER_HOUR },
+        enforcement: if unlimited {
+          Enforcement::Soft
+        } else {
+          Enforcement::Hard
+        },
+        per_hour: if unlimited {
+          u64::MAX
+        } else if solo {
+          SOLO_PER_HOUR
+        } else {
+          PRO_PER_HOUR
+        },
         identity: state.user.id,
         profiles: None,
-        running_browsers: solo.then_some(SOLO_RUNNING_BROWSERS),
+        running_browsers: if unlimited {
+          None
+        } else if solo {
+          Some(SOLO_RUNNING_BROWSERS)
+        } else {
+          None
+        },
+        unlimited,
       }
     }
     signed_in => {
@@ -170,6 +196,7 @@ async fn policy() -> Policy {
         per_hour: free_per_hour(profiles),
         profiles: Some(profiles),
         running_browsers: Some(FREE_RUNNING_BROWSERS),
+        unlimited: false,
       }
     }
   }
@@ -274,6 +301,11 @@ pub async fn get_profile_creation_allowance() -> Allowance {
     );
   if let Some(profiles) = policy.profiles {
     allowance.remaining = free_batch_room(profiles, allowance.used);
+  }
+  allowance.unlimited = policy.unlimited;
+  if policy.unlimited {
+    allowance.retry_after_secs = None;
+    allowance.remaining = u64::MAX;
   }
   allowance.close_a_browser = no_seat_left(policy.running_browsers, running_wayfern_browsers());
   allowance

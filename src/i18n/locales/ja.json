@@ -1797,7 +1797,8 @@
       "runRemote": "{{name}} をクラウドで実行",
       "moreActions": "{{name}} のその他の操作",
       "close": "{{name}} の詳細を閉じる",
-      "copyId": "{{name}} の ID をコピー"
+      "copyId": "{{name}} の ID をコピー",
+      "runLocal": "このマシンで {{name}} を実行"
     },
     "runningBanner": "編集するにはプロファイルを停止してください。",
     "debug": {
@@ -2479,7 +2480,8 @@
       "runRemote": "クラウドで実行",
       "lockNow": "今すぐロック",
       "moveToTrash": "ゴミ箱に移動",
-      "askAgent": "エージェントに依頼"
+      "askAgent": "エージェントに依頼",
+      "runLocal": "このマシンで実行"
     },
     "emptyGroupTitle": "このグループは空です",
     "emptyGroupHint": "このグループにプロファイルを作成するか、既存のプロファイルを移動してください。",
@@ -2737,6 +2739,7 @@
     "profileLockedElsewhere": "このプロファイルは別のデバイスで使用中です。",
     "profileLockUnavailable": "このプロファイルが他で使用中か確認できませんでした。接続を確認して再試行してください。",
     "fingerprintExitMismatch": "プロキシの出口ノードがこのプロファイルのフィンガープリントと一致しません。",
+    "fingerprintHostOsMismatch": "このプロファイルは {{claimed}} を名乗っていますが、Donut は {{host}} 上で実行されています。{{claimed}} の実機または仮想マシンで起動してください。",
     "launchConsentExpired": "この確認は無効になりました。もう一度起動してください。",
     "vpnWorkerStartFailed": "VPN接続を開始できませんでした: {{detail}}",
     "exitProbeFailed": "プロキシの出口ノードに接続できず、所在地を確認できませんでした。",
@@ -2995,7 +2998,9 @@
     "pasteTypingKeysHeld": "ショートカットのキーを離すと、Donut が入力を始めます。",
     "pasteTypingPermission": "入力するには Donut にアクセシビリティの許可が必要です。システム設定 > プライバシーとセキュリティ > アクセシビリティで Donut をオンにしてから、もう一度試してください。",
     "pasteTypingFailed": "入力できませんでした: {{detail}}",
-    "profileStillSyncing": "このプロファイルはまだ同期中です。しばらくしてからもう一度お試しください。"
+    "profileStillSyncing": "このプロファイルはまだ同期中です。しばらくしてからもう一度お試しください。",
+    "cloudApiUrlInvalid": "http:// または https:// で始まる完全なアドレスを入力してください。",
+    "cookieBotRequiresWayfern": "ローカル Cookie Bot はブラウザの DevTools 接続を使うため、Wayfern プロファイルのみ操作できます。"
   },
   "rail": {
     "profiles": "プロファイル",
@@ -3086,7 +3091,8 @@
       "selfHosted": "セルフホスト",
       "teamUsage": "チームの使用状況",
       "teamActivity": "チームのアクティビティ",
-      "teamAccess": "チームのアクセス"
+      "teamAccess": "チームのアクセス",
+      "server": "サーバー"
     },
     "selfHosted": {
       "title": "セルフホスト同期サーバー",
@@ -3112,6 +3118,14 @@
       "removed": "同期サーバーを削除しました。",
       "switched": "{{server}} と同期しています。",
       "tokenServer": "{{host}}（同期トークン）"
+    },
+    "server": {
+      "title": "アカウントサーバー",
+      "description": "サインイン、プラン、権限はこのサーバーから取得します。既定のまま Donut Cloud を使うか、セルフホストのコントロールプレーンを入力してください。",
+      "urlLabel": "コントロールプレーンの URL",
+      "urlPlaceholder": "https://control.example.com",
+      "saved": "アカウントサーバーを保存しました。もう一度サインインしてください。",
+      "reset": "Donut Cloud を使う"
     }
   },
   "shortcutsPage": {
@@ -3650,7 +3664,9 @@
       "fixProxy": "プロキシを割り当てる",
       "fixFailed": "その修正を適用できませんでした。",
       "exitNodeHint": "プロキシも VPN もない場合、通信はマシン群自身のデータセンターのアドレスから出ていきます。ホスティングネットワークからの長時間のトラフィックは、ウォームアップしない場合よりもプロファイルの信頼性を損ないます。",
-      "reasonSyncPassword": "同期暗号化のパスワードが設定済み"
+      "reasonSyncPassword": "同期暗号化のパスワードが設定済み",
+      "reasonLocalBrowser": "ローカル Cookie Bot には Wayfern プロファイルが必要です",
+      "reasonEphemeral": "このプロファイルは一時的（エフェメラル）のため、閉じると Cookie は消えます"
     },
     "conflict": {
       "title": "{{email}} がすでにこのプロファイルを {{time}} にウォームアップしています",
@@ -3742,6 +3758,11 @@
       "dueSoon_other": "今後 24 時間で {{count}} 件のプロファイル",
       "nothingScheduled": "予定はありません",
       "blocked": "実行できるプロファイルがありません。下の一覧を確認してください。"
+    },
+    "local": {
+      "description": "このマシン上で、指定したスケジュールに従ってプロファイルを温めます。",
+      "emptyHint": "プロファイルを選ぶと、指定した時刻にこのマシン上で温めます。Donut を開いたままにしてください。",
+      "enrolDescription": "ボットはこのマシン上でプロファイルを開き、指定したサイトを閲覧します。Donut を開いたままにしてください。"
     }
   },
   "prelaunchGate": {

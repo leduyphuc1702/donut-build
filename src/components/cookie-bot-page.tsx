@@ -53,7 +53,11 @@ import {
   deleteCookieBotSchedule,
   getCookieBotRuns,
 } from "@/lib/cookie-bot";
-import { canUseCookieBot, getEntitlements } from "@/lib/entitlements";
+import {
+  canUseCookieBot,
+  getEntitlements,
+  isSelfHostedAccount,
+} from "@/lib/entitlements";
 import { showErrorToast, showSuccessToast } from "@/lib/toast-utils";
 import { cn } from "@/lib/utils";
 import type { BrowserProfile, CloudUser } from "@/types";
@@ -400,7 +404,11 @@ export function CookieBotPage({
             <DialogHeader>
               <DialogTitle>{t("cookieBot.title")}</DialogTitle>
               <DialogDescription>
-                {t("cookieBot.description")}
+                {t(
+                  isSelfHostedAccount()
+                    ? "cookieBot.local.description"
+                    : "cookieBot.description",
+                )}
               </DialogDescription>
             </DialogHeader>
           )}

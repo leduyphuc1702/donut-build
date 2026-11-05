@@ -64,6 +64,7 @@ export type BackendErrorCode =
   | "ACCOUNT_SYNC_PLAN_REQUIRED"
   | "ACCOUNT_SYNC_UNAVAILABLE"
   | "SYNC_SERVER_URL_INVALID"
+  | "CLOUD_API_URL_INVALID"
   | "SYNC_SERVER_UNREACHABLE"
   | "SYNC_SERVER_STORAGE_UNREACHABLE"
   | "SYNC_SERVER_NO_ACCOUNTS"
@@ -299,6 +300,9 @@ export type BackendErrorCode =
   // rendered as the raw machine identifier.
   | "COOKIE_BOT_REQUIRES_PROXY"
   | "COOKIE_BOT_TOUCH_FINGERPRINT_UNSUPPORTED"
+  // A self-hosted bot drives the profile over CDP on this machine, which only
+  // Wayfern exposes.
+  | "COOKIE_BOT_REQUIRES_WAYFERN"
   | "RECIPES_NOT_ENTITLED"
   | "AGENT_RECIPE_INVALID"
   | "AGENT_RECIPE_NOT_FOUND"
@@ -345,6 +349,9 @@ export type BackendErrorCode =
   | "FEEDBACK_SEND_FAILED"
   | "FEEDBACK_LOGS_UNREADABLE"
   | "FINGERPRINT_EXIT_MISMATCH"
+  // The profile's fingerprint claims another OS than the machine running the
+  // browser. `params.claimed` and `params.host` name both.
+  | "FINGERPRINT_HOST_OS_MISMATCH"
   // The launch refuses instead of opening a window on an unmanaged device: a
   // silent fallback would leave the user browsing a random fingerprint while
   // the UI reported success, which is the worst failure an anti-detect product
@@ -643,6 +650,8 @@ export function translateBackendError(t: TFunction, err: unknown): string {
       return t("backendErrors.accountSyncUnavailable");
     case "SYNC_SERVER_URL_INVALID":
       return t("backendErrors.syncServerUrlInvalid");
+    case "CLOUD_API_URL_INVALID":
+      return t("backendErrors.cloudApiUrlInvalid");
     case "SYNC_SERVER_UNREACHABLE":
       return t("backendErrors.syncServerUnreachable");
     case "SYNC_SERVER_STORAGE_UNREACHABLE":
@@ -1157,6 +1166,8 @@ export function translateBackendError(t: TFunction, err: unknown): string {
       });
     case "COOKIE_BOT_TOUCH_FINGERPRINT_UNSUPPORTED":
       return t("backendErrors.cookieBotTouchFingerprintUnsupported");
+    case "COOKIE_BOT_REQUIRES_WAYFERN":
+      return t("backendErrors.cookieBotRequiresWayfern");
     case "RECIPES_NOT_ENTITLED":
       return t("backendErrors.recipesNotEntitled");
     case "AGENT_RECIPE_INVALID":
@@ -1254,6 +1265,11 @@ export function translateBackendError(t: TFunction, err: unknown): string {
     // room for one sentence.
     case "FINGERPRINT_EXIT_MISMATCH":
       return t("backendErrors.fingerprintExitMismatch");
+    case "FINGERPRINT_HOST_OS_MISMATCH":
+      return t("backendErrors.fingerprintHostOsMismatch", {
+        claimed: remoteOsLabel(parsed.params?.claimed ?? ""),
+        host: remoteOsLabel(parsed.params?.host ?? ""),
+      });
     case "WAYFERN_FINGERPRINT_APPLY_FAILED":
       return t("backendErrors.wayfernFingerprintApplyFailed", {
         detail: parsed.params?.detail ?? "",

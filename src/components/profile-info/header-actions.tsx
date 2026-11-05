@@ -12,6 +12,7 @@ import {
   LuLayoutTemplate,
   LuLoaderCircle,
   LuLock,
+  LuMonitor,
   LuPlay,
   LuSquare,
   LuTrash2,
@@ -33,7 +34,7 @@ import { useCloudAuth } from "@/hooks/use-cloud-auth";
 import { useMotionAllowed } from "@/hooks/use-motion-allowed";
 import { useSyncPasswordSet } from "@/hooks/use-sync-password";
 import { translateBackendError } from "@/lib/backend-errors";
-import { getEntitlements } from "@/lib/entitlements";
+import { getEntitlements, isSelfHostedAccount } from "@/lib/entitlements";
 import { MOTION_SPRING } from "@/lib/motion";
 import {
   type RemoteHandoffState,
@@ -109,14 +110,17 @@ export function useCanRunRemote(
   const { user } = useCloudAuth();
   const entitlements = getEntitlements(user);
   const syncPasswordSet = useSyncPasswordSet();
+  // A self-hosted account has no fleet: the session opens on this machine, so
+  // the rules about a host pulling the profile from cloud storage do not apply.
+  const local = user?.selfHosted === true;
   return (
     Boolean(user) &&
     entitlements.active &&
     entitlements.remoteInteractive &&
     profile.browser === "wayfern" &&
     profile.ephemeral !== true &&
-    profile.sync_mode === "Regular" &&
-    !syncPasswordSet &&
+    (local || profile.sync_mode === "Regular") &&
+    (local || !syncPasswordSet) &&
     !isRunning &&
     !handoffState
   );
@@ -125,7 +129,13 @@ export function useCanRunRemote(
 export function RunInCloudButton({ profile }: { profile: BrowserProfile }) {
   const { t } = useTranslation();
   const [starting, setStarting] = React.useState(false);
-  const label = t("profileInfo.aria.runRemote", { name: profile.name });
+  // A self-hosted account runs the session here, so saying "cloud" and showing
+  // a cloud icon would name a host that does not exist.
+  const local = isSelfHostedAccount();
+  const label = t(
+    local ? "profileInfo.aria.runLocal" : "profileInfo.aria.runRemote",
+    { name: profile.name },
+  );
 
   const start = async () => {
     setStarting(true);
@@ -153,12 +163,18 @@ export function RunInCloudButton({ profile }: { profile: BrowserProfile }) {
         >
           {starting ? (
             <LuLoaderCircle className="size-3.5 animate-spin" />
+          ) : local ? (
+            <LuMonitor className="size-3.5" />
           ) : (
             <LuCloud className="size-3.5" />
           )}
         </Button>
       </TooltipTrigger>
-      <TooltipContent>{t("profileTable.menu.runRemote")}</TooltipContent>
+      <TooltipContent>
+        {t(
+          local ? "profileTable.menu.runLocal" : "profileTable.menu.runRemote",
+        )}
+      </TooltipContent>
     </Tooltip>
   );
 }

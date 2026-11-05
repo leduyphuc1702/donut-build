@@ -10,6 +10,7 @@ import {
   LuInfo,
   LuLock,
   LuMessagesSquare,
+  LuMonitor,
   LuPencil,
   LuPlay,
   LuSquare,
@@ -23,6 +24,7 @@ import {
   ContextMenuSeparator,
   ContextMenuShortcut,
 } from "@/components/ui/context-menu";
+import { isSelfHostedAccount } from "@/lib/entitlements";
 import { keyToken } from "@/lib/shortcuts";
 import { showErrorToast, showSuccessToast } from "@/lib/toast-utils";
 import type { BrowserProfile } from "@/types";
@@ -161,8 +163,12 @@ export function RowContextMenuContent({
           disabled={actions.isRunning}
           onSelect={actions.onRunRemote}
         >
-          <LuCloud />
-          {t("profileTable.menu.runRemote")}
+          {isSelfHostedAccount() ? <LuMonitor /> : <LuCloud />}
+          {t(
+            isSelfHostedAccount()
+              ? "profileTable.menu.runLocal"
+              : "profileTable.menu.runRemote",
+          )}
         </ContextMenuItem>
       )}
       {actions.onLockNow && unlocked && (

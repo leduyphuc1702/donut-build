@@ -1797,7 +1797,8 @@
       "runRemote": "Chạy {{name}} trên đám mây",
       "moreActions": "Thao tác khác cho {{name}}",
       "close": "Đóng chi tiết của {{name}}",
-      "copyId": "Sao chép ID của {{name}}"
+      "copyId": "Sao chép ID của {{name}}",
+      "runLocal": "Chạy {{name}} trên máy này"
     },
     "runningBanner": "Dừng hồ sơ để chỉnh sửa.",
     "debug": {
@@ -2479,7 +2480,8 @@
       "runRemote": "Chạy trên đám mây",
       "lockNow": "Khóa ngay",
       "moveToTrash": "Chuyển vào thùng rác",
-      "askAgent": "Hỏi tác tử"
+      "askAgent": "Hỏi tác tử",
+      "runLocal": "Chạy trên máy này"
     },
     "emptyGroupTitle": "Nhóm này đang trống",
     "emptyGroupHint": "Tạo một hồ sơ trong nhóm này hoặc chuyển các hồ sơ hiện có vào đây.",
@@ -2737,6 +2739,7 @@
     "profileLockedElsewhere": "Hồ sơ này đang được sử dụng trên thiết bị khác.",
     "profileLockUnavailable": "Không thể kiểm tra hồ sơ này có đang được dùng ở nơi khác hay không. Hãy kiểm tra kết nối và thử lại.",
     "fingerprintExitMismatch": "Nút thoát của proxy không khớp với dấu vân tay của hồ sơ này.",
+    "fingerprintHostOsMismatch": "Hồ sơ này khai {{claimed}}, nhưng Donut đang chạy trên {{host}}. Hãy mở nó trên máy hoặc máy ảo {{claimed}}.",
     "launchConsentExpired": "Xác nhận đó không còn hiệu lực. Hãy thử khởi chạy lại.",
     "vpnWorkerStartFailed": "Không thể khởi động kết nối VPN: {{detail}}",
     "exitProbeFailed": "Không thể kết nối tới nút thoát của proxy để kiểm tra vị trí.",
@@ -2995,7 +2998,9 @@
     "pasteTypingKeysHeld": "Hãy nhả các phím tắt ra để Donut bắt đầu gõ.",
     "pasteTypingPermission": "Donut cần quyền Trợ năng để gõ. Mở Cài đặt hệ thống > Quyền riêng tư & Bảo mật > Trợ năng, bật Donut rồi thử lại.",
     "pasteTypingFailed": "Không gõ được: {{detail}}",
-    "profileStillSyncing": "Hồ sơ này vẫn đang đồng bộ. Hãy thử lại sau ít phút."
+    "profileStillSyncing": "Hồ sơ này vẫn đang đồng bộ. Hãy thử lại sau ít phút.",
+    "cloudApiUrlInvalid": "Nhập địa chỉ http:// hoặc https:// đầy đủ.",
+    "cookieBotRequiresWayfern": "Cookie Bot cục bộ chỉ điều khiển được hồ sơ Wayfern vì nó dùng kết nối DevTools của trình duyệt."
   },
   "rail": {
     "profiles": "Profile",
@@ -3086,7 +3091,8 @@
       "selfHosted": "Tự lưu trữ",
       "teamUsage": "Mức dùng của nhóm",
       "teamActivity": "Hoạt động của nhóm",
-      "teamAccess": "Quyền truy cập của nhóm"
+      "teamAccess": "Quyền truy cập của nhóm",
+      "server": "Máy chủ"
     },
     "selfHosted": {
       "title": "Máy chủ đồng bộ tự lưu trữ",
@@ -3112,6 +3118,14 @@
       "removed": "Đã gỡ máy chủ đồng bộ.",
       "switched": "Đang đồng bộ với {{server}}.",
       "tokenServer": "{{host}} (token đồng bộ)"
+    },
+    "server": {
+      "title": "Máy chủ tài khoản",
+      "description": "Đăng nhập, gói và quyền tính năng lấy từ máy chủ này. Để mặc định để dùng Donut cloud, hoặc nhập control plane tự lưu trữ của bạn.",
+      "urlLabel": "Địa chỉ control plane",
+      "urlPlaceholder": "https://control.example.com",
+      "saved": "Đã lưu máy chủ tài khoản. Hãy đăng nhập lại.",
+      "reset": "Dùng Donut cloud"
     }
   },
   "shortcutsPage": {
@@ -3650,7 +3664,9 @@
       "fixProxy": "Gán một proxy",
       "fixFailed": "Không áp dụng được cách khắc phục đó.",
       "exitNodeHint": "Không có proxy hoặc VPN, lần chạy sẽ đi ra từ chính địa chỉ trung tâm dữ liệu của hệ thống máy. Nhiều giờ lưu lượng từ một mạng lưu trữ gây hại cho danh tính hồ sơ hơn cả việc không làm ấm.",
-      "reasonSyncPassword": "Đã đặt mật khẩu mã hóa đồng bộ"
+      "reasonSyncPassword": "Đã đặt mật khẩu mã hóa đồng bộ",
+      "reasonLocalBrowser": "Cookie Bot cục bộ cần hồ sơ Wayfern",
+      "reasonEphemeral": "Hồ sơ này là tạm thời nên cookie sẽ mất khi đóng"
     },
     "conflict": {
       "title": "{{email}} đã làm ấm hồ sơ này lúc {{time}}",
@@ -3742,6 +3758,11 @@
       "dueSoon_other": "{{count}} hồ sơ trong 24 giờ tới",
       "nothingScheduled": "Chưa lên lịch gì",
       "blocked": "Chưa có hồ sơ nào chạy được. Xem danh sách bên dưới."
+    },
+    "local": {
+      "description": "Làm nóng hồ sơ trên máy này, theo lịch của bạn.",
+      "emptyHint": "Chọn một hồ sơ và bot sẽ làm nóng nó trên máy này vào giờ bạn đặt. Donut phải mở.",
+      "enrolDescription": "Bot mở hồ sơ trên máy này và duyệt các trang bạn liệt kê. Donut phải mở."
     }
   },
   "prelaunchGate": {

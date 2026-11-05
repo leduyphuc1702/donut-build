@@ -1797,7 +1797,8 @@
       "runRemote": "{{name}} profilini bulutta çalıştır",
       "moreActions": "{{name}} için diğer işlemler",
       "close": "{{name}} ayrıntılarını kapat",
-      "copyId": "{{name}} kimliğini kopyala"
+      "copyId": "{{name}} kimliğini kopyala",
+      "runLocal": "{{name}} profilini bu makinede çalıştır"
     },
     "runningBanner": "Düzenlemek için profili durdurun.",
     "debug": {
@@ -2479,7 +2480,8 @@
       "runRemote": "Bulutta çalıştır",
       "lockNow": "Şimdi kilitle",
       "moveToTrash": "Çöp kutusuna taşı",
-      "askAgent": "Ajana sor"
+      "askAgent": "Ajana sor",
+      "runLocal": "Bu makinede çalıştır"
     },
     "emptyGroupTitle": "Bu grup boş",
     "emptyGroupHint": "Bu grupta bir profil oluşturun veya mevcut profilleri buraya taşıyın.",
@@ -2737,6 +2739,7 @@
     "profileLockedElsewhere": "Bu profil başka bir cihazda kullanılıyor.",
     "profileLockUnavailable": "Bu profilin başka bir yerde kullanılıp kullanılmadığı denetlenemedi. Bağlantınızı kontrol edip yeniden deneyin.",
     "fingerprintExitMismatch": "Proxy çıkış düğümü bu profilin parmak iziyle eşleşmiyor.",
+    "fingerprintHostOsMismatch": "Bu profil {{claimed}} olduğunu belirtiyor, ancak Donut {{host}} üzerinde çalışıyor. {{claimed}} bir makinede veya sanal makinede başlatın.",
     "launchConsentExpired": "Bu onay artık geçerli değil. Yeniden başlatmayı deneyin.",
     "vpnWorkerStartFailed": "VPN bağlantısı başlatılamadı: {{detail}}",
     "exitProbeFailed": "Konumunu denetlemek için proxy çıkış düğümüne ulaşılamadı.",
@@ -2995,7 +2998,9 @@
     "pasteTypingKeysHeld": "Donut'un yazmaya başlaması için kısayol tuşlarını bırakın.",
     "pasteTypingPermission": "Donut'un yazabilmesi için Erişilebilirlik izni gerekir. Sistem Ayarları > Gizlilik ve Güvenlik > Erişilebilirlik bölümünde Donut'u açın ve yeniden deneyin.",
     "pasteTypingFailed": "Yazılamadı: {{detail}}",
-    "profileStillSyncing": "Bu profil hâlâ eşitleniyor. Birazdan yeniden deneyin."
+    "profileStillSyncing": "Bu profil hâlâ eşitleniyor. Birazdan yeniden deneyin.",
+    "cloudApiUrlInvalid": "Tam bir http:// veya https:// adresi girin.",
+    "cookieBotRequiresWayfern": "Yerel Cookie Bot, tarayıcının DevTools bağlantısını kullandığı için yalnızca Wayfern profillerini sürebilir."
   },
   "rail": {
     "profiles": "Profiller",
@@ -3086,7 +3091,8 @@
       "selfHosted": "Kendi sunucunuz",
       "teamUsage": "Ekip kullanımı",
       "teamActivity": "Ekip etkinliği",
-      "teamAccess": "Ekip erişimi"
+      "teamAccess": "Ekip erişimi",
+      "server": "Sunucu"
     },
     "selfHosted": {
       "title": "Kendi eşitleme sunucunuz",
@@ -3112,6 +3118,14 @@
       "removed": "Eşitleme sunucusu kaldırıldı.",
       "switched": "{{server}} ile eşitleniyor.",
       "tokenServer": "{{host}} (eşitleme jetonu)"
+    },
+    "server": {
+      "title": "Hesap sunucusu",
+      "description": "Oturum açma, plan ve yetkiler bu sunucudan gelir. Donut Cloud için varsayılanı bırakın veya kendi barındırdığınız control plane adresini girin.",
+      "urlLabel": "Control plane URL'si",
+      "urlPlaceholder": "https://control.example.com",
+      "saved": "Hesap sunucusu kaydedildi. Tekrar oturum açın.",
+      "reset": "Donut Cloud kullan"
     }
   },
   "shortcutsPage": {
@@ -3650,7 +3664,9 @@
       "fixProxy": "Bir proxy ata",
       "fixFailed": "Bu düzeltme uygulanamadı.",
       "exitNodeHint": "Proxy veya VPN olmadan çalışma, filonun kendi veri merkezi adresinden çıkar. Bir barındırma ağından saatlerce gelen trafik, profilin kimliğine hiç ısıtmamaktan daha çok zarar verir.",
-      "reasonSyncPassword": "Eşitleme şifrelemesi parolası ayarlı"
+      "reasonSyncPassword": "Eşitleme şifrelemesi parolası ayarlı",
+      "reasonLocalBrowser": "Yerel Cookie Bot bir Wayfern profili gerektirir",
+      "reasonEphemeral": "Bu profil geçici: kapatıldığında çerezleri kaybolur"
     },
     "conflict": {
       "title": "{{email}} bu profili zaten {{time}} saatinde ısıtıyor",
@@ -3742,6 +3758,11 @@
       "dueSoon_other": "Önümüzdeki 24 saatte {{count}} profil",
       "nothingScheduled": "Zamanlanmış bir şey yok",
       "blocked": "Hiçbir profil çalışamıyor. Aşağıdaki listeye bakın."
+    },
+    "local": {
+      "description": "Profilleri bu makinede, belirlediğiniz zamanlamaya göre ısıtır.",
+      "emptyHint": "Bir profil seçin; bot onu belirlediğiniz saatlerde bu makinede ısıtsın. Donut açık kalmalıdır.",
+      "enrolDescription": "Bot profili bu makinede açar ve listelediğiniz siteleri gezer. Donut açık kalmalıdır."
     }
   },
   "prelaunchGate": {

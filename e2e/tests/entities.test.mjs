@@ -2911,6 +2911,7 @@ test("the hourly profile allowance counts from a window that survives a restart"
       retry_after_secs: null,
       remaining: 8,
       close_a_browser: false,
+      unlimited: false,
     });
 
     // A generation that makes no fingerprint gives its slot back: this suite

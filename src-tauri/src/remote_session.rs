@@ -24,6 +24,52 @@ const SESSION_CODES: FailureCodes = FailureCodes {
   conflict: "REMOTE_SESSION_CONFLICT",
 };
 
+/// A session this machine runs itself, for an account served by a self-hosted
+/// control plane. It is the local equivalent of a leased host: the browser is
+/// this computer's, the profile lock is the same one a launch takes, and the
+/// session id exists so the UI can start, list and stop it like any other.
+struct LocalSession {
+  profile_id: String,
+  platform: String,
+  started_at: u64,
+  app: AppHandle,
+}
+
+static LOCAL_SESSIONS: Mutex<Option<HashMap<String, LocalSession>>> = Mutex::new(None);
+
+fn with_local_sessions<T>(f: impl FnOnce(&mut HashMap<String, LocalSession>) -> T) -> T {
+  let mut guard = LOCAL_SESSIONS
+    .lock()
+    .unwrap_or_else(std::sync::PoisonError::into_inner);
+  f(guard.get_or_insert_with(HashMap::new))
+}
+
+fn local_state(session_id: &str, session: &LocalSession) -> RemoteSessionState {
+  let started = chrono::DateTime::from_timestamp(session.started_at as i64, 0)
+    .map(|at| at.to_rfc3339_opts(chrono::SecondsFormat::Secs, true));
+  RemoteSessionState {
+    session_id: session_id.to_string(),
+    profile_id: Some(session.profile_id.clone()),
+    platform: Some(session.platform.clone()),
+    state: "live".to_string(),
+    cdp_ready: true,
+    kind: Some("interactive".to_string()),
+    run_id: None,
+    team_id: None,
+    started_at: started,
+    ended_at: None,
+    close_reason: None,
+    billed_seconds: Some(crate::proxy_manager::now_secs().saturating_sub(session.started_at)),
+  }
+}
+
+fn emit_local_state(app: &AppHandle, state: &RemoteSessionState) {
+  use tauri::Emitter;
+  if let Err(e) = app.emit(EVENT_SESSION_STATE, state) {
+    log::warn!("Event not emitted event={EVENT_SESSION_STATE} err=\"{e}\"");
+  }
+}
+
 /// Why a remote launch failed, mapped to the status the local API should return.
 #[derive(Debug)]
 pub enum RemoteSessionError {
@@ -247,11 +293,118 @@ fn local_exit_refusal(verdict: &ExitReachability) -> Option<RemoteSessionError> 
 /// Goes through `api_call_with_retry` so an expired access token is refreshed
 /// and the request retried once, rather than surfacing to the user as a
 /// spurious "not signed in".
-pub async fn start_remote_session(
-  _app: AppHandle,
+/// Open the profile on THIS machine and record it as a session.
+///
+/// A self-hosted account has no fleet to lease, so the local machine is the
+/// host. The browser takes the normal launch path (fingerprint gate, profile
+/// lock, sync lease), which is what keeps it from overlapping a local launch.
+async fn start_local_session(
+  app: AppHandle,
   profile: &BrowserProfile,
   url: Option<String>,
 ) -> Result<RemoteSessionOutcome, RemoteSessionError> {
+  if profile.process_id.is_some() {
+    return Err(RemoteSessionError::Conflict(
+      "profile is already running".to_string(),
+    ));
+  }
+  if profile.browser != "wayfern" {
+    return Err(RemoteSessionError::Other(
+      serde_json::json!({ "code": "REMOTE_PLATFORM_UNSUPPORTED" }).to_string(),
+    ));
+  }
+  // The host is this machine. `remote_platform` is the fingerprint's target OS
+  // for a Wayfern profile, which is not the OS the session actually runs on.
+  let platform = crate::profile::types::get_host_os();
+  // A session is a remote-host launch, and the leased host runs automation
+  // defaults: a mismatch between the exit and the fingerprint is reported,
+  // never a hard stop with no dialog to answer.
+  crate::browser_runner::launch_browser_profile_impl(
+    app.clone(),
+    profile.clone(),
+    url,
+    crate::browser_runner::LaunchOptions::automation(None, false),
+  )
+  .await
+  .map_err(RemoteSessionError::Other)?;
+
+  let session_id = uuid::Uuid::new_v4().to_string();
+  let session = LocalSession {
+    profile_id: profile.id.to_string(),
+    platform: platform.clone(),
+    started_at: crate::proxy_manager::now_secs(),
+    app: app.clone(),
+  };
+  let state = local_state(&session_id, &session);
+  with_local_sessions(|sessions| sessions.insert(session_id.clone(), session));
+  emit_local_state(&app, &state);
+  log::info!(
+    "Local remote session started profile={} session={} platform={platform}",
+    profile.id,
+    crate::log_redaction::ShortId(&session_id)
+  );
+  Ok(RemoteSessionOutcome {
+    session_id,
+    platform,
+    status: "live".to_string(),
+  })
+}
+
+/// End a session this machine started, without asking the cloud.
+fn end_local_session(session_id: &str) -> Option<(String, String, u64, AppHandle)> {
+  let session = with_local_sessions(|sessions| sessions.remove(session_id))?;
+  let billed = crate::proxy_manager::now_secs().saturating_sub(session.started_at);
+  Some((session.profile_id, session.platform, billed, session.app))
+}
+
+/// Forget a local session whose browser was stopped by the ordinary profile
+/// stop rather than through the session endpoint (the header's Stop is the
+/// launch button). Without this the store keeps counting the session as live
+/// and gates the next launch until the app restarts.
+pub fn forget_local_sessions_for_profile(app: &AppHandle, profile_id: &str) {
+  let removed: Vec<(String, LocalSession)> = with_local_sessions(|sessions| {
+    let ids: Vec<String> = sessions
+      .iter()
+      .filter(|(_, session)| session.profile_id == profile_id)
+      .map(|(id, _)| id.clone())
+      .collect();
+    ids
+      .into_iter()
+      .filter_map(|id| sessions.remove(&id).map(|session| (id, session)))
+      .collect()
+  });
+  for (session_id, session) in removed {
+    let closed = RemoteSessionState {
+      session_id: session_id.clone(),
+      profile_id: Some(session.profile_id),
+      platform: Some(session.platform),
+      state: "closed".to_string(),
+      cdp_ready: false,
+      kind: Some("interactive".to_string()),
+      run_id: None,
+      team_id: None,
+      started_at: None,
+      ended_at: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+      close_reason: Some("profile_stopped".to_string()),
+      billed_seconds: Some(crate::proxy_manager::now_secs().saturating_sub(session.started_at)),
+    };
+    emit_local_state(app, &closed);
+    log::info!(
+      "Local remote session stopped session={} reason=profile_stopped",
+      crate::log_redaction::ShortId(&session_id)
+    );
+  }
+}
+
+pub async fn start_remote_session(
+  app: AppHandle,
+  profile: &BrowserProfile,
+  url: Option<String>,
+) -> Result<RemoteSessionOutcome, RemoteSessionError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    return start_local_session(app, profile, url).await;
+  }
+
   let platform = profile
     .remote_platform()
     .ok_or_else(|| {
@@ -364,6 +517,49 @@ pub fn note_session_stopped(app: &AppHandle, session_id: &str) {
 pub async fn end_remote_session(
   session_id: &str,
 ) -> Result<EndRemoteSessionOutcome, RemoteSessionError> {
+  if let Some((profile_id, platform, billed, app)) = end_local_session(session_id) {
+    let profile = crate::profile::ProfileManager::instance()
+      .list_profiles()
+      .ok()
+      .and_then(|profiles| {
+        profiles
+          .into_iter()
+          .find(|p| p.id.to_string() == profile_id)
+      });
+    if let Some(profile) = profile {
+      Box::pin(crate::browser_runner::kill_browser_profile(
+        app.clone(),
+        profile,
+      ))
+      .await
+      .map_err(RemoteSessionError::Other)?;
+    }
+    let closed = RemoteSessionState {
+      session_id: session_id.to_string(),
+      profile_id: Some(profile_id),
+      platform: Some(platform),
+      state: "closed".to_string(),
+      cdp_ready: false,
+      kind: Some("interactive".to_string()),
+      run_id: None,
+      team_id: None,
+      started_at: None,
+      ended_at: Some(chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Secs, true)),
+      close_reason: Some("stopped_by_user".to_string()),
+      billed_seconds: Some(billed),
+    };
+    emit_local_state(&app, &closed);
+    log::info!(
+      "Local remote session stopped session={} billed_s={billed}",
+      crate::log_redaction::ShortId(session_id)
+    );
+    return Ok(EndRemoteSessionOutcome {
+      session_id: session_id.to_string(),
+      status: "closed".to_string(),
+      billed_seconds: billed,
+    });
+  }
+
   let endpoint = format!(
     "{}/api/remote-sessions/{}",
     crate::cloud_auth::CLOUD_API_URL,
@@ -466,6 +662,28 @@ struct RemoteSessionListResponse {
 
 /// Every session the caller currently owns.
 pub async fn list_remote_sessions() -> Result<Vec<RemoteSessionState>, RemoteSessionError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    let running: std::collections::HashSet<String> = crate::profile::ProfileManager::instance()
+      .list_profiles()
+      .unwrap_or_default()
+      .into_iter()
+      .filter(|profile| {
+        profile
+          .process_id
+          .is_some_and(crate::proxy_storage::is_process_running)
+      })
+      .map(|profile| profile.id.to_string())
+      .collect();
+    return Ok(with_local_sessions(|sessions| {
+      // A browser that exited on its own is no longer a session, even though
+      // nothing told the stop path.
+      sessions.retain(|_, session| running.contains(&session.profile_id));
+      sessions
+        .iter()
+        .map(|(session_id, session)| local_state(session_id, session))
+        .collect()
+    }));
+  }
   let endpoint = format!("{}/api/remote-sessions", crate::cloud_auth::CLOUD_API_URL);
   let response: RemoteSessionListResponse = get_json(endpoint).await?;
   Ok(response.sessions)
@@ -479,6 +697,18 @@ pub async fn list_remote_sessions() -> Result<Vec<RemoteSessionState>, RemoteSes
 pub async fn get_remote_session(
   session_id: &str,
 ) -> Result<RemoteSessionState, RemoteSessionError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    let state = with_local_sessions(|sessions| {
+      sessions
+        .get(session_id)
+        .map(|session| local_state(session_id, session))
+    });
+    return state.ok_or_else(|| {
+      RemoteSessionError::Other(
+        serde_json::json!({ "code": "REMOTE_SESSION_NOT_FOUND" }).to_string(),
+      )
+    });
+  }
   let endpoint = format!(
     "{}/api/remote-sessions/{}",
     crate::cloud_auth::CLOUD_API_URL,
@@ -553,6 +783,47 @@ static CDP_ENDPOINTS: Mutex<Option<HashMap<String, CdpEndpoint>>> = Mutex::new(N
 
 /// Ask the backend where to attach for `session_id`.
 pub async fn cdp_endpoint(session_id: &str) -> Result<CdpEndpoint, RemoteSessionError> {
+  if crate::cloud_auth::is_self_hosted_account() {
+    let profile_id = with_local_sessions(|sessions| {
+      sessions
+        .get(session_id)
+        .map(|session| session.profile_id.clone())
+    })
+    .ok_or_else(|| {
+      RemoteSessionError::Other(
+        serde_json::json!({ "code": "REMOTE_SESSION_NOT_FOUND" }).to_string(),
+      )
+    })?;
+    let profile = crate::profile::ProfileManager::instance()
+      .list_profiles()
+      .ok()
+      .and_then(|profiles| {
+        profiles
+          .into_iter()
+          .find(|p| p.id.to_string() == profile_id)
+      })
+      .ok_or_else(|| {
+        RemoteSessionError::Other(
+          serde_json::json!({ "code": "REMOTE_SESSION_NOT_FOUND" }).to_string(),
+        )
+      })?;
+    // A self-hosted session is on this machine, so its CDP endpoint is the
+    // browser's own page socket. No relay, no credential.
+    let ws_url = crate::cdp_target::local_ws_url(&profile)
+      .await
+      .ok_or_else(|| {
+        RemoteSessionError::Other(
+          serde_json::json!({ "code": "REMOTE_SESSION_REFUSED" }).to_string(),
+        )
+      })?;
+    return Ok(CdpEndpoint {
+      session_id: session_id.to_string(),
+      ws_url,
+      protocol: String::new(),
+      auth: String::new(),
+    });
+  }
+
   if let Some(cached) = with_endpoints(|map| map.get(session_id).cloned()) {
     return Ok(cached);
   }
@@ -1363,11 +1634,15 @@ pub async fn start_profile_remote_session(
     .into_iter()
     .find(|p| p.id.to_string() == profile_id)
     .ok_or_else(|| crate::backend_error("PROFILE_NOT_FOUND"))?;
-  if let Some(code) = remote_rule_code(&profile, crate::sync::encryption::has_e2e_password()) {
-    return Err(crate::backend_error(code));
+  // A leased host needs the profile in cloud storage and an exit it can dial;
+  // a self-hosted session is a local launch on this machine and needs neither.
+  if !crate::cloud_auth::is_self_hosted_account() {
+    if let Some(code) = remote_rule_code(&profile, crate::sync::encryption::has_e2e_password()) {
+      return Err(crate::backend_error(code));
+    }
+    // The profile rules passed above, so what is left to refuse here is coded.
+    crate::api_server::remote_launch_precondition(&profile).await?;
   }
-  // The profile rules passed above, so what is left to refuse here is coded.
-  crate::api_server::remote_launch_precondition(&profile).await?;
 
   let outcome = start_remote_session(app_handle, &profile, None)
     .await

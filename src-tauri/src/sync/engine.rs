@@ -677,26 +677,27 @@ impl SyncEngine {
     if crate::cloud_auth::CLOUD_AUTH.is_logged_in().await
       && !super::account_server::self_hosted_picked().await
     {
-      let (url, token) = match super::account_server::configured().await {
-        Some(server) => {
-          let token = crate::cloud_auth::CLOUD_AUTH
-            .server_sync_token(&server)
-            .await
-            .map_err(|e| format!("Failed to get own server sync token: {e}"))?;
-          (server, token)
-        }
-        None => {
-          let token = crate::cloud_auth::CLOUD_AUTH
-            .get_or_refresh_sync_token()
-            .await
-            .map_err(|e| format!("Failed to get cloud sync token: {e}"))?
-            .ok_or_else(|| "Cloud sync token not available".to_string())?;
-          (crate::cloud_auth::CLOUD_SYNC_URL.to_string(), token)
-        }
-      };
-      let mut engine = Self::new(url, token);
-      engine.read_only = crate::team_roles::is_read_only();
-      return Ok(engine);
+      if let Some(server) = super::account_server::configured().await {
+        let token = crate::cloud_auth::CLOUD_AUTH
+          .server_sync_token(&server)
+          .await
+          .map_err(|e| format!("Failed to get own server sync token: {e}"))?;
+        let mut engine = Self::new(server, token);
+        engine.read_only = crate::team_roles::is_read_only();
+        return Ok(engine);
+      }
+      // A self-hosted control plane's token is not valid at Donut cloud.
+      // Fall through to the customer's own server below instead.
+      if crate::cloud_auth::cloud_api_base() == crate::cloud_auth::DEFAULT_CLOUD_API_URL {
+        let token = crate::cloud_auth::CLOUD_AUTH
+          .get_or_refresh_sync_token()
+          .await
+          .map_err(|e| format!("Failed to get cloud sync token: {e}"))?
+          .ok_or_else(|| "Cloud sync token not available".to_string())?;
+        let mut engine = Self::new(crate::cloud_auth::CLOUD_SYNC_URL.to_string(), token);
+        engine.read_only = crate::team_roles::is_read_only();
+        return Ok(engine);
+      }
     }
 
     // Fall back to self-hosted settings

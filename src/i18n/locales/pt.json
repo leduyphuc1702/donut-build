@@ -1808,7 +1808,8 @@
       "runRemote": "Executar {{name}} na nuvem",
       "moreActions": "Mais ações para {{name}}",
       "close": "Fechar os detalhes de {{name}}",
-      "copyId": "Copiar o ID de {{name}}"
+      "copyId": "Copiar o ID de {{name}}",
+      "runLocal": "Executar {{name}} nesta máquina"
     },
     "runningBanner": "Pare o perfil para editá-lo.",
     "debug": {
@@ -2498,7 +2499,8 @@
       "runRemote": "Executar na nuvem",
       "lockNow": "Bloquear agora",
       "moveToTrash": "Mover para a lixeira",
-      "askAgent": "Perguntar ao agente"
+      "askAgent": "Perguntar ao agente",
+      "runLocal": "Executar nesta máquina"
     },
     "emptyGroupTitle": "Este grupo está vazio",
     "emptyGroupHint": "Crie um perfil neste grupo ou mova perfis existentes para ele.",
@@ -2756,6 +2758,7 @@
     "profileLockedElsewhere": "Este perfil está a ser utilizado noutro dispositivo.",
     "profileLockUnavailable": "Não foi possível verificar se este perfil está a ser utilizado noutro local. Verifique a ligação e tente novamente.",
     "fingerprintExitMismatch": "O nó de saída do proxy não corresponde à impressão digital deste perfil.",
+    "fingerprintHostOsMismatch": "Este perfil declara {{claimed}}, mas o Donut está sendo executado em {{host}}. Inicie-o em uma máquina ou máquina virtual {{claimed}}.",
     "launchConsentExpired": "Essa confirmação não é mais válida. Tente iniciar novamente.",
     "vpnWorkerStartFailed": "Não foi possível iniciar a conexão VPN: {{detail}}",
     "exitProbeFailed": "Não foi possível alcançar o nó de saída do proxy para verificar sua localização.",
@@ -3015,7 +3018,9 @@
     "pasteTypingKeysHeld": "Solte as teclas do atalho para o Donut começar a digitar.",
     "pasteTypingPermission": "O Donut precisa da permissão de Acessibilidade para digitar. Abra Ajustes do Sistema > Privacidade e Segurança > Acessibilidade, ative o Donut e tente de novo.",
     "pasteTypingFailed": "Não foi possível digitar: {{detail}}",
-    "profileStillSyncing": "Este perfil ainda está a sincronizar. Tente novamente daqui a pouco."
+    "profileStillSyncing": "Este perfil ainda está a sincronizar. Tente novamente daqui a pouco.",
+    "cloudApiUrlInvalid": "Informe um endereço http:// ou https:// completo.",
+    "cookieBotRequiresWayfern": "O Cookie Bot local só consegue controlar perfis Wayfern, porque usa a conexão DevTools do navegador."
   },
   "rail": {
     "profiles": "Perfis",
@@ -3106,7 +3111,8 @@
       "selfHosted": "Auto-hospedado",
       "teamUsage": "Uso da equipe",
       "teamActivity": "Atividade da equipe",
-      "teamAccess": "Acesso da equipe"
+      "teamAccess": "Acesso da equipe",
+      "server": "Servidor"
     },
     "selfHosted": {
       "title": "Servidor de sincronização auto-hospedado",
@@ -3132,6 +3138,14 @@
       "removed": "Servidor de sincronização removido.",
       "switched": "Sincronizando com {{server}}.",
       "tokenServer": "{{host}} (token de sincronização)"
+    },
+    "server": {
+      "title": "Servidor da conta",
+      "description": "Login, plano e permissões vêm deste servidor. Deixe o padrão para usar o Donut Cloud ou informe seu control plane auto-hospedado.",
+      "urlLabel": "URL do control plane",
+      "urlPlaceholder": "https://control.example.com",
+      "saved": "Servidor da conta salvo. Entre novamente.",
+      "reset": "Usar Donut Cloud"
     }
   },
   "shortcutsPage": {
@@ -3687,7 +3701,9 @@
       "fixProxy": "Anexar um proxy",
       "fixFailed": "Não foi possível aplicar essa correção.",
       "exitNodeHint": "Sem proxy nem VPN, a execução sai pelo próprio endereço do data center da frota. Horas de tráfego vindo de uma rede de hospedagem danificam a identidade do perfil mais do que não aquecê-lo.",
-      "reasonSyncPassword": "Senha de criptografia de sincronização definida"
+      "reasonSyncPassword": "Senha de criptografia de sincronização definida",
+      "reasonLocalBrowser": "O Cookie Bot local precisa de um perfil Wayfern",
+      "reasonEphemeral": "Este perfil é efêmero: os cookies desapareceriam ao fechá-lo"
     },
     "conflict": {
       "title": "{{email}} já aquece este perfil às {{time}}",
@@ -3783,6 +3799,11 @@
       "dueSoon_many": "{{count}} perfis nas próximas 24 h",
       "nothingScheduled": "Nada agendado",
       "blocked": "Nenhum perfil pode ser executado. Veja a lista abaixo."
+    },
+    "local": {
+      "description": "Aquece perfis nesta máquina, conforme a sua programação.",
+      "emptyHint": "Escolha um perfil e o bot o aquece nesta máquina nos horários definidos. O Donut precisa ficar aberto.",
+      "enrolDescription": "O bot abre o perfil nesta máquina e visita os sites listados. O Donut precisa ficar aberto."
     }
   },
   "prelaunchGate": {

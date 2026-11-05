@@ -81,6 +81,7 @@ donutbrowser/
 │   │   ├── profile_statuses.rs     # Synced profile statuses (name + color) set on profiles
 │   │   ├── totp.rs                 # RFC 6238 codes; profile_totp.rs keeps sealed per-profile keys (device only)
 │   │   ├── fingerprint_consistency.rs # Launch-time proxy exit vs fingerprint timezone/language check
+│   │   ├── fingerprint_generator.rs # Local full-device generation for self-hosted accounts
 │   │   ├── dns_blocklist.rs         # Hagezi DNS blocklists + user custom lists/allowlist
 │   │   ├── traffic_stats.rs         # Per-profile traffic stats + secure history erase
 │   │   ├── extension_manager.rs    # Browser extension management
@@ -99,6 +100,7 @@ donutbrowser/
 │   └── tests/                      # End-to-end tests: the binary against the compose S3 server
 │   └── src/                        # Controllers, services, auth, S3 sync
 ├── vietflow/sync-server/           # Vietflow fork: donut-sync deploy (VPS with Caddy HTTPS, or LAN) and its Vietnamese guide
+├── vietflow/control-plane/         # Self-hosted account/control plane (Node, no deps): device sign-in, unlimited entitlements, profile locks; cloud-only services off
 ├── e2e/                            # Isolated native UI/sync/Wayfern E2E system
 │   ├── app/                        # Test-only Tauri harness that injects the private driver
 │   ├── lib/                        # WebDriver, CDP, fixtures, app-session helpers

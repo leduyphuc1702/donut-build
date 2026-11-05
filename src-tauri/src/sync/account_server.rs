@@ -95,6 +95,14 @@ pub(crate) fn resolve(
     .account_sync_server_url
     .clone()
     .map(SyncSource::Account);
+  if self_hosted_account() {
+    // A self-hosted control plane issued this account's token. Donut cloud
+    // would refuse it, so the only reachable targets are the customer's own
+    // server and the shared-token server they already configured. This wins
+    // over the team-seat rule too: a one-seat local team still syncs to the
+    // server the customer runs, never to Donut cloud.
+    return self_hosted_source(settings, account);
+  }
   let picked = match settings.sync_source {
     Some(SyncSourceKind::Cloud) => Some(SyncSource::Cloud),
     Some(SyncSourceKind::Account) => account.clone(),
@@ -103,6 +111,23 @@ pub(crate) fn resolve(
     None => None,
   };
   Some(picked.or(account).unwrap_or(SyncSource::Cloud))
+}
+
+fn self_hosted_account() -> bool {
+  crate::cloud_auth::cloud_api_base() != crate::cloud_auth::DEFAULT_CLOUD_API_URL
+}
+
+/// The source for an account whose control plane is not Donut cloud. A pick
+/// that names a target this build cannot reach falls back to the shared-token
+/// server, never to Donut cloud.
+fn self_hosted_source(settings: &AppSettings, account: Option<SyncSource>) -> Option<SyncSource> {
+  match settings.sync_source {
+    Some(SyncSourceKind::Account) => account,
+    Some(SyncSourceKind::SelfHosted) => token_server(settings).map(SyncSource::SelfHosted),
+    Some(SyncSourceKind::Cloud) | None => token_server(settings)
+      .map(SyncSource::SelfHosted)
+      .or(account),
+  }
 }
 
 /// Whether `url` is Donut cloud's address, in any scheme or spelling.
@@ -127,7 +152,8 @@ fn token_server(settings: &AppSettings) -> Option<String> {
 
 /// Turn a team seat's shared-token pick into Donut cloud. Whether it did.
 fn settle_team_pick(settings: &mut AppSettings, team_seat: bool) -> bool {
-  let reset = team_seat && settings.sync_source == Some(SyncSourceKind::SelfHosted);
+  let reset =
+    team_seat && !self_hosted_account() && settings.sync_source == Some(SyncSourceKind::SelfHosted);
   if reset {
     settings.sync_source = Some(SyncSourceKind::Cloud);
   }
@@ -237,7 +263,8 @@ async fn state(
   SyncSourceState {
     active: resolve(settings, signed_in, team_seat).map(|source| source.kind()),
     account_server: settings.account_sync_server_url.clone(),
-    self_hosted_server: token_server(settings).filter(|_| has_token && !team_seat),
+    self_hosted_server: token_server(settings)
+      .filter(|_| has_token && (!team_seat || self_hosted_account())),
   }
 }
 
@@ -366,6 +393,38 @@ mod tests {
       sync_source: picked,
       ..AppSettings::default()
     }
+  }
+
+  #[test]
+  fn a_self_hosted_account_never_falls_back_to_donut_cloud() {
+    assert_eq!(self_hosted_source(&settings(None, None, None), None), None);
+    assert_eq!(
+      self_hosted_source(&settings(None, Some(SHARED), None), None),
+      Some(SyncSource::SelfHosted(SHARED.into()))
+    );
+    assert_eq!(
+      self_hosted_source(
+        &settings(None, Some(SHARED), Some(SyncSourceKind::Cloud)),
+        None
+      ),
+      Some(SyncSource::SelfHosted(SHARED.into())),
+      "an explicit cloud pick cannot reach a self-hosted account's token"
+    );
+    assert_eq!(
+      self_hosted_source(
+        &settings(Some(OWN), None, Some(SyncSourceKind::Account)),
+        Some(SyncSource::Account(OWN.into()))
+      ),
+      Some(SyncSource::Account(OWN.into()))
+    );
+    assert_eq!(
+      self_hosted_source(
+        &settings(None, None, Some(SyncSourceKind::SelfHosted)),
+        None
+      ),
+      None,
+      "a self-hosted pick with no configured server disables sync, never cloud"
+    );
   }
 
   #[test]

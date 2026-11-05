@@ -1808,7 +1808,8 @@
       "runRemote": "Exécuter {{name}} dans le cloud",
       "moreActions": "Plus d'actions pour {{name}}",
       "close": "Fermer les détails de {{name}}",
-      "copyId": "Copier l'ID de {{name}}"
+      "copyId": "Copier l'ID de {{name}}",
+      "runLocal": "Exécuter {{name}} sur cette machine"
     },
     "runningBanner": "Arrêtez le profil pour le modifier.",
     "debug": {
@@ -2498,7 +2499,8 @@
       "runRemote": "Exécuter dans le cloud",
       "lockNow": "Verrouiller maintenant",
       "moveToTrash": "Placer dans la corbeille",
-      "askAgent": "Demander à l’agent"
+      "askAgent": "Demander à l’agent",
+      "runLocal": "Exécuter sur cette machine"
     },
     "emptyGroupTitle": "Ce groupe est vide",
     "emptyGroupHint": "Créez un profil dans ce groupe ou déplacez-y des profils existants.",
@@ -2756,6 +2758,7 @@
     "profileLockedElsewhere": "Ce profil est utilisé sur un autre appareil.",
     "profileLockUnavailable": "Impossible de vérifier si ce profil est utilisé ailleurs. Vérifiez votre connexion et réessayez.",
     "fingerprintExitMismatch": "Le nœud de sortie du proxy ne correspond pas à l'empreinte de ce profil.",
+    "fingerprintHostOsMismatch": "Ce profil déclare {{claimed}}, mais Donut s’exécute sur {{host}}. Lancez-le sur une machine ou une machine virtuelle {{claimed}}.",
     "launchConsentExpired": "Cette confirmation n'est plus valide. Relancez le profil.",
     "vpnWorkerStartFailed": "Impossible de démarrer la connexion VPN : {{detail}}",
     "exitProbeFailed": "Impossible de joindre le nœud de sortie du proxy pour vérifier sa localisation.",
@@ -3015,7 +3018,9 @@
     "pasteTypingKeysHeld": "Relâchez les touches du raccourci pour que Donut commence à taper.",
     "pasteTypingPermission": "Donut a besoin de l'autorisation Accessibilité pour taper. Ouvrez Réglages Système > Confidentialité et sécurité > Accessibilité, activez Donut, puis réessayez.",
     "pasteTypingFailed": "Échec de la saisie : {{detail}}",
-    "profileStillSyncing": "Ce profil est encore en cours de synchronisation. Réessayez dans un instant."
+    "profileStillSyncing": "Ce profil est encore en cours de synchronisation. Réessayez dans un instant.",
+    "cloudApiUrlInvalid": "Saisissez une adresse http:// ou https:// complète.",
+    "cookieBotRequiresWayfern": "Le Cookie Bot local ne peut piloter que des profils Wayfern, car il utilise la connexion DevTools du navigateur."
   },
   "rail": {
     "profiles": "Profils",
@@ -3106,7 +3111,8 @@
       "selfHosted": "Auto-hébergé",
       "teamUsage": "Utilisation de l'équipe",
       "teamActivity": "Activité de l’équipe",
-      "teamAccess": "Accès de l’équipe"
+      "teamAccess": "Accès de l’équipe",
+      "server": "Serveur"
     },
     "selfHosted": {
       "title": "Serveur de synchronisation auto-hébergé",
@@ -3132,6 +3138,14 @@
       "removed": "Serveur de synchronisation retiré.",
       "switched": "Synchronisation avec {{server}}.",
       "tokenServer": "{{host}} (jeton de synchronisation)"
+    },
+    "server": {
+      "title": "Serveur de compte",
+      "description": "La connexion, l'offre et les droits viennent de ce serveur. Laissez la valeur par défaut pour Donut Cloud, ou saisissez votre control plane auto-hébergé.",
+      "urlLabel": "URL du control plane",
+      "urlPlaceholder": "https://control.example.com",
+      "saved": "Serveur de compte enregistré. Reconnectez-vous.",
+      "reset": "Utiliser Donut Cloud"
     }
   },
   "shortcutsPage": {
@@ -3687,7 +3701,9 @@
       "fixProxy": "Associer un proxy",
       "fixFailed": "Impossible d'appliquer ce correctif.",
       "exitNodeHint": "Sans proxy ni VPN, l'exécution sort par l'adresse du centre de données de la flotte. Des heures de trafic depuis un réseau d'hébergement abîment l'identité du profil plus que de ne pas le chauffer du tout.",
-      "reasonSyncPassword": "Mot de passe de chiffrement de synchronisation défini"
+      "reasonSyncPassword": "Mot de passe de chiffrement de synchronisation défini",
+      "reasonLocalBrowser": "Le Cookie Bot local nécessite un profil Wayfern",
+      "reasonEphemeral": "Ce profil est éphémère : ses cookies disparaîtraient à sa fermeture"
     },
     "conflict": {
       "title": "{{email}} chauffe déjà ce profil à {{time}}",
@@ -3783,6 +3799,11 @@
       "dueSoon_many": "{{count}} profils dans les prochaines 24 h",
       "nothingScheduled": "Rien de planifié",
       "blocked": "Aucun profil ne peut s'exécuter. Voir la liste ci-dessous."
+    },
+    "local": {
+      "description": "Réchauffe les profils sur cette machine, selon votre planning.",
+      "emptyHint": "Choisissez un profil et le bot le réchauffera sur cette machine aux heures choisies. Donut doit rester ouvert.",
+      "enrolDescription": "Le bot ouvre le profil sur cette machine et parcourt les sites indiqués. Donut doit rester ouvert."
     }
   },
   "prelaunchGate": {

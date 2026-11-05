@@ -21,6 +21,7 @@ import { translateBackendError } from "@/lib/backend-errors";
 import { showErrorToast, showSuccessToast } from "@/lib/toast-utils";
 
 const DEVICE_LINK_URL = "https://donutbrowser.com/auth/link";
+const DEFAULT_CLOUD_API_URL = "https://api.donutbrowser.com";
 
 interface DeviceCodeVerifyDialogProps {
   isOpen: boolean;
@@ -43,11 +44,12 @@ export function DeviceCodeVerifyDialog({
   const [linkCode, setLinkCode] = useState("");
   const [isVerifying, setIsVerifying] = useState(false);
   const [isOpeningLogin, setIsOpeningLogin] = useState(false);
+  const [loginUrl, setLoginUrl] = useState(DEVICE_LINK_URL);
 
   const handleOpenLogin = async () => {
     setIsOpeningLogin(true);
     try {
-      await openUrl(DEVICE_LINK_URL);
+      await openUrl(loginUrl);
     } catch (error) {
       console.error("Failed to open login link:", error);
       showErrorToast(translateBackendError(t, error));
@@ -56,12 +58,28 @@ export function DeviceCodeVerifyDialog({
     }
   };
 
-  // Reset the field when the dialog reopens so a stale code from a
-  // previous attempt doesn't auto-populate.
+  // Reset the field when the dialog reopens so a stale code from a previous
+  // attempt doesn't auto-populate. A self-hosted control plane serves its own
+  // link page; the Donut website only knows about Donut cloud accounts.
   useEffect(() => {
-    if (isOpen) {
-      setLinkCode("");
-    }
+    if (!isOpen) return;
+    setLinkCode("");
+    let cancelled = false;
+    void invoke<string>("get_cloud_api_url")
+      .then((base) => {
+        if (cancelled) return;
+        setLoginUrl(
+          base === DEFAULT_CLOUD_API_URL
+            ? DEVICE_LINK_URL
+            : `${base}/auth/link`,
+        );
+      })
+      .catch((error) => {
+        console.error("Failed to read the account server:", error);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   const handleVerify = async () => {

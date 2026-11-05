@@ -235,7 +235,7 @@ async fn configure(link: &EngineLink, version: &str) -> Result<(), String> {
     .call(
       "Wayfern.agentConfigure",
       json!({
-        "apiBase": crate::cloud_auth::CLOUD_API_URL,
+        "apiBase": crate::cloud_auth::cloud_api_base(),
         "token": token.token,
         "locale": locale(),
       }),
@@ -270,7 +270,7 @@ fn ensure_token_refresher() {
       match token::current().await {
         Ok((token, true)) => {
           let params = json!({
-            "apiBase": crate::cloud_auth::CLOUD_API_URL,
+            "apiBase": crate::cloud_auth::cloud_api_base(),
             "token": token.token,
             "locale": locale(),
           });

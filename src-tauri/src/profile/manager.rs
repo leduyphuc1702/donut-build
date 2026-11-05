@@ -412,15 +412,96 @@ impl ProfileManager {
       // behavior; for generated ones this comes from the geolocation lookup.
       let mut geolocation_applied = true;
 
-      // A caller-supplied device is a set of explicit field choices, not a
-      let supplied_device = if crate::wayfern_manager::supports_wayfern_152(version) {
-        config
-          .fingerprint
-          .take()
-          .and_then(|json| crate::wayfern_manager::WayfernManager::fingerprint_object(&json))
-      } else {
-        None
+      // A caller-supplied device on an identity-capable engine is a set of
+      // explicit field choices, not a complete device: the engine mints an
+      // identity and the choices become overrides. A locally generated device
+      // is already complete and has no identity to attach choices to, so it is
+      // stored as the payload and applied directly.
+      let local_generation = crate::fingerprint_generator::local_generation_enabled();
+      let supplied_device =
+        if crate::wayfern_manager::supports_wayfern_152(version) && !local_generation {
+          config
+            .fingerprint
+            .take()
+            .and_then(|json| crate::wayfern_manager::WayfernManager::fingerprint_object(&json))
+        } else {
+          None
+        };
+
+      // A stand-in for fingerprint generation and location resolution. It
+      // carries the new profile's id so the generation's log lines name the
+      // profile being created.
+      let temp_profile = BrowserProfile {
+        id: profile_id,
+        name: name.to_string(),
+        browser: browser.to_string(),
+        version: version.to_string(),
+        proxy_id: proxy_id.clone(),
+        // Carried, not None. Fingerprint generation reads this to decide
+        // whether the profile routes its traffic at all; hardcoding None made
+        // a VPN profile look direct, so its geolocation probe went out from
+        // the user's real address and that location was baked into the
+        // fingerprint, which the launch-time gate then rejects as a mismatch
+        // the profile should never have had.
+        vpn_id: vpn_id.clone(),
+        launch_hook: launch_hook.clone(),
+        process_id: None,
+        last_launch: None,
+        release_type: release_type.to_string(),
+        wayfern_config: None,
+        group_id: group_id.clone(),
+        tags: Vec::new(),
+        note: None,
+        window_color: None,
+        sync_mode: SyncMode::Disabled,
+        encryption_salt: None,
+        last_sync: None,
+        host_os: None,
+        ephemeral: false,
+        temporary: false,
+        extension_group_id: None,
+        proxy_bypass_rules: Vec::new(),
+        created_by_id: None,
+        created_by_email: None,
+        dns_blocklist: None,
+        dns_server: None,
+        required_exit_country: None,
+        status_id: None,
+        start_urls: Vec::new(),
+        password_protected: false,
+        clear_on_close: false,
+        created_at: None,
+        updated_at: None,
       };
+
+      // A device the form generated was created before this profile's route
+      // existed, so it carries no location. With local generation it is the
+      // whole device, not a set of overrides, and the route's location is
+      // merged into it here.
+      if local_generation {
+        if let Some(supplied) = config.fingerprint.clone() {
+          // An empty or unreadable payload is not a device. Generating over it
+          // keeps a profile from launching on the host device; the same rule
+          // the identity path applies when it takes the payload apart.
+          if crate::wayfern_manager::WayfernManager::fingerprint_object(&supplied)
+            .is_some_and(|device| !device.is_empty())
+          {
+            let (merged, applied) =
+              crate::wayfern_manager::WayfernManager::localize_supplied_fingerprint(
+                &temp_profile,
+                &config,
+                &supplied,
+              )
+              .await;
+            config.location = crate::wayfern_manager::WayfernManager::fingerprint_object(&merged)
+              .and_then(|object| crate::wayfern_manager::WayfernManager::location_of(&object));
+            config.fingerprint = Some(merged);
+            geolocation_applied = applied;
+          } else {
+            config.fingerprint = None;
+          }
+        }
+      }
 
       // Generate a device if the profile has neither a legacy payload nor an
       // identity.
@@ -447,51 +528,6 @@ impl ProfileManager {
               .into(),
             );
           }
-        };
-
-        // A stand-in for fingerprint generation. It carries the new profile's
-        // id so the generation's log lines name the profile being created.
-        let temp_profile = BrowserProfile {
-          id: profile_id,
-          name: name.to_string(),
-          browser: browser.to_string(),
-          version: version.to_string(),
-          proxy_id: proxy_id.clone(),
-          // Carried, not None. Fingerprint generation reads this to decide
-          // whether the profile routes its traffic at all; hardcoding None made
-          // a VPN profile look direct, so its geolocation probe went out from
-          // the user's real address and that location was baked into the
-          // fingerprint, which the launch-time gate then rejects as a mismatch
-          // the profile should never have had.
-          vpn_id: vpn_id.clone(),
-          launch_hook: launch_hook.clone(),
-          process_id: None,
-          last_launch: None,
-          release_type: release_type.to_string(),
-          wayfern_config: None,
-          group_id: group_id.clone(),
-          tags: Vec::new(),
-          note: None,
-          window_color: None,
-          sync_mode: SyncMode::Disabled,
-          encryption_salt: None,
-          last_sync: None,
-          host_os: None,
-          ephemeral: false,
-          temporary: false,
-          extension_group_id: None,
-          proxy_bypass_rules: Vec::new(),
-          created_by_id: None,
-          created_by_email: None,
-          dns_blocklist: None,
-          dns_server: None,
-          required_exit_country: None,
-          status_id: None,
-          start_urls: Vec::new(),
-          password_protected: false,
-          clear_on_close: false,
-          created_at: None,
-          updated_at: None,
         };
 
         match self

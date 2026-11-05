@@ -1797,7 +1797,8 @@
       "runRemote": "Run {{name}} in cloud",
       "moreActions": "More actions for {{name}}",
       "close": "Close details of {{name}}",
-      "copyId": "Copy ID of {{name}}"
+      "copyId": "Copy ID of {{name}}",
+      "runLocal": "Run {{name}} on this machine"
     },
     "runningBanner": "Stop the profile to edit it.",
     "debug": {
@@ -2479,7 +2480,8 @@
       "runRemote": "Run in cloud",
       "lockNow": "Lock now",
       "moveToTrash": "Move to Trash",
-      "askAgent": "Ask the agent"
+      "askAgent": "Ask the agent",
+      "runLocal": "Run on this machine"
     },
     "emptyGroupTitle": "This group is empty",
     "emptyGroupHint": "Create a profile in this group, or move existing profiles into it.",
@@ -2737,6 +2739,7 @@
     "profileLockedElsewhere": "This profile is in use on another device.",
     "profileLockUnavailable": "Could not check whether this profile is in use elsewhere. Check your connection and try again.",
     "fingerprintExitMismatch": "The proxy exit node doesn't match this profile's fingerprint.",
+    "fingerprintHostOsMismatch": "This profile claims {{claimed}}, but Donut is running on {{host}}. Launch it on a {{claimed}} machine or virtual machine.",
     "launchConsentExpired": "That confirmation is no longer valid. Try launching again.",
     "vpnWorkerStartFailed": "Couldn't start the VPN connection: {{detail}}",
     "exitProbeFailed": "Couldn't reach the proxy exit node to check its location.",
@@ -2995,7 +2998,9 @@
     "pasteTypingKeysHeld": "Let go of the shortcut keys so Donut can start typing.",
     "pasteTypingPermission": "Donut needs the Accessibility permission to type. Open System Settings > Privacy & Security > Accessibility, turn on Donut, then try again.",
     "pasteTypingFailed": "Typing failed: {{detail}}",
-    "profileStillSyncing": "This profile is still syncing. Try again shortly."
+    "profileStillSyncing": "This profile is still syncing. Try again shortly.",
+    "cloudApiUrlInvalid": "Enter an absolute http:// or https:// address.",
+    "cookieBotRequiresWayfern": "The local Cookie Bot can only drive Wayfern profiles, because it uses the browser's DevTools connection."
   },
   "rail": {
     "profiles": "Profiles",
@@ -3086,7 +3091,8 @@
       "selfHosted": "Self-hosted",
       "teamUsage": "Team usage",
       "teamActivity": "Team activity",
-      "teamAccess": "Team access"
+      "teamAccess": "Team access",
+      "server": "Server"
     },
     "selfHosted": {
       "title": "Self-hosted sync server",
@@ -3112,6 +3118,14 @@
       "removed": "Sync server removed.",
       "switched": "Syncing with {{server}}.",
       "tokenServer": "{{host}} (sync token)"
+    },
+    "server": {
+      "title": "Account server",
+      "description": "Sign-in, plan and entitlements come from this server. Leave the default to use Donut cloud, or enter your self-hosted control plane.",
+      "urlLabel": "Control plane URL",
+      "urlPlaceholder": "https://control.example.com",
+      "saved": "Account server saved. Sign in again.",
+      "reset": "Use Donut cloud"
     }
   },
   "shortcutsPage": {
@@ -3650,7 +3664,9 @@
       "fixProxy": "Attach a proxy",
       "fixFailed": "Could not apply that fix.",
       "exitNodeHint": "Without a proxy or VPN the run leaves from the fleet's own datacenter address. Hours of traffic from a hosting network damages the profile's identity more than not warming it at all.",
-      "reasonSyncPassword": "Sync encryption password is set"
+      "reasonSyncPassword": "Sync encryption password is set",
+      "reasonLocalBrowser": "Local Cookie Bot needs a Wayfern profile",
+      "reasonEphemeral": "This profile is ephemeral, so its cookies would vanish when it closes"
     },
     "conflict": {
       "title": "{{email}} already warms this profile at {{time}}",
@@ -3742,6 +3758,11 @@
       "dueSoon_other": "{{count}} profiles in the next 24 h",
       "nothingScheduled": "Nothing scheduled",
       "blocked": "No profile can run. See the list below."
+    },
+    "local": {
+      "description": "Warms profiles on this machine, on your schedule.",
+      "emptyHint": "Pick a profile and the bot warms it on this machine at the times you set. Donut has to stay open.",
+      "enrolDescription": "The bot opens the profile on this machine and browses the sites you list. Donut has to stay open."
     }
   },
   "prelaunchGate": {

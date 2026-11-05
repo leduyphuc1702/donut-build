@@ -236,6 +236,11 @@ pub struct AppSettings {
   pub api_token: Option<String>, // Displayed token for user to copy
   #[serde(default)]
   pub sync_server_url: Option<String>, // URL of the sync server
+  /// The account/control-plane base. `None` uses Donut cloud, or
+  /// `DONUT_CLOUD_API_URL` when that is set. Backend-owned: a settings save
+  /// keeps the stored value, and `set_cloud_api_url` is the only writer.
+  #[serde(default)]
+  pub cloud_api_url: Option<String>,
   /// The customer's own donut-sync a signed-in paid account syncs with,
   /// instead of Donut cloud (`sync::account_server`). Owned by
   /// `set_account_sync_server`, never by a settings save.
@@ -517,6 +522,7 @@ impl Default for AppSettings {
       api_port: 10108,
       api_token: None,
       sync_server_url: None,
+      cloud_api_url: None,
       account_sync_server_url: None,
       sync_source: None,
       first_launch_timestamp: None,
@@ -949,12 +955,14 @@ pub async fn save_app_settings(
       settings.feedback_sent_at = current.feedback_sent_at;
       settings.account_sync_server_url = current.account_sync_server_url;
       settings.sync_source = current.sync_source;
+      settings.cloud_api_url = current.cloud_api_url;
     }
   } else {
     settings.mcp_remote_enabled = false;
     settings.mcp_remote_key_id = None;
     settings.account_sync_server_url = None;
     settings.sync_source = None;
+    settings.cloud_api_url = None;
   }
 
   let mut persist_settings = settings.clone();
@@ -1184,8 +1192,19 @@ pub async fn save_sync_settings(
   // account — the clearing path (both `None`) is always allowed so logged-
   // in users can wipe a stale self-hosted config that pre-dates their
   // sign-in.
+  //
+  // A self-hosted account is the exception: its control plane serves no cloud
+  // backup, and `self_hosted_source` already routes it to the shared-token
+  // server. With first-launch provisioning that account exists before the
+  // person can configure sync, so refusing here would leave a fresh install
+  // unable to sync at all.
   let is_setting_self_hosted = sync_server_url.is_some() || sync_token.is_some();
-  if is_setting_self_hosted && crate::cloud_auth::CLOUD_AUTH.is_logged_in().await {
+  let self_hosted_account =
+    crate::cloud_auth::cloud_api_base() != crate::cloud_auth::DEFAULT_CLOUD_API_URL;
+  if is_setting_self_hosted
+    && !self_hosted_account
+    && crate::cloud_auth::CLOUD_AUTH.is_logged_in().await
+  {
     return Err(serde_json::json!({ "code": "SELF_HOSTED_REQUIRES_LOGOUT" }).to_string());
   }
 
@@ -2101,6 +2120,7 @@ mod tests {
       api_port: 10108,
       api_token: None,
       sync_server_url: None,
+      cloud_api_url: None,
       account_sync_server_url: None,
       sync_source: None,
       first_launch_timestamp: None,

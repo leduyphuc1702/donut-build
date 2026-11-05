@@ -13,8 +13,134 @@ use crate::proxy_manager::PROXY_MANAGER;
 use crate::settings_manager::{SettingsManager, StoredMcpRemoteKey};
 use crate::sync;
 
-pub const CLOUD_API_URL: &str = "https://api.donutbrowser.com";
+pub const DEFAULT_CLOUD_API_URL: &str = "https://api.donutbrowser.com";
 pub const CLOUD_SYNC_URL: &str = "https://sync.donutbrowser.com";
+
+/// The configured cloud API base, formatted on demand.
+///
+/// This is deliberately a `Display` value rather than a `&str`: the account
+/// backend can move to a self-hosted control plane, and the many
+/// `format!("{CLOUD_API_URL}/...")` call sites pick up that base without each
+/// one knowing which server it talks to.
+pub struct CloudApiBase;
+
+impl std::fmt::Display for CloudApiBase {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.write_str(&cloud_api_base())
+  }
+}
+
+pub const CLOUD_API_URL: CloudApiBase = CloudApiBase;
+
+static CLOUD_API_BASE: std::sync::LazyLock<std::sync::RwLock<String>> =
+  std::sync::LazyLock::new(|| std::sync::RwLock::new(effective_cloud_api_base(None)));
+
+/// Normalize a configured control-plane address, or `None` when it is not an
+/// absolute HTTP(S) URL. A trailing slash and a trailing `/api` are accepted
+/// because people paste either from a browser.
+pub fn normalize_cloud_api_base(url: &str) -> Option<String> {
+  let trimmed = url.trim().trim_end_matches('/');
+  let trimmed = trimmed.strip_suffix("/api").unwrap_or(trimmed);
+  let rest = trimmed
+    .strip_prefix("https://")
+    .or_else(|| trimmed.strip_prefix("http://"))?;
+  if rest.is_empty() || rest.chars().any(char::is_whitespace) {
+    return None;
+  }
+  Some(trimmed.to_string())
+}
+
+pub fn cloud_api_base() -> String {
+  CLOUD_API_BASE
+    .read()
+    .unwrap_or_else(std::sync::PoisonError::into_inner)
+    .clone()
+}
+
+/// Whether the account comes from a control plane this deployment runs, rather
+/// than Donut cloud. Cloud-only services branch on this to use their local
+/// equivalent instead of asking for a route that cannot exist.
+pub fn is_self_hosted_account() -> bool {
+  cloud_api_base() != DEFAULT_CLOUD_API_URL
+}
+
+/// The base `set_cloud_api_base` will apply: the configured address, else
+/// `DONUT_CLOUD_API_URL`, else Donut cloud.
+fn effective_cloud_api_base(configured: Option<&str>) -> String {
+  configured
+    .and_then(normalize_cloud_api_base)
+    .unwrap_or_else(|| {
+      std::env::var("DONUT_CLOUD_API_URL")
+        .ok()
+        .and_then(|value| normalize_cloud_api_base(&value))
+        .unwrap_or_else(|| DEFAULT_CLOUD_API_URL.to_string())
+    })
+}
+
+/// Point every account call at `url`. `None` restores `DONUT_CLOUD_API_URL`
+/// when it is set, else Donut cloud.
+pub fn set_cloud_api_base(url: Option<&str>) {
+  let next = effective_cloud_api_base(url);
+  *CLOUD_API_BASE
+    .write()
+    .unwrap_or_else(std::sync::PoisonError::into_inner) = next;
+}
+
+/// A build meant for a team ships the self-hosted account it adopts on first
+/// launch. `DONUT_SELF_HOST_URL` / `DONUT_SELF_HOST_KEY` at runtime win over
+/// the values baked in at compile time, so a developer can point one binary at
+/// a local control plane without rebuilding.
+const BAKED_SELF_HOST_URL: Option<&str> = option_env!("DONUT_SELF_HOST_URL");
+const BAKED_SELF_HOST_KEY: Option<&str> = option_env!("DONUT_SELF_HOST_KEY");
+
+fn non_empty(value: Option<&str>) -> Option<&str> {
+  value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+/// Resolve the address and key an install uses to mint the shared self-hosted
+/// account. `configured_base` (what the person saved under Account → Server)
+/// wins; a stock build with no key resolves to `None`, which keeps every
+/// existing sign-in path unchanged.
+fn provisioning_config(
+  configured_base: &str,
+  runtime_url: Option<&str>,
+  runtime_key: Option<&str>,
+  baked_url: Option<&str>,
+  baked_key: Option<&str>,
+) -> Option<(String, String)> {
+  let key = non_empty(runtime_key).or_else(|| non_empty(baked_key))?;
+  let base = if configured_base != DEFAULT_CLOUD_API_URL {
+    configured_base.to_string()
+  } else {
+    normalize_cloud_api_base(non_empty(runtime_url).or_else(|| non_empty(baked_url))?)?
+  };
+  if base == DEFAULT_CLOUD_API_URL {
+    return None;
+  }
+  Some((base, key.to_string()))
+}
+
+fn self_host_provisioning() -> Option<(String, String)> {
+  let runtime_url = std::env::var("DONUT_SELF_HOST_URL").ok();
+  let runtime_key = std::env::var("DONUT_SELF_HOST_KEY").ok();
+  provisioning_config(
+    &cloud_api_base(),
+    runtime_url.as_deref(),
+    runtime_key.as_deref(),
+    BAKED_SELF_HOST_URL,
+    BAKED_SELF_HOST_KEY,
+  )
+}
+
+/// Point the account backend at the build's self-hosted control plane before
+/// any background task reads it. Sign-in itself happens later, in the startup
+/// cloud task; this only settles which server the session, sync source and
+/// account page belong to.
+pub fn apply_self_host_base() {
+  if let Some((base, _)) = self_host_provisioning() {
+    set_cloud_api_base(Some(base.as_str()));
+  }
+}
 
 /// Default per-hour cap on local automation API / MCP requests, used when the
 /// cloud API has not sent one.
@@ -283,6 +409,12 @@ pub struct CloudUser {
   /// keeps older login/state payloads deserializing; resolve via `entitlements()`.
   #[serde(default)]
   pub entitlements: Option<Entitlements>,
+  /// Whether a self-hosted control plane issued this account. The control
+  /// plane sends it; `cloud_get_user` also stamps the current answer, so a
+  /// state cached by a build without this field still tells the UI which
+  /// local services are available.
+  #[serde(rename = "selfHosted", default)]
+  pub self_hosted: Option<bool>,
 }
 
 impl CloudUser {
@@ -573,6 +705,31 @@ impl CloudAuthManager {
     }
   }
 
+  /// Whether this install has already had its first self-hosted launch. The
+  /// marker outlives the session files, so an explicit sign-out is not undone
+  /// by the next start.
+  fn self_host_provisioned() -> bool {
+    Self::get_settings_dir()
+      .join("self_host_provisioned")
+      .exists()
+  }
+
+  fn remember_self_host_provisioned() {
+    let path = Self::get_settings_dir().join("self_host_provisioned");
+    if path.exists() {
+      return;
+    }
+    if let Some(parent) = path.parent() {
+      if let Err(e) = fs::create_dir_all(parent) {
+        log::warn!("Self-hosted marker directory failed err=\"{e}\"");
+        return;
+      }
+    }
+    if let Err(e) = fs::write(&path, b"1") {
+      log::warn!("Self-hosted marker write failed err=\"{e}\"");
+    }
+  }
+
   // --- JWT expiry check ---
 
   /// A JWT's claims, unverified.
@@ -731,6 +888,92 @@ impl CloudAuthManager {
     *state = Some(auth_state.clone());
 
     Ok(auth_state)
+  }
+
+  /// Adopt the build's shared self-hosted account when this install has no
+  /// session yet. The control plane mints it from the provisioning key in the
+  /// build, so a first launch is the pro account without a device code.
+  ///
+  /// Returns whether a session exists afterwards. A build without a key, or
+  /// one already signed in, is left untouched.
+  pub async fn provision_self_hosted(&self) -> bool {
+    let Some((base, key)) = self_host_provisioning() else {
+      return false;
+    };
+    if self.is_logged_in().await {
+      Self::remember_self_host_provisioned();
+      return true;
+    }
+    // A person who signed out on a provisioned install stays signed out: the
+    // marker records that this install has already had its first launch, so
+    // the next start does not force the account back in.
+    if Self::self_host_provisioned() {
+      return false;
+    }
+    // The account belongs to this server, not to Donut cloud; every later
+    // call (sync token, profile refresh) must use the same base.
+    set_cloud_api_base(Some(base.as_str()));
+
+    let url = format!("{base}/api/auth/auto");
+    let response = match self
+      .client
+      .get()
+      .post(&url)
+      .json(&serde_json::json!({ "key": key }))
+      .send()
+      .await
+    {
+      Ok(response) => response,
+      Err(e) => {
+        log::warn!("Self-hosted account sign-in failed err=\"{e}\"");
+        return false;
+      }
+    };
+
+    if !response.status().is_success() {
+      let status = response.status();
+      let body = response.text().await.unwrap_or_default();
+      log::warn!(
+        "Self-hosted account sign-in refused status={status} detail=\"{}\"",
+        body.trim()
+      );
+      return false;
+    }
+
+    let login: DeviceCodeExchangeResponse = match response.json().await {
+      Ok(login) => login,
+      Err(e) => {
+        log::warn!("Self-hosted account sign-in response invalid err=\"{e}\"");
+        return false;
+      }
+    };
+
+    if let Err(e) = Self::store_access_token(&login.access_token) {
+      log::error!("Self-hosted access token store failed err=\"{e}\"");
+      return false;
+    }
+    if let Err(e) = Self::store_refresh_token(&login.refresh_token) {
+      log::error!("Self-hosted refresh token store failed err=\"{e}\"");
+      return false;
+    }
+
+    let auth_state = CloudAuthState {
+      user: login.user,
+      logged_in_at: Utc::now().to_rfc3339(),
+    };
+    if let Err(e) = Self::store_auth_state(&auth_state) {
+      log::error!("Self-hosted account state store failed err=\"{e}\"");
+    }
+    *self.state.lock().await = Some(auth_state.clone());
+    Self::remember_self_host_provisioned();
+
+    log::info!(
+      "Self-hosted account signed in plan={} entitlements_active={}",
+      auth_state.user.effective_plan(),
+      auth_state.user.entitlements().active
+    );
+    let _ = crate::events::emit_empty("cloud-auth-changed");
+    true
   }
 
   pub async fn refresh_access_token(&self) -> Result<(), String> {
@@ -1678,6 +1921,15 @@ impl CloudAuthManager {
       return Ok(());
     }
 
+    // A self-hosted control plane issues the account, not Wayfern's engine
+    // token. Same-OS launches do not need one, and cross-OS launches are
+    // refused by `launch_gate::enforce_host_os` before the engine starts.
+    if cloud_api_base() != DEFAULT_CLOUD_API_URL {
+      log::info!("Wayfern token not requested: self-hosted account server");
+      self.clear_wayfern_token().await;
+      return Ok(());
+    }
+
     let result = self
       .api_call_with_retry(|access_token| {
         let url = format!("{CLOUD_API_URL}/api/auth/wayfern-start");
@@ -2042,6 +2294,51 @@ pub async fn cloud_exchange_device_code(
   Ok(state)
 }
 
+/// The account backend this build talks to, after settings and
+/// `DONUT_CLOUD_API_URL` are applied.
+#[tauri::command]
+pub fn get_cloud_api_url() -> String {
+  cloud_api_base()
+}
+
+/// Point the account backend at another server. `None` clears the stored
+/// address, falling back to `DONUT_CLOUD_API_URL` or Donut cloud.
+#[tauri::command]
+pub async fn set_cloud_api_url(url: Option<String>) -> Result<String, String> {
+  let normalized = match url.as_deref().map(str::trim).filter(|url| !url.is_empty()) {
+    Some(value) => Some(
+      normalize_cloud_api_base(value)
+        .ok_or_else(|| crate::backend_error("CLOUD_API_URL_INVALID"))?,
+    ),
+    None => None,
+  };
+
+  let manager = SettingsManager::instance();
+  let mut settings = manager
+    .load_settings()
+    .map_err(|e| crate::backend_error_with_detail("INTERNAL_ERROR", e))?;
+  let before = cloud_api_base();
+  let after = effective_cloud_api_base(normalized.as_deref());
+  settings.cloud_api_url = normalized.clone();
+  if before != after {
+    // An internet-facing bridge belongs to the account it was enabled for,
+    // and the next server may not implement `/api/mcp-bridge` at all.
+    settings.mcp_remote_enabled = false;
+  }
+  manager
+    .save_settings(&settings)
+    .map_err(|e| crate::backend_error_with_detail("INTERNAL_ERROR", e))?;
+
+  set_cloud_api_base(normalized.as_deref());
+  if before != after && CLOUD_AUTH.is_logged_in().await {
+    // A session belongs to the server that issued it; keeping it would send
+    // this server's bearer token to the next one. This also hangs up the
+    // remote-control bridge the old account had opened.
+    CLOUD_AUTH.invalidate_session().await;
+  }
+  Ok(after)
+}
+
 /// Open the remote-control bridge if the user asked for it and is signed in.
 ///
 /// Idempotent, and safe to call from anywhere: `mcp_remote::start` returns
@@ -2066,6 +2363,17 @@ pub(crate) async fn ensure_remote_bridge(app_handle: &tauri::AppHandle) {
   if !CLOUD_AUTH.is_logged_in().await {
     return;
   }
+  // A self-hosted control plane that does not declare remote control has no
+  // `/api/mcp-bridge` for the socket to reach; opening it would only log a
+  // reconnect failure every few seconds.
+  if cloud_api_base() != DEFAULT_CLOUD_API_URL
+    && !CLOUD_AUTH
+      .entitlements()
+      .await
+      .is_some_and(|entitlements| entitlements.remote_control)
+  {
+    return;
+  }
   let enabled = crate::settings_manager::SettingsManager::instance()
     .load_settings()
     .map(|settings| settings.mcp_remote_enabled)
@@ -2082,6 +2390,10 @@ pub async fn cloud_get_user() -> Result<Option<CloudAuthState>, String> {
     // Always hand the frontend a resolved entitlements object so it never has to
     // derive capabilities itself (covers older cached state with no entitlements).
     state.user.entitlements = Some(state.user.entitlements());
+    // The base in effect decides this, not the cached payload: state written
+    // before the field existed would otherwise read as a Donut cloud account
+    // and hide every local service.
+    state.user.self_hosted = Some(is_self_hosted_account());
     state
   }))
 }
@@ -2090,6 +2402,7 @@ pub async fn cloud_get_user() -> Result<Option<CloudAuthState>, String> {
 pub async fn cloud_refresh_profile() -> Result<CloudUser, String> {
   let mut user = CLOUD_AUTH.fetch_profile().await?;
   user.entitlements = Some(user.entitlements());
+  user.self_hosted = Some(is_self_hosted_account());
 
   // Minting the token is what actually unlocks cross-OS fingerprints, and it
   // only happened at login, at startup and once every 10 hours. An account
@@ -2102,6 +2415,12 @@ pub async fn cloud_refresh_profile() -> Result<CloudUser, String> {
     // Failures are logged inside.
     let _ = CLOUD_AUTH.request_wayfern_token().await;
   }
+
+  // `fetch_profile` rewrote the cached state, but every `useCloudAuth` keeps
+  // its own copy. Without this event an account that refreshed here left the
+  // Profiles page holding the old entitlements until a restart, so a feature
+  // the control plane had just granted still rendered locked.
+  let _ = crate::events::emit_empty("cloud-auth-changed");
 
   Ok(user)
 }
@@ -2322,6 +2641,124 @@ pub async fn restart_sync_service(app_handle: tauri::AppHandle) -> Result<(), St
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn cloud_api_base_normalizes_what_people_paste() {
+    for (input, expected) in [
+      ("https://control.example.com", "https://control.example.com"),
+      (
+        "https://control.example.com/",
+        "https://control.example.com",
+      ),
+      (
+        "https://control.example.com/api",
+        "https://control.example.com",
+      ),
+      ("http://localhost:8080/api/", "http://localhost:8080"),
+      (
+        "  https://control.example.com  ",
+        "https://control.example.com",
+      ),
+    ] {
+      assert_eq!(
+        normalize_cloud_api_base(input).as_deref(),
+        Some(expected),
+        "input={input}"
+      );
+    }
+    for invalid in [
+      "",
+      "control.example.com",
+      "ftp://control.example.com",
+      "https://",
+    ] {
+      assert_eq!(normalize_cloud_api_base(invalid), None, "input={invalid}");
+    }
+  }
+
+  #[test]
+  fn cloud_api_url_formats_the_configured_base() {
+    let base = cloud_api_base();
+    assert_eq!(format!("{CLOUD_API_URL}"), base);
+    assert_eq!(
+      format!("{CLOUD_API_URL}/api/auth/me"),
+      format!("{base}/api/auth/me")
+    );
+  }
+
+  #[test]
+  fn provisioning_needs_a_key_and_a_self_hosted_base() {
+    assert_eq!(
+      provisioning_config(DEFAULT_CLOUD_API_URL, None, None, None, None),
+      None,
+      "a stock build has no provisioning key"
+    );
+    assert_eq!(
+      provisioning_config(
+        DEFAULT_CLOUD_API_URL,
+        None,
+        Some("  "),
+        Some("https://control.example.com"),
+        Some("")
+      ),
+      None,
+      "blank values are not credentials"
+    );
+    assert_eq!(
+      provisioning_config(
+        DEFAULT_CLOUD_API_URL,
+        Some(DEFAULT_CLOUD_API_URL),
+        Some("key"),
+        None,
+        None
+      ),
+      None,
+      "pointing at Donut cloud is never a self-hosted provisioning"
+    );
+  }
+
+  #[test]
+  fn provisioning_prefers_the_saved_server_then_runtime_then_build() {
+    assert_eq!(
+      provisioning_config(
+        "https://saved.example.com",
+        Some("https://runtime.example.com"),
+        Some("key"),
+        Some("https://baked.example.com"),
+        Some("baked-key")
+      ),
+      Some(("https://saved.example.com".to_string(), "key".to_string())),
+      "Account → Server is the person's choice and wins"
+    );
+    assert_eq!(
+      provisioning_config(
+        DEFAULT_CLOUD_API_URL,
+        Some("https://runtime.example.com/api/"),
+        Some(" runtime-key "),
+        Some("https://baked.example.com"),
+        Some("baked-key")
+      ),
+      Some((
+        "https://runtime.example.com".to_string(),
+        "runtime-key".to_string()
+      )),
+      "a developer can point one binary at a local control plane"
+    );
+    assert_eq!(
+      provisioning_config(
+        DEFAULT_CLOUD_API_URL,
+        None,
+        None,
+        Some("https://baked.example.com/"),
+        Some("baked-key")
+      ),
+      Some((
+        "https://baked.example.com".to_string(),
+        "baked-key".to_string()
+      )),
+      "a distributed build uses what it was compiled with"
+    );
+  }
 
   fn jwt_with(claims: serde_json::Value) -> String {
     use base64::{engine::general_purpose, Engine as _};

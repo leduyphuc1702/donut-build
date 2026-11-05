@@ -506,6 +506,8 @@ impl BrowserRunner {
       // it: the gate returns early for several kinds of profile and answers a
       // question ("may this launch proceed"), while this is a preparation step
       // every spawn needs, including a profile with no route to check.
+      crate::launch_gate::enforce_host_os(profile)
+        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
       crate::launch_gate::enforce_route_required(profile, upstream_proxy.is_some())
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
       crate::launch_gate::enforce_exit_country(profile, upstream_proxy.as_ref())
@@ -2024,6 +2026,13 @@ pub async fn kill_browser_profile(
     .await
   {
     Ok(()) => {
+      // A local remote session ends when its browser does, whichever surface
+      // stopped it.
+      crate::remote_session::forget_local_sessions_for_profile(
+        &app_handle,
+        &profile.id.to_string(),
+      );
+
       // Release team lock if applicable
       crate::team_lock::release_team_lock_if_needed(&profile).await;
 

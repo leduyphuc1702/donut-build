@@ -96,9 +96,65 @@ Không công cụ nào cam kết kín 100% trước mọi thuật toán: độ t
    - <https://demo.fingerprint.com/playground>: "Bot: not detected", và mã visitor ID **giống nhau** trên 2 máy.
 2. Nếu hash canvas hoặc WebGL khác nhau giữa 2 máy: hai máy đó không nên dùng chung hồ sơ. Ghép cặp theo phần cứng giống nhau.
 
+## Đo mạng thực tế (2026-11-05)
+
+Máy đo: macOS, Wi-Fi văn phòng đi qua WireGuard US.
+
+- IP: `71.236.224.43`, Comcast AS7922, Portland/Hillsboro, Oregon; loại residential; không có IPv6; WebRTC chỉ thấy IP exit.
+- DNS: NextDNS US (`45.90.28.0`/`45.90.30.0`), egress Vultr/Misaka tại Mỹ. Khác ISP Comcast nhưng cùng country.
+- Latency: ~200–216 ms tới 1.1.1.1, Amazon, eBay, Shopify. Đây là residual của đường Việt Nam → US → site.
+- MTU tunnel: 1380; MSS bị clamp còn 1340; TTL giảm 2 hop.
+- p0f/browserleaks: SYN từ exit có MSS 1340, options của Darwin (nop, wscale 6, timestamps, sackOK, eol), bị xếp **iOS/Darwin**, link type **OpenVPN UDP**. Không phải Windows/Linux. Đây là lý do profile Windows không thể chạy trên máy macOS này.
+
+Từ bản này, launch gate so OS mà fingerprint khai với OS đang chạy app; lệch thì trả `FINGERPRINT_HOST_OS_MISMATCH` và không mở browser. Muốn profile Windows: chạy Donut trong Windows VM/máy Windows thật, dùng bridged/TAP hoặc kernel NAT; không dùng user-mode NAT (QEMU slirp) vì nó terminate TCP và lộ stack host. Chạy app trong VM, không chỉ browser.
+
+## Tài khoản tự host (control plane)
+
+Từ bản này, tài khoản không cần Donut cloud. `vietflow/control-plane/` là một server nhỏ trả về một tài khoản duy nhất với:
+
+- không giới hạn số hồ sơ mỗi giờ và số trình duyệt chạy cùng lúc;
+- `requestsPerHour: 0`, nên automation cục bộ (REST/MCP trên máy) không bị đếm;
+- bật quyền sửa vân tay; hồ sơ mới sinh thiết bị ngay trên máy, không cần token hay cloud;
+- cổng chống lệch OS vẫn chặn nếu máy chạy app không khớp, nên profile Windows vẫn phải chạy trên Windows;
+- bật nhóm cục bộ một ghế: tài khoản là chủ sở hữu, nhật ký hoạt động (mở/đóng hồ sơ, sửa hồ sơ/proxy/nhóm/VPN/extension) lưu tại control plane và xem/xuất CSV được trong **Tài khoản → Nhật ký hoạt động**;
+- bật cookie bot, phiên từ xa và dịch vụ agent cục bộ (chi tiết bên dưới). Remote MCP (kết nối từ donutbrowser.com) vẫn là dịch vụ cloud; automation cục bộ qua REST/MCP vẫn chạy.
+
+### Dịch vụ cục bộ thay cho dịch vụ cloud
+
+- **Cookie Bot** chạy trên chính máy này (`src-tauri/src/cookie_bot_local.rs`). Lịch, lần chạy, thống kê và mẫu lưu trong `settings/cookie_bot_local.json`. Mỗi lần một hồ sơ, chỉ khi Donut đang mở, chỉ với hồ sơ Wayfern cùng OS và không ephemeral; không cần proxy/exit node và không tiêu "giờ từ xa" (mức hiển thị chỉ là danh nghĩa). Lệch vân tay với lối ra chỉ ghi log, không chặn lần chạy nền.
+- **Phiên từ xa** mở hồ sơ ngay trên máy này. Nút **Chạy trên máy này** trong chi tiết hồ sơ (và mục tương ứng trong menu chuột phải) tạo một phiên có trạng thái đang chạy, dừng được, và dùng chung đường launch/CDP với phiên cloud. Máy chủ phiên chính là máy đang chạy Donut.
+- **Agent**: control plane trả credits, token, routine và lần chạy tại `/api/agent/*`. Các tab Chat/Tasks/Routines chỉ hiện khi bản Wayfern đã cài có engine agent; bản Wayfern phát hành hiện tại báo không hỗ trợ engine nên các tab này còn ẩn, và nhiệm vụ agent chưa chạy được. Các tab Conversation/Profiles/Activity/Recipes/Schedules thuộc dịch vụ cloud nên vẫn khóa; muốn điều khiển hồ sơ bằng agent ngay bây giờ thì dùng MCP cục bộ trong **Tích hợp**.
+
+Giới hạn của các dịch vụ cục bộ:
+
+- Cookie Bot chỉ chạy khi app mở; đóng app là lịch dừng. Mỗi lúc chỉ một lần chạy.
+- Danh sách phiên từ xa nằm trong bộ nhớ: khởi động lại app thì phiên không còn trong danh sách; nếu trình duyệt vẫn mở, dừng nó bằng nút Stop thường.
+- Team chỉ có một ghế owner; không có lời mời thành viên hay phân quyền nhóm.
+- Agent tasks cần Wayfern có engine agent; nếu không, chỉ dùng MCP cục bộ.
+
+Cách dùng:
+
+1. Dựng server theo `vietflow/control-plane/README.md`.
+2. Trong Donut: **Tài khoản → Server**, nhập `https://control...`, bấm Lưu.
+3. Bấm **Đăng nhập**, mở trang `/auth/link`, nhập `CONTROL_TOKEN`, lấy mã dùng một lần rồi dán vào Donut.
+
+Bản build phát cho cả công ty không cần bước 3: build với `DONUT_SELF_HOST_URL` và `DONUT_SELF_HOST_KEY` (khóa tự đăng nhập của control plane), lần mở đầu tiên app tự nhận tài khoản pro. Khóa nằm trong binary nên chỉ phát nội bộ; đổi khóa trên server rồi phát bản mới khi cần thu hồi. Chi tiết trong `vietflow/control-plane/README.md`.
+
+Đồng bộ hồ sơ vẫn do `vietflow/sync-server/` đảm nhiệm; control plane không giữ dữ liệu hồ sơ. Khi tài khoản là tự host, app không gửi token của tài khoản đó tới `sync.donutbrowser.com`; nó dùng server đồng bộ tự host đã cấu hình. Mục **Tài khoản → Tự lưu trữ** vẫn mở sau khi đăng nhập tài khoản tự host, nên bản build tự đăng nhập vẫn đặt được `SYNC_TOKEN`.
+
+## Sinh vân tay cục bộ
+
+Trên tài khoản tự host, hồ sơ mới không gọi `Wayfern.createIdentity` và không cần token của Donut cloud. Donut tự dựng thiết bị (`src-tauri/src/fingerprint_generator.rs`): User-Agent, platform, màn hình, CPU/RAM, WebGL, font, voice, audio, battery, … theo OS của máy, rồi ghi toàn bộ vào `wayfern_config.fingerprint`. Khi mở, thiết bị được áp bằng `Wayfern.setFingerprint`.
+
+- Cùng một profile id luôn ra cùng một thiết bị; hai hồ sơ khác nhau ra hai thiết bị khác nhau.
+- Múi giờ, ngôn ngữ và tọa độ lấy từ lối ra của hồ sơ (proxy/VPN) lúc tạo, không lấy từ máy. Nếu không đo được lối ra mà hồ sơ có proxy/VPN, các trường vị trí bị bỏ trống để lần đo sau điền lại.
+- Chỉ hỗ trợ Windows/macOS/Linux, và chỉ mở được khi OS khai báo trùng OS đang chạy app. Android/iOS bị từ chối.
+- Hồ sơ cũ dùng `identity_id` (Wayfern sinh trước bản này) vẫn sửa được bằng nút **Tạo lại vân tay**: lần tạo lại chuyển hồ sơ sang thiết bị cục bộ. Nếu chưa tạo lại, sửa tay trên hồ sơ cũ vẫn cần token Donut và sẽ bị từ chối khi mở.
+- Đây là bước đầu của việc thay engine. Wayfern vẫn là binary đóng: WebGPU, Client Hints, font và TLS/p0f chưa do Donut kiểm soát hoàn toàn. p0f/TCP-IP vẫn phụ thuộc OS của máy và lối ra; launch gate đã chặn khai OS khác máy.
+
 ## Phụ thuộc vào máy chủ bên ngoài
 
-Khi không đăng nhập tài khoản Donut (cách Vietflow dùng), ứng dụng chỉ gọi ra ngoài các địa chỉ sau:
+Khi dùng tài khoản tự host, ứng dụng chỉ gọi ra ngoài các địa chỉ sau:
 
 | Địa chỉ | Để làm gì | Thay được không |
 |---|---|---|
@@ -106,8 +162,9 @@ Khi không đăng nhập tài khoản Donut (cách Vietflow dùng), ứng dụng
 | `donutbrowser.com/wayfern.json` | Biết phiên bản Wayfern mới nhất để tải; kết quả được lưu lại cục bộ | Chưa; nếu địa chỉ này mất, máy mới không biết tải bản Wayfern nào |
 | `download.wayfern.com` | Tải trình duyệt Wayfern (mã đóng, của bên thứ ba) | Không. Wayfern là phụ thuộc cứng duy nhất của Donut |
 | GitHub (cơ sở dữ liệu GeoIP) | Định vị IP lối ra | Có thể tự host, chưa cần |
+| Control plane của Vietflow | Tài khoản, entitlements, khóa hồ sơ | Đã tự host (`vietflow/control-plane/`) |
 | Máy chủ đồng bộ của Vietflow | Đồng bộ hồ sơ và khóa phiên | Đã tự host (`vietflow/sync-server/`) |
 
-`api.donutbrowser.com` và `sync.donutbrowser.com` chỉ được gọi khi đăng nhập tài khoản Donut. Không có gì bắt buộc phải đăng nhập. Những gì tài khoản trả phí mở thêm (vân tay khác hệ điều hành, sửa vân tay, tự động hóa) do Wayfern và máy chủ Donut kiểm soát; bản Vietflow không thay đổi phần đó.
+`api.donutbrowser.com` và `sync.donutbrowser.com` chỉ còn được gọi khi cố ý dùng tài khoản Donut cloud. Khi dùng control plane tự host, hồ sơ mới sinh thiết bị cục bộ nên không cần token Donut; binary Wayfern vẫn do Donut phát hành và vẫn là mã đóng, nên WebGPU/TLS/p0f và việc thay engine vẫn là bước tiếp theo.
 
-Một giới hạn của bản không đăng nhập đáng biết: khi đang mở **hơn 3 trình duyệt** cùng lúc trên một máy, Donut không tạo được hồ sơ mới (việc sinh thiết bị cần mở thêm một trình duyệt ngầm). Đóng bớt rồi tạo.
+Khi chưa đăng nhập control plane, vẫn còn giới hạn cũ: đang mở **hơn 3 trình duyệt** cùng lúc thì Donut không tạo được hồ sơ mới (việc sinh thiết bị cần mở thêm một trình duyệt ngầm). Đăng nhập tài khoản tự host để bỏ giới hạn này.

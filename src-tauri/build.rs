@@ -159,12 +159,23 @@ fn embed_windows_manifest() {
   println!("cargo:rerun-if-changed=app.manifest");
 }
 
+/// Writes `bytes` only when the file's content differs.
+///
+/// `tauri dev` watches `src-tauri`, so rewriting an identical tray icon on
+/// every build made the watcher rebuild forever: build → icon written →
+/// rebuild → icon written. Comparing first keeps that loop from starting.
+fn save_if_changed(path: &std::path::Path, bytes: &[u8]) {
+  if std::fs::read(path).ok().as_deref() == Some(bytes) {
+    return;
+  }
+  std::fs::write(path, bytes).expect("Failed to save tray icon PNG");
+}
+
 fn generate_tray_icons() {
   use resvg::tiny_skia::{Pixmap, Transform};
   use resvg::usvg::{Options, Tree};
   use std::fs;
   use std::path::PathBuf;
-
   let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
   let icons_dir = PathBuf::from(&manifest_dir).join("icons");
   let svg_path = icons_dir.join("tray-icon.svg");
@@ -206,9 +217,8 @@ fn generate_tray_icons() {
     }
 
     let output_path = icons_dir.join(filename);
-    pixmap
-      .save_png(&output_path)
-      .expect("Failed to save tray icon PNG");
+    let bytes = pixmap.encode_png().expect("Failed to encode tray icon PNG");
+    save_if_changed(&output_path, &bytes);
   }
 
   // Generate a full-color icon for Windows tray (no template conversion)
@@ -223,8 +233,9 @@ fn generate_tray_icons() {
     resvg::render(&tree, transform, &mut pixmap.as_mut());
 
     let output_path = icons_dir.join("tray-icon-win-44.png");
-    pixmap
-      .save_png(&output_path)
-      .expect("Failed to save Windows tray icon PNG");
+    let bytes = pixmap
+      .encode_png()
+      .expect("Failed to encode Windows tray icon PNG");
+    save_if_changed(&output_path, &bytes);
   }
 }

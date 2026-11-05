@@ -1797,7 +1797,8 @@
       "runRemote": "在云端运行 {{name}}",
       "moreActions": "{{name}} 的更多操作",
       "close": "关闭 {{name}} 的详情",
-      "copyId": "复制 {{name}} 的 ID"
+      "copyId": "复制 {{name}} 的 ID",
+      "runLocal": "在此机器上运行 {{name}}"
     },
     "runningBanner": "停止该配置文件后才能编辑。",
     "debug": {
@@ -2479,7 +2480,8 @@
       "runRemote": "在云端运行",
       "lockNow": "立即锁定",
       "moveToTrash": "移到回收站",
-      "askAgent": "询问智能体"
+      "askAgent": "询问智能体",
+      "runLocal": "在此机器上运行"
     },
     "emptyGroupTitle": "此分组为空",
     "emptyGroupHint": "在此分组中创建配置文件，或将现有配置文件移到这里。",
@@ -2737,6 +2739,7 @@
     "profileLockedElsewhere": "该配置文件正在另一台设备上使用。",
     "profileLockUnavailable": "无法检查该配置文件是否正在别处使用。请检查网络连接后重试。",
     "fingerprintExitMismatch": "代理出口节点与此配置文件的指纹不匹配。",
+    "fingerprintHostOsMismatch": "此配置文件声称是 {{claimed}}，但 Donut 正在 {{host}} 上运行。请在 {{claimed}} 机器或虚拟机上启动它。",
     "launchConsentExpired": "该确认已失效。请重新启动。",
     "vpnWorkerStartFailed": "无法启动 VPN 连接：{{detail}}",
     "exitProbeFailed": "无法连接代理出口节点以检查其位置。",
@@ -2995,7 +2998,9 @@
     "pasteTypingKeysHeld": "请松开快捷键，Donut 才能开始输入。",
     "pasteTypingPermission": "Donut 需要辅助功能权限才能输入。请打开系统设置 > 隐私与安全性 > 辅助功能，开启 Donut 后重试。",
     "pasteTypingFailed": "无法输入：{{detail}}",
-    "profileStillSyncing": "此配置文件仍在同步。请稍后再试。"
+    "profileStillSyncing": "此配置文件仍在同步。请稍后再试。",
+    "cloudApiUrlInvalid": "请输入完整的 http:// 或 https:// 地址。",
+    "cookieBotRequiresWayfern": "本地 Cookie Bot 只能驱动 Wayfern 配置文件，因为它使用浏览器的 DevTools 连接。"
   },
   "rail": {
     "profiles": "配置文件",
@@ -3086,7 +3091,8 @@
       "selfHosted": "自托管",
       "teamUsage": "团队用量",
       "teamActivity": "团队活动",
-      "teamAccess": "团队权限"
+      "teamAccess": "团队权限",
+      "server": "服务器"
     },
     "selfHosted": {
       "title": "自托管同步服务器",
@@ -3112,6 +3118,14 @@
       "removed": "已移除同步服务器。",
       "switched": "正在与 {{server}} 同步。",
       "tokenServer": "{{host}}（同步令牌）"
+    },
+    "server": {
+      "title": "账户服务器",
+      "description": "登录、套餐和权限来自此服务器。保留默认值使用 Donut Cloud，或输入自托管的 control plane 地址。",
+      "urlLabel": "Control plane 地址",
+      "urlPlaceholder": "https://control.example.com",
+      "saved": "账户服务器已保存。请重新登录。",
+      "reset": "使用 Donut Cloud"
     }
   },
   "shortcutsPage": {
@@ -3650,7 +3664,9 @@
       "fixProxy": "绑定代理",
       "fixFailed": "无法应用该修复。",
       "exitNodeHint": "没有代理或 VPN 时，流量会从机器集群自己的数据中心地址发出。来自托管网络的长时间流量对配置文件身份的损害，比完全不养号还要大。",
-      "reasonSyncPassword": "已设置同步加密密码"
+      "reasonSyncPassword": "已设置同步加密密码",
+      "reasonLocalBrowser": "本地 Cookie Bot 需要 Wayfern 配置文件",
+      "reasonEphemeral": "此配置文件是临时的，关闭后 Cookie 会消失"
     },
     "conflict": {
       "title": "{{email}} 已在 {{time}} 养这个配置文件",
@@ -3742,6 +3758,11 @@
       "dueSoon_other": "未来 24 小时内有 {{count}} 个配置文件",
       "nothingScheduled": "没有安排",
       "blocked": "没有可运行的配置文件。请查看下方列表。"
+    },
+    "local": {
+      "description": "按你的计划在这台机器上预热配置文件。",
+      "emptyHint": "选择一个配置文件，机器人会在你设定的时间于这台机器上预热它。Donut 必须保持打开。",
+      "enrolDescription": "机器人会在这台机器上打开配置文件并浏览你列出的网站。Donut 必须保持打开。"
     }
   },
   "prelaunchGate": {

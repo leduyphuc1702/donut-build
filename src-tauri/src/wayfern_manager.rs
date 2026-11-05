@@ -2741,64 +2741,24 @@ impl WayfernManager {
       .await
   }
 
-  /// Generate a device for `config` on a headless Wayfern.
+  /// Resolve the location of the exit a fingerprint is generated against.
   ///
-  /// On a browser that ships the identity API this mints an identity and
-  /// returns its handle alongside the fingerprint; on older browsers it returns
-  /// the fingerprint alone. Which path runs is decided by `profile.version`,
-  /// the same field the executable path is resolved from, so the generated
-  /// device always matches the binary that ran.
+  /// Builds a transport that genuinely carries the probe through this
+  /// profile's upstream, or none at all. `probe_route` decides which: reqwest
+  /// where it can proxy the scheme itself, a temporary local donut-proxy worker
+  /// for the schemes that worker speaks (including every remote SOCKS one,
+  /// because reqwest's SOCKS connector corrupts its parse buffer when a proxy
+  /// splits a handshake reply across TCP segments), an Xray-core sidecar behind
+  /// such a worker for VLESS, and nothing for an upstream none of them can
+  /// speak.
   ///
-  /// Callers must only stamp `geo_proxy_signature` when
-  /// `geolocation_applied` is true: the device comes from a headless Wayfern
-  /// launched without a proxy, so on failure it silently carries the HOST
-  /// timezone/locale — stamping the signature then would tell the launch-time
-  /// refresh the location is already correct for this proxy and permanently
-  /// disable the one path that can repair it.
-  pub async fn generate_fingerprint_config(
-    &self,
-    _app_handle: &AppHandle,
+  /// No transport is built when the probe would not leave this machine anyway:
+  /// `resolve_geolocation` ignores `proxy` entirely when geolocation is off or
+  /// the location comes from a pinned geoip IP.
+  async fn resolve_generation_location(
     profile: &BrowserProfile,
     config: &WayfernConfig,
-  ) -> Result<GeneratedFingerprint, Box<dyn std::error::Error + Send + Sync>> {
-    let wayfern_token = crate::cloud_auth::CLOUD_AUTH.get_wayfern_token().await;
-    let session = HeadlessWayfern::start(
-      self,
-      profile,
-      wayfern_token.as_deref(),
-      &format!("purpose=generation profile={}", profile.id),
-    )
-    .await?;
-    let ws_url = session.page_ws_url().to_string();
-
-    // A profile without an explicit claim keeps the OS of the machine that
-    // created it, wherever it is regenerated.
-    let native_os = profile.native_os();
-    let os = config.os.as_deref().unwrap_or(&native_os);
-
-    // Include wayfern token if available (enables cross-OS fingerprinting for paid users)
-    let mut generate_params = json!({ "operatingSystem": os });
-    if let Some(ref token) = wayfern_token {
-      generate_params
-        .as_object_mut()
-        .unwrap()
-        .insert("wayfernToken".to_string(), json!(token));
-    }
-
-    let use_identity_api = supports_wayfern_152(&profile.version);
-
-    // Build a transport that genuinely carries the probe through this
-    // profile's upstream, or none at all. `probe_route` decides which:
-    // reqwest where it can proxy the scheme itself, a temporary local
-    // donut-proxy worker for the schemes that worker speaks (including
-    // every remote SOCKS one, because reqwest's SOCKS connector corrupts
-    // its parse buffer when a proxy splits a handshake reply across TCP
-    // segments), an Xray-core sidecar behind such a worker for VLESS, and
-    // nothing for an upstream none of them can speak.
-    //
-    // No transport is built when the probe would not leave this machine
-    // anyway: `resolve_geolocation` ignores `proxy` entirely when geolocation
-    // is off or the location comes from a pinned geoip IP.
+  ) -> Option<crate::geolocation::Geolocation> {
     let probe_leaves_this_machine = !matches!(
       config.geoip.as_ref(),
       Some(serde_json::Value::Bool(false)) | Some(serde_json::Value::String(_))
@@ -2808,8 +2768,6 @@ impl WayfernManager {
       _ => ProbeTransport::default(),
     };
 
-    // Resolve the location of the exit this fingerprint is generated against.
-    // Shared with the launch-time location refresh.
     // A profile that ROUTES ITS TRAFFIC must never probe from the real
     // address: `resolve_geolocation` treats `None` as "no proxy configured",
     // which is right for a direct profile and an IP leak for a routed one.
@@ -2835,6 +2793,162 @@ impl WayfernManager {
     };
 
     transport.shutdown().await;
+    exit_location
+  }
+
+  /// Build a device with Donut's own generator and store it as a full payload.
+  ///
+  /// Same-OS desktop devices only. A mobile claim has no generator here and
+  /// would be refused at launch by the host-OS gate anyway, so it is refused
+  /// now with the same code. A desktop claim for another host is generated and
+  /// kept, so a profile can be created for the Windows machine that will run
+  /// it; the gate still refuses it on a host it does not match.
+  async fn generate_local_fingerprint(
+    profile: &BrowserProfile,
+    config: &WayfernConfig,
+    os: &str,
+  ) -> Result<GeneratedFingerprint, Box<dyn std::error::Error + Send + Sync>> {
+    if !matches!(os, "windows" | "macos" | "linux") {
+      return Err(
+        serde_json::json!({
+          "code": "FINGERPRINT_HOST_OS_MISMATCH",
+          "params": {
+            "claimed": os,
+            "host": crate::profile::types::get_host_os(),
+          },
+        })
+        .to_string()
+        .into(),
+      );
+    }
+
+    let exit_location = Self::resolve_generation_location(profile, config).await;
+    let device = crate::fingerprint_generator::generate(
+      &profile.id.to_string(),
+      os,
+      &profile.version,
+      exit_location.as_ref(),
+    );
+    let location = device.as_object().and_then(Self::location_of);
+    let geolocation_applied = exit_location.is_some();
+    log::info!(
+      "Fingerprint generated locally profile={} os={} geolocation={}",
+      profile.id,
+      crate::log_redaction::Plain(os),
+      if geolocation_applied {
+        "applied"
+      } else {
+        "skipped"
+      }
+    );
+    Ok(GeneratedFingerprint {
+      fingerprint: device.to_string(),
+      identity_id: None,
+      location,
+      geolocation_applied,
+    })
+  }
+
+  /// Put the exit's location into a locally supplied payload.
+  ///
+  /// The form can generate a device before the profile exists, when the
+  /// profile's route is not yet known, so that device carries no location. A
+  /// profile that routes its traffic must never keep a location it did not
+  /// verify: the keys are removed and the caller leaves `geolocation_applied`
+  /// false, which keeps the launch-time refresh available.
+  pub async fn localize_supplied_fingerprint(
+    profile: &BrowserProfile,
+    config: &WayfernConfig,
+    fingerprint_json: &str,
+  ) -> (String, bool) {
+    let Some(device) = Self::fingerprint_object(fingerprint_json) else {
+      return (fingerprint_json.to_string(), false);
+    };
+    let exit_location = Self::resolve_generation_location(profile, config).await;
+    let routed = config.proxy.is_some() || profile.vpn_id.is_some();
+    let (device, geolocation_applied) =
+      Self::localize_device(device, exit_location.as_ref(), routed);
+    (
+      serde_json::Value::Object(device).to_string(),
+      geolocation_applied,
+    )
+  }
+
+  /// Merge an exit location into a supplied device, or strip the location it
+  /// carried when the exit could not be resolved and the profile is routed.
+  fn localize_device(
+    mut device: serde_json::Map<String, serde_json::Value>,
+    exit_location: Option<&crate::geolocation::Geolocation>,
+    routed: bool,
+  ) -> (serde_json::Map<String, serde_json::Value>, bool) {
+    if let Some(geo) = exit_location {
+      let mut value = serde_json::Value::Object(device);
+      Self::write_geolocation(&mut value, geo);
+      return (value.as_object().cloned().unwrap_or_default(), true);
+    }
+    if routed {
+      for key in LOCALE_CARRY_OVER_KEYS {
+        device.remove(key);
+      }
+    }
+    (device, false)
+  }
+
+  /// Generate a device for `config` on a headless Wayfern.
+  ///
+  /// On a browser that ships the identity API this mints an identity and
+  /// returns its handle alongside the fingerprint; on older browsers it returns
+  /// the fingerprint alone. Which path runs is decided by `profile.version`,
+  /// the same field the executable path is resolved from, so the generated
+  /// device always matches the binary that ran.
+  ///
+  /// Callers must only stamp `geo_proxy_signature` when
+  /// `geolocation_applied` is true: the device comes from a headless Wayfern
+  /// launched without a proxy, so on failure it silently carries the HOST
+  /// timezone/locale — stamping the signature then would tell the launch-time
+  /// refresh the location is already correct for this proxy and permanently
+  /// disable the one path that can repair it.
+  pub async fn generate_fingerprint_config(
+    &self,
+    _app_handle: &AppHandle,
+    profile: &BrowserProfile,
+    config: &WayfernConfig,
+  ) -> Result<GeneratedFingerprint, Box<dyn std::error::Error + Send + Sync>> {
+    // A profile without an explicit claim keeps the OS of the machine that
+    // created it, wherever it is regenerated.
+    let native_os = profile.native_os();
+    let os = config.os.as_deref().unwrap_or(&native_os);
+
+    // A self-hosted account has no Wayfern token, and the closed engine will
+    // not accept the custom/cross-OS calls a token unlocks. Build the device
+    // here instead and store it as a full payload, which the engine applies
+    // without asking Donut cloud for anything.
+    if crate::fingerprint_generator::local_generation_enabled() {
+      return Self::generate_local_fingerprint(profile, config, os).await;
+    }
+
+    let wayfern_token = crate::cloud_auth::CLOUD_AUTH.get_wayfern_token().await;
+    let session = HeadlessWayfern::start(
+      self,
+      profile,
+      wayfern_token.as_deref(),
+      &format!("purpose=generation profile={}", profile.id),
+    )
+    .await?;
+    let ws_url = session.page_ws_url().to_string();
+
+    // Include wayfern token if available (enables cross-OS fingerprinting for paid users)
+    let mut generate_params = json!({ "operatingSystem": os });
+    if let Some(ref token) = wayfern_token {
+      generate_params
+        .as_object_mut()
+        .unwrap()
+        .insert("wayfernToken".to_string(), json!(token));
+    }
+
+    let use_identity_api = supports_wayfern_152(&profile.version);
+
+    let exit_location = Self::resolve_generation_location(profile, config).await;
 
     // The exit's location goes into the mint, resolved here through the
     // profile's own route, because the headless browser has no proxy and would
@@ -4425,6 +4539,56 @@ mod tests {
   }
 
   use super::*;
+
+  #[test]
+  fn localizing_a_supplied_device_writes_the_exit_and_strips_an_unverified_location() {
+    let device = json!({
+      "userAgent": "Mozilla/5.0",
+      "timezone": "Asia/Ho_Chi_Minh",
+      "language": "vi-VN",
+      "latitude": 10.0,
+      "longitude": 106.0,
+    })
+    .as_object()
+    .cloned()
+    .unwrap();
+    let geo = crate::geolocation::Geolocation {
+      locale: crate::geolocation::Locale {
+        language: "en".into(),
+        region: Some("US".into()),
+      },
+      longitude: -122.6765,
+      latitude: 45.5231,
+      timezone: "America/Los_Angeles".into(),
+    };
+    let (localized, applied) = WayfernManager::localize_device(device.clone(), Some(&geo), true);
+    assert!(applied);
+    assert_eq!(localized["timezone"], json!("America/Los_Angeles"));
+    assert_eq!(localized["language"], json!("en-US"));
+    assert_eq!(localized["latitude"], json!(45.5231));
+    assert_eq!(localized["userAgent"], json!("Mozilla/5.0"));
+
+    let (stripped, applied) = WayfernManager::localize_device(device, None, true);
+    assert!(!applied);
+    for key in ["timezone", "language", "latitude", "longitude"] {
+      assert!(
+        stripped.get(key).is_none(),
+        "{key} must not survive an unverified route"
+      );
+    }
+    assert_eq!(stripped["userAgent"], json!("Mozilla/5.0"));
+  }
+
+  #[test]
+  fn localizing_a_direct_device_with_no_exit_keeps_what_the_user_supplied() {
+    let device = json!({"timezone": "Asia/Ho_Chi_Minh"})
+      .as_object()
+      .cloned()
+      .unwrap();
+    let (localized, applied) = WayfernManager::localize_device(device, None, false);
+    assert!(!applied);
+    assert_eq!(localized["timezone"], json!("Asia/Ho_Chi_Minh"));
+  }
 
   #[test]
   fn an_early_exit_names_the_last_lines_the_browser_printed_redacted() {

@@ -191,6 +191,7 @@ mod extraction;
 mod feedback;
 mod file_stamp;
 mod fingerprint_consistency;
+mod fingerprint_generator;
 mod fs_secure;
 mod geoip_downloader;
 mod geolocation;
@@ -258,6 +259,7 @@ mod cloud_errors;
 mod commercial_license;
 mod cookie_bot;
 mod cookie_bot_exit;
+mod cookie_bot_local;
 mod cookie_health;
 mod cookie_manager;
 mod cookie_paste;
@@ -926,6 +928,16 @@ async fn start_mcp_remote_bridge(
   }
   if !cloud_auth::CLOUD_AUTH.is_logged_in().await {
     return Err(backend_error("MCP_REMOTE_REQUIRES_SIGN_IN"));
+  }
+  // A self-hosted control plane without remote control has no relay to ask;
+  // starting the bridge would only produce a reconnect loop.
+  if cloud_auth::cloud_api_base() != cloud_auth::DEFAULT_CLOUD_API_URL
+    && !cloud_auth::CLOUD_AUTH
+      .entitlements()
+      .await
+      .is_some_and(|entitlements| entitlements.remote_control)
+  {
+    return Err(backend_error("MCP_REMOTE_NOT_ENTITLED"));
   }
 
   mcp_remote::start(app_handle);
@@ -2720,6 +2732,20 @@ pub fn run_with_builder(
         portable_update::clean_up(dir);
       }
 
+      // Resolve the account backend before the first cloud request. A malformed
+      // stored value leaves the Donut default (or DONUT_CLOUD_API_URL) in place.
+      if let Ok(settings) = crate::settings_manager::SettingsManager::instance().load_settings() {
+        crate::cloud_auth::set_cloud_api_base(settings.cloud_api_url.as_deref());
+      }
+      // A distributed build carries its control plane, so the sync source and
+      // the account page see it before the background sign-in runs.
+      crate::cloud_auth::apply_self_host_base();
+
+      // The local Calendar for a self-hosted account: it does nothing while
+      // the account is Donut cloud's, and needs the handle from the first
+      // minute for a run the person starts before the ticker has fired.
+      cookie_bot_local::start(app.handle().clone());
+
       // Before the first request Donut makes.
       app_proxy::load();
 
@@ -3548,6 +3574,11 @@ pub fn run_with_builder(
       // Start cloud auth background refresh loop
       let app_handle_cloud = app.handle().clone();
       tauri::async_runtime::spawn(async move {
+        // A distributed build carries the self-hosted control plane it belongs
+        // to; adopt its shared account before the first cloud request. A stock
+        // build has no provisioning key and stays signed out.
+        cloud_auth::CLOUD_AUTH.provision_self_hosted().await;
+
         // On startup, refresh sync token, proxy config, and wayfern token in
         // PARALLEL. Previously they were awaited sequentially, so the wayfern
         // token request didn't even start until the earlier two API calls had
@@ -3878,6 +3909,8 @@ pub fn run_with_builder(
       cloud_auth::restart_sync_service,
       cloud_auth::cloud_get_wayfern_token,
       cloud_auth::cloud_refresh_wayfern_token,
+      cloud_auth::get_cloud_api_url,
+      cloud_auth::set_cloud_api_url,
       // Team lock commands
       team_lock::get_team_locks,
       team_lock::get_team_lock_status,

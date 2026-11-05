@@ -138,6 +138,11 @@ jobs:
           # sees one consistent signature (open it once with right-click >
           # Open, or `xattr -dr com.apple.quarantine /Applications/Donut.app`).
           APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && '-' || '' }}
+          # Compiled in: a first launch adopts this control plane's account, so
+          # every install is pro without a sign-in code. Unset secrets leave the
+          # stock manual sign-in flow.
+          DONUT_SELF_HOST_URL: ${{ secrets.DONUT_SELF_HOST_URL }}
+          DONUT_SELF_HOST_KEY: ${{ secrets.DONUT_SELF_HOST_KEY }}
         with:
           projectPath: ./src-tauri
           tagName: ${{ env.TAG }}

@@ -66,6 +66,9 @@ interface AccountPageProps {
 
 type ConnectionStatus = "unknown" | "testing" | "connected" | "error";
 
+/** The base the app uses when no self-hosted control plane is configured. */
+const DEFAULT_CLOUD_API_URL = "https://api.donutbrowser.com";
+
 export function AccountPage({
   isOpen,
   onClose,
@@ -112,6 +115,14 @@ export function AccountPage({
   );
   const [activeTab, setActiveTab] = useState("account");
 
+  // The account backend: Donut cloud by default, or a self-hosted control
+  // plane. Kept separate from the sync server above: one holds the account and
+  // its entitlements, the other holds profile files.
+  const [controlUrl, setControlUrl] = useState(DEFAULT_CLOUD_API_URL);
+  const [savedControlUrl, setSavedControlUrl] = useState(DEFAULT_CLOUD_API_URL);
+  const [isSavingControl, setIsSavingControl] = useState(false);
+  const isSelfHostedAccount = savedControlUrl !== DEFAULT_CLOUD_API_URL;
+
   // Signing out (or losing the team) removes the tab while it is the selected
   // one, which would leave the page showing an empty panel with no trigger to
   // click back to.
@@ -123,8 +134,16 @@ export function AccountPage({
     ) {
       setActiveTab("account");
     }
-    if (isLoggedIn && activeTab === "self-hosted") setActiveTab("account");
-  }, [showTeamUsage, showTeamActivity, isLoggedIn, activeTab]);
+    if (isLoggedIn && !isSelfHostedAccount && activeTab === "self-hosted") {
+      setActiveTab("account");
+    }
+  }, [
+    showTeamUsage,
+    showTeamActivity,
+    isLoggedIn,
+    isSelfHostedAccount,
+    activeTab,
+  ]);
 
   // Self-hosted server state. Loaded once when the dialog opens and persisted
   // via `save_sync_settings` so the rest of the app picks up the new URL/token
@@ -138,11 +157,47 @@ export function AccountPage({
     useState<ConnectionStatus>("unknown");
 
   const hasConfig = Boolean(serverUrl && token);
-  // A shared-token server is set up signed out. Signed in, the account card
-  // names where the account syncs (`AccountSyncServer`); the backend refuses a
-  // new shared token then (`save_sync_settings`), so one device never syncs one
-  // profile to two places.
+  // A shared-token server is set up signed out on Donut cloud; a self-hosted
+  // account is served by one control plane that has no cloud backup, so its
+  // sync server is configured here while signed in. The account card names
+  // where the account syncs separately.
+  const canConfigureSelfHostedSync = !isLoggedIn || isSelfHostedAccount;
   const selfHostedDisabled = isCloudLoading;
+
+  const loadControlUrl = useCallback(async () => {
+    try {
+      const url = await invoke<string>("get_cloud_api_url");
+      setControlUrl(url);
+      setSavedControlUrl(url);
+    } catch (error) {
+      console.error("Failed to load the account server:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      void loadControlUrl();
+    }
+  }, [isOpen, loadControlUrl]);
+
+  const saveControlUrl = useCallback(
+    async (value: string) => {
+      setIsSavingControl(true);
+      try {
+        const saved = await invoke<string>("set_cloud_api_url", {
+          url: value.trim() || null,
+        });
+        setControlUrl(saved);
+        setSavedControlUrl(saved);
+        showSuccessToast(t("account.server.saved"));
+      } catch (error) {
+        showErrorToast(translateBackendError(t, error));
+      } finally {
+        setIsSavingControl(false);
+      }
+    },
+    [t],
+  );
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -343,6 +398,9 @@ export function AccountPage({
                 <AnimatedTabsTrigger value="account">
                   {t("account.tabs.account")}
                 </AnimatedTabsTrigger>
+                <AnimatedTabsTrigger value="server">
+                  {t("account.tabs.server")}
+                </AnimatedTabsTrigger>
                 {showTeamUsage && (
                   <AnimatedTabsTrigger value="team-usage">
                     {t("account.tabs.teamUsage")}
@@ -358,7 +416,7 @@ export function AccountPage({
                     {t("account.tabs.teamAccess")}
                   </AnimatedTabsTrigger>
                 )}
-                {!isLoggedIn && (
+                {canConfigureSelfHostedSync && (
                   <AnimatedTabsTrigger
                     value="self-hosted"
                     disabled={selfHostedDisabled}
@@ -506,6 +564,7 @@ export function AccountPage({
                     <AccountSyncServer
                       paid={getEntitlements(user).cloudBackup}
                       teamSeat={Boolean(user.teamId)}
+                      selfHosted={savedControlUrl !== DEFAULT_CLOUD_API_URL}
                     />
                   )}
                 </SettingsPanel>
@@ -567,6 +626,78 @@ export function AccountPage({
                 )}
               </AnimatedTabsContent>
 
+              <AnimatedTabsContent value="server" className="@container mt-4">
+                <SettingsPanel className="flex flex-col gap-4">
+                  <div className="flex items-start gap-3">
+                    <FeatureIcon
+                      active={savedControlUrl !== DEFAULT_CLOUD_API_URL}
+                    >
+                      <LuServer />
+                    </FeatureIcon>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium">
+                        {t("account.server.title")}
+                      </p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                        {t("account.server.description")}
+                      </p>
+                    </div>
+                  </div>
+                  <SoftFields>
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="control-plane-url"
+                        className={FIELD_LABEL_CLASS}
+                      >
+                        {t("account.server.urlLabel")}
+                      </Label>
+                      <Input
+                        id="control-plane-url"
+                        type="url"
+                        placeholder={t("account.server.urlPlaceholder")}
+                        value={controlUrl}
+                        onChange={(e) => setControlUrl(e.target.value)}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                  </SoftFields>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="mr-auto truncate text-xs text-muted-foreground">
+                      {savedControlUrl}
+                    </span>
+                    {savedControlUrl !== DEFAULT_CLOUD_API_URL && (
+                      <Button
+                        size="sm"
+                        variant="subtle"
+                        disabled={isSavingControl}
+                        onClick={() => {
+                          void saveControlUrl("");
+                        }}
+                        className="h-8 rounded-lg text-xs"
+                      >
+                        {t("account.server.reset")}
+                      </Button>
+                    )}
+                    <LoadingButton
+                      size="sm"
+                      isLoading={isSavingControl}
+                      disabled={
+                        !controlUrl.trim() ||
+                        controlUrl.trim() === savedControlUrl ||
+                        isSavingControl
+                      }
+                      onClick={() => {
+                        void saveControlUrl(controlUrl);
+                      }}
+                      className="h-8 rounded-lg text-xs"
+                    >
+                      {t("common.buttons.save")}
+                    </LoadingButton>
+                  </div>
+                </SettingsPanel>
+              </AnimatedTabsContent>
+
               {showTeamUsage && (
                 <AnimatedTabsContent value="team-usage" className="mt-4">
                   <TeamUsagePanel quota={quota} />
@@ -589,7 +720,7 @@ export function AccountPage({
                 value="self-hosted"
                 className="@container mt-4"
               >
-                {isLoggedIn || selfHostedDisabled ? null : (
+                {!canConfigureSelfHostedSync || selfHostedDisabled ? null : (
                   <SettingsPanel className="flex flex-col gap-4">
                     <div className="flex items-start gap-3">
                       <FeatureIcon active={connectionStatus === "connected"}>

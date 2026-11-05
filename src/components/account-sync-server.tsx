@@ -43,9 +43,12 @@ function hostOf(server: string): string {
 export function AccountSyncServer({
   paid,
   teamSeat,
+  selfHosted = false,
 }: {
   paid: boolean;
   teamSeat: boolean;
+  /** The account comes from a self-hosted control plane, not Donut cloud. */
+  selfHosted?: boolean;
 }) {
   const { t } = useTranslation();
   const formId = useId();
@@ -81,10 +84,13 @@ export function AccountSyncServer({
     ? hostOf(source.self_hosted_server)
     : null;
   const showAccount =
-    accountHost !== null && (paid || source?.active === "account");
-  const options: { value: SyncSourceKind; label: string }[] = [
-    { value: "cloud", label: t("account.ownServer.donutCloud") },
-  ];
+    !selfHosted &&
+    accountHost !== null &&
+    (paid || source?.active === "account");
+  const options: { value: SyncSourceKind; label: string }[] = [];
+  if (!selfHosted) {
+    options.push({ value: "cloud", label: t("account.ownServer.donutCloud") });
+  }
   if (showAccount && accountHost) {
     options.push({ value: "account", label: accountHost });
   }
@@ -182,7 +188,8 @@ export function AccountSyncServer({
     [source, restartSync, t],
   );
 
-  if (!source || (!paid && options.length < 2)) return null;
+  if (!source || options.length === 0) return null;
+  if (!paid && !selfHosted && options.length < 2) return null;
 
   const active = source.active ?? "cloud";
   const probeTone = {

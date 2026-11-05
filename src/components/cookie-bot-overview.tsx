@@ -61,6 +61,7 @@ import type {
   CookieBotSchedule,
   RemoteHoursQuota,
 } from "@/lib/cookie-bot";
+import { isSelfHostedAccount } from "@/lib/entitlements";
 import { MOTION_EASE_OUT } from "@/lib/motion";
 import type { RemoteSessionState } from "@/lib/remote-sessions";
 import { cn } from "@/lib/utils";
@@ -124,7 +125,11 @@ export function CookieBotOverview({
             {t("cookieBot.empty.title")}
           </p>
           <p className="max-w-sm text-xs leading-relaxed text-muted-foreground">
-            {t("cookieBot.empty.hint")}
+            {t(
+              isSelfHostedAccount()
+                ? "cookieBot.local.emptyHint"
+                : "cookieBot.empty.hint",
+            )}
           </p>
         </div>
         <RippleButton size="sm" onClick={onEnrol}>

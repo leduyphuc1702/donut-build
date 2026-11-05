@@ -150,8 +150,12 @@ impl SyncSubscription {
       )));
     }
 
-    // Cloud auth takes priority
+    // Cloud auth takes priority, but only for an account Donut cloud issued.
+    // A self-hosted control plane signs its own tokens; sending one to
+    // sync.donutbrowser.com is refused (401) and the person sees a sync
+    // warning for a server their account cannot use.
     if crate::cloud_auth::CLOUD_AUTH.is_logged_in().await
+      && crate::cloud_auth::cloud_api_base() == crate::cloud_auth::DEFAULT_CLOUD_API_URL
       && !super::account_server::self_hosted_picked().await
     {
       let url = crate::cloud_auth::CLOUD_SYNC_URL.to_string();

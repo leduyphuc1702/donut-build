@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { createControlPlane } from "../../vietflow/control-plane/server.mjs";
 import { withApp } from "../lib/app.mjs";
 import {
   extensionZipBase64,
@@ -1677,6 +1680,24 @@ test("offline cloud, update, team-lock, trial, and synchronizer contracts are de
       assert.equal(await app.invoke("cloud_get_user"), null);
       assert.equal(await app.invoke("cloud_get_proxy_usage"), null);
       assert.ok(await app.invoke("cloud_get_wayfern_token"));
+      const originalCloudApi = await app.invoke("get_cloud_api_url");
+      assert.match(originalCloudApi, /^https?:\/\//);
+      assert.equal(
+        await app.invoke("set_cloud_api_url", {
+          url: "https://control.example.test/api/",
+        }),
+        "https://control.example.test",
+      );
+      assert.equal(
+        await app.invoke("get_cloud_api_url"),
+        "https://control.example.test",
+      );
+      assert.match(
+        await app.invokeError("set_cloud_api_url", { url: "not a url" }),
+        /CLOUD_API_URL_INVALID/,
+      );
+      await app.invoke("set_cloud_api_url", { url: null });
+      assert.equal(await app.invoke("get_cloud_api_url"), originalCloudApi);
       assert.deepEqual(await app.invoke("get_team_locks"), []);
       assert.equal(
         await app.invoke("get_team_lock_status", {
@@ -2165,4 +2186,212 @@ test("offline cloud, update, team-lock, trial, and synchronizer contracts are de
     },
     { wayfernTermsAccepted: false },
   );
+});
+
+test("a self-hosted control plane signs in and answers the account contracts", async () => {
+  const controlToken = "e2e-control-token-0123456789";
+  const dataDir = mkdtempSync(path.join(tmpdir(), "control-plane-e2e-"));
+  const control = createControlPlane({
+    controlToken,
+    jwtSecret: "e2e-jwt-secret-0123456789",
+    accountId: "e2e-owner",
+    email: "e2e-owner@example.test",
+    plan: "enterprise",
+    syncServerUrl: "",
+    dataDir,
+  });
+  await new Promise((resolve, reject) => {
+    control.once("error", reject);
+    control.listen(0, "127.0.0.1", resolve);
+  });
+  const base = `http://127.0.0.1:${control.address().port}`;
+  try {
+    await withApp(
+      "integrations-control-plane",
+      async (app) => {
+        assert.equal(
+          await app.invoke("set_cloud_api_url", { url: base }),
+          base,
+        );
+
+        const link = await fetch(`${base}/auth/link`, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ token: controlToken }),
+        });
+        assert.equal(link.status, 200);
+        const code = (await link.text()).match(
+          /<code>([0-9A-F]+)<\/code>/,
+        )?.[1];
+        assert.ok(code, "the control plane prints a one-time code");
+
+        const state = await app.invoke("cloud_exchange_device_code", { code });
+        assert.equal(state.user.id, "e2e-owner");
+        assert.equal(state.user.entitlements.active, true);
+        assert.equal(state.user.entitlements.browserAutomation, true);
+        assert.equal(state.user.entitlements.crossOsFingerprints, true);
+        // The services with a local equivalent: the Cookie Bot drives this
+        // machine, a "remote" session is a local session, the agent's routines
+        // and credits are the control plane's, and the one-seat team's log is
+        // its own file. Remote MCP and cloud backup have no local equivalent.
+        assert.equal(state.user.entitlements.cookieBot, true);
+        assert.equal(state.user.entitlements.remoteInteractive, true);
+        assert.equal(state.user.entitlements.agent, true);
+        assert.equal(state.user.entitlements.remoteControl, false);
+        assert.equal(state.user.entitlements.cloudBackup, false);
+        assert.equal(state.user.entitlements.requestsPerHour, 0);
+        assert.ok(state.user.entitlements.profileLimit > 1000);
+        assert.equal(state.user.teamId, "local-team");
+        assert.equal(state.user.teamRole, "owner");
+
+        const user = await app.invoke("cloud_get_user");
+        assert.equal(user.user.id, "e2e-owner");
+        assert.deepEqual(await app.invoke("get_team_locks"), []);
+        const source = await app.invoke("get_sync_source");
+        assert.equal(
+          source.active,
+          null,
+          "a self-hosted account must not fall back to Donut cloud sync",
+        );
+
+        const allowance = await app.invoke("get_profile_creation_allowance");
+        assert.equal(allowance.unlimited, true);
+
+        // No Wayfern token exists on a self-hosted account. Fingerprint
+        // generation must therefore come from the local generator and return a
+        // full device, not an identity the closed engine would have to mint.
+        const sample = await app.invoke("generate_sample_fingerprint", {
+          browser: "wayfern",
+          version: "155.0.8059.79",
+          configJson: JSON.stringify({ geoip: false }),
+        });
+        assert.equal(sample.identity_id, null);
+        const sampleDevice = JSON.parse(sample.fingerprint);
+        assert.equal(sampleDevice.webdriver, false);
+        assert.ok(
+          Object.keys(sampleDevice).length >= 20,
+          "the local generator returns a complete device",
+        );
+
+        const created = await app.invoke("create_browser_profile_new", {
+          name: "Local device",
+          browserStr: "wayfern",
+          version: "155.0.8059.79",
+          releaseType: "stable",
+          proxyId: null,
+          vpnId: null,
+          wayfernConfig: { geoip: false },
+          groupId: null,
+        });
+        const config = created.wayfern_config ?? {};
+        assert.equal(config.identity_id ?? null, null);
+        assert.ok(config.fingerprint, "the profile stores a full device");
+        const stored = JSON.parse(config.fingerprint);
+        assert.equal(
+          stored.timezone,
+          undefined,
+          "geolocation off writes no location",
+        );
+        assert.equal(stored.platform, sampleDevice.platform);
+
+        // An empty payload from an old form or an import is not a device: the
+        // profile must be generated rather than launched on the host device.
+        const empty = await app.invoke("create_browser_profile_new", {
+          name: "Empty payload",
+          browserStr: "wayfern",
+          version: "155.0.8059.79",
+          releaseType: "stable",
+          proxyId: null,
+          vpnId: null,
+          wayfernConfig: { fingerprint: "{}", geoip: false },
+          groupId: null,
+        });
+        assert.equal(empty.wayfern_config.identity_id ?? null, null);
+        assert.ok(
+          Object.keys(JSON.parse(empty.wayfern_config.fingerprint)).length >=
+            20,
+          "an empty payload is replaced by a generated device",
+        );
+
+        // An edit to a local profile stays a payload edit. It must not turn
+        // into `identity_overrides`, which the closed engine refuses without a
+        // Donut token.
+        const edited = {
+          ...stored,
+          hardwareConcurrency: stored.hardwareConcurrency === 12 ? 8 : 12,
+        };
+        await app.invoke("update_wayfern_config", {
+          profileId: created.id,
+          config: { ...config, fingerprint: JSON.stringify(edited) },
+        });
+        const after = (await app.invoke("list_browser_profiles")).find(
+          (profile) => profile.id === created.id,
+        );
+        assert.equal(after.wayfern_config.identity_overrides ?? null, null);
+        assert.equal(
+          JSON.parse(after.wayfern_config.fingerprint).hardwareConcurrency,
+          edited.hardwareConcurrency,
+        );
+
+        await app.invoke("cloud_logout");
+        assert.equal(await app.invoke("cloud_get_user"), null);
+      },
+      { wayfernTermsAccepted: false },
+    );
+  } finally {
+    control.closeAllConnections?.();
+    await new Promise((resolve) => control.close(resolve));
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("a build with a provisioning key signs itself in before the first launch", async () => {
+  const controlToken = "e2e-auto-control-token-0123456789";
+  const autoLoginKey = "e2e-auto-login-key-0123456789";
+  const dataDir = mkdtempSync(path.join(tmpdir(), "control-plane-auto-"));
+  const control = createControlPlane({
+    controlToken,
+    autoLoginKey,
+    jwtSecret: "e2e-auto-jwt-secret-0123456789",
+    accountId: "e2e-auto-owner",
+    email: "e2e-auto-owner@example.test",
+    plan: "pro",
+    syncServerUrl: "",
+    dataDir,
+  });
+  await new Promise((resolve, reject) => {
+    control.once("error", reject);
+    control.listen(0, "127.0.0.1", resolve);
+  });
+  const base = `http://127.0.0.1:${control.address().port}`;
+  try {
+    await withApp(
+      "integrations-auto-provision",
+      async (app) => {
+        const state = await app.waitFor(
+          async () => app.invoke("cloud_get_user"),
+          {
+            description: "the self-provisioned account",
+            timeoutMs: 30_000,
+          },
+        );
+        assert.equal(state.user.id, "e2e-auto-owner");
+        assert.equal(state.user.plan, "pro");
+        assert.equal(state.user.entitlements.active, true);
+        assert.equal(state.user.entitlements.browserAutomation, true);
+        assert.equal(state.user.entitlements.crossOsFingerprints, true);
+        assert.equal(await app.invoke("get_cloud_api_url"), base);
+      },
+      {
+        extraEnv: {
+          DONUT_SELF_HOST_URL: base,
+          DONUT_SELF_HOST_KEY: autoLoginKey,
+        },
+      },
+    );
+  } finally {
+    control.closeAllConnections?.();
+    await new Promise((resolve) => control.close(resolve));
+    rmSync(dataDir, { recursive: true, force: true });
+  }
 });

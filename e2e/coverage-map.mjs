@@ -343,6 +343,8 @@ export const commandCoverage = {
       "cloud_auth::create_cloud_location_proxy",
       "cloud_auth::cloud_get_wayfern_token",
       "cloud_auth::cloud_refresh_wayfern_token",
+      "cloud_auth::get_cloud_api_url",
+      "cloud_auth::set_cloud_api_url",
       "team_lock::get_team_locks",
       "team_lock::get_team_lock_status",
     ],

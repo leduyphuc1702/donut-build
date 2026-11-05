@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
+import { rememberSelfHostedAccount } from "@/lib/entitlements";
 import type { CloudAuthState, CloudUser } from "@/types";
 
 interface UseCloudAuthReturn {
@@ -21,6 +22,7 @@ export function useCloudAuth(): UseCloudAuthReturn {
   const loadUser = useCallback(async () => {
     try {
       const state = await invoke<CloudAuthState | null>("cloud_get_user");
+      rememberSelfHostedAccount(state?.user);
       setAuthState(state);
     } catch (error) {
       console.error("Failed to load cloud auth state:", error);
@@ -34,6 +36,7 @@ export function useCloudAuth(): UseCloudAuthReturn {
     void loadUser();
 
     const unlistenExpired = listen("cloud-auth-expired", () => {
+      rememberSelfHostedAccount(null);
       setAuthState(null);
     });
 
@@ -56,6 +59,7 @@ export function useCloudAuth(): UseCloudAuthReturn {
       const state = await invoke<CloudAuthState>("cloud_exchange_device_code", {
         code,
       });
+      rememberSelfHostedAccount(state.user);
       setAuthState(state);
       return state;
     },
@@ -64,11 +68,13 @@ export function useCloudAuth(): UseCloudAuthReturn {
 
   const logout = useCallback(async () => {
     await invoke("cloud_logout");
+    rememberSelfHostedAccount(null);
     setAuthState(null);
   }, []);
 
   const refreshProfile = useCallback(async (): Promise<CloudUser> => {
     const user = await invoke<CloudUser>("cloud_refresh_profile");
+    rememberSelfHostedAccount(user);
     setAuthState((prev) =>
       prev
         ? { ...prev, user }
