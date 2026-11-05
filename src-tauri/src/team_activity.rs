@@ -8,6 +8,10 @@
 //! Names leave this computer only when the team's data is not end-to-end
 //! encrypted, because the cloud then holds those names already; otherwise the
 //! log carries ids, and a viewer shows its own local names for them.
+//!
+//! A self-hosted control plane also logs which computer a report came from, so
+//! each batch carries this install's `device` (id and host name). Donut cloud
+//! is sent the batch it has always taken.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -24,6 +28,10 @@ use crate::log_streak::Streak;
 const BATCH: usize = 50;
 const MAX_ID_CHARS: usize = 128;
 const MAX_NAME_CHARS: usize = 200;
+/// The longest computer name the control plane keeps.
+const MAX_DEVICE_NAME_CHARS: usize = 64;
+/// Browser ends remembered, so one end is reported once.
+const MAX_REMEMBERED_STOPS: usize = 64;
 /// Events kept while the cloud cannot be reached. Older ones drop first.
 const MAX_QUEUED: usize = 500;
 const ATTEMPTS: u8 = 3;
@@ -40,6 +48,8 @@ const ACTIVITY_CODES: FailureCodes = FailureCodes {
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static FLUSHING: AtomicBool = AtomicBool::new(false);
 static QUEUE: Mutex<VecDeque<Value>> = Mutex::new(VecDeque::new());
+/// `(profile id, browser pid)` of the ends already reported.
+static STOPS: Mutex<VecDeque<(String, u32)>> = Mutex::new(VecDeque::new());
 static REPORT: Streak = Streak::new(module_path!(), "Team activity report");
 
 /// Record the signed-in account, or `None` once signed out.
@@ -102,6 +112,74 @@ pub fn fields(fields: &[&str]) -> Option<Value> {
   (!fields.is_empty()).then(|| json!({ "fields": fields }))
 }
 
+/// A browser opened for `profile_id` on this computer, by the person or by
+/// automation (the REST API, MCP). No page address is ever logged.
+pub fn launched(profile_id: &str, name: &str, automation: bool) {
+  if !ENABLED.load(Ordering::Relaxed) {
+    return;
+  }
+  // A new browser may reuse the pid of one that ended before it.
+  remembered_stops().retain(|(id, _)| id != profile_id);
+  record(
+    "profile.launch",
+    profile_id,
+    Some(name),
+    automation.then(|| json!({ "automation": true })),
+  );
+}
+
+/// The browser of `profile_id` ended on this computer. The two places that see
+/// an end, a Stop and the poll that notices a closed window, can both see the
+/// same one; `pid` tells the repeat apart, and the first report wins.
+pub fn stopped(profile_id: &str, name: &str, pid: Option<u32>) {
+  if !ENABLED.load(Ordering::Relaxed) {
+    return;
+  }
+  if !first_end(&mut remembered_stops(), profile_id, pid) {
+    return;
+  }
+  record("profile.stop", profile_id, Some(name), None);
+}
+
+/// Whether this end is new, noting it. Without a pid there is nothing to tell
+/// a repeat by, so the end counts.
+fn first_end(stops: &mut VecDeque<(String, u32)>, profile_id: &str, pid: Option<u32>) -> bool {
+  let Some(pid) = pid else {
+    return true;
+  };
+  if stops.iter().any(|(id, p)| id == profile_id && *p == pid) {
+    return false;
+  }
+  if stops.len() >= MAX_REMEMBERED_STOPS {
+    stops.pop_front();
+  }
+  stops.push_back((profile_id.to_string(), pid));
+  true
+}
+
+fn remembered_stops() -> std::sync::MutexGuard<'static, VecDeque<(String, u32)>> {
+  STOPS
+    .lock()
+    .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// This install, as a control plane names the computer a report came from.
+fn device() -> Value {
+  json!({
+    "id": crate::sync::lease::device_id(),
+    "name": clip(&crate::sync::lease::device_name(), MAX_DEVICE_NAME_CHARS),
+  })
+}
+
+/// The body of one report. `device` is `None` for Donut cloud.
+fn report_body(batch: &[Value], device: Option<Value>) -> Value {
+  let mut body = json!({ "events": batch });
+  if let Some(device) = device {
+    body["device"] = device;
+  }
+  body
+}
+
 async fn flush() {
   tokio::time::sleep(SETTLE).await;
   let mut attempts = 0u8;
@@ -122,10 +200,14 @@ async fn flush() {
     }
     let count = batch.len();
     let url = format!("{}/api/teams/activity", crate::cloud_auth::CLOUD_API_URL);
+    let body = report_body(
+      &batch,
+      crate::cloud_auth::is_self_hosted_account().then(device),
+    );
     let sent = crate::cloud_api::call::<Option<Value>>(
       reqwest::Method::POST,
       url,
-      Some(json!({ "events": batch })),
+      Some(body),
       ACTIVITY_CODES,
     )
     .await;
@@ -362,7 +444,58 @@ mod tests {
   fn nothing_queues_for_a_seat_that_does_not_report() {
     observe(None);
     record("profile.delete", "p1", None, None);
+    launched("p1", "Shop", false);
+    stopped("p1", "Shop", Some(10));
     assert!(queue().is_empty());
+  }
+
+  #[test]
+  fn a_launch_and_a_stop_are_profile_events_without_a_page() {
+    let launch = event(
+      "profile.launch",
+      "p1",
+      Some("Shop"),
+      Some(json!({ "automation": true })),
+      true,
+    );
+    assert_eq!(launch["targetType"], "profile");
+    assert_eq!(launch["targetName"], "Shop");
+    assert_eq!(launch["detail"], json!({ "automation": true }));
+    let stop = event("profile.stop", "p1", Some("Shop"), None, true);
+    assert_eq!(stop["action"], "profile.stop");
+    assert!(stop.get("detail").is_none());
+    assert!(!launch.to_string().contains("http"));
+  }
+
+  #[test]
+  fn one_end_of_a_browser_is_reported_once() {
+    let mut stops = VecDeque::new();
+    assert!(first_end(&mut stops, "p1", Some(100)));
+    assert!(!first_end(&mut stops, "p1", Some(100)), "the repeat");
+    assert!(first_end(&mut stops, "p1", Some(101)), "another browser");
+    assert!(first_end(&mut stops, "p2", Some(100)), "another profile");
+    assert!(
+      first_end(&mut stops, "p1", None),
+      "no pid, nothing to compare"
+    );
+    assert!(first_end(&mut stops, "p1", None));
+    for pid in 0..(MAX_REMEMBERED_STOPS as u32 * 2) {
+      first_end(&mut stops, "p3", Some(pid));
+    }
+    assert!(stops.len() <= MAX_REMEMBERED_STOPS);
+  }
+
+  #[test]
+  fn only_a_self_hosted_report_names_the_computer() {
+    let batch = vec![event("proxy.update", "x1", None, None, true)];
+    let cloud = report_body(&batch, None);
+    assert!(cloud.get("device").is_none());
+    assert_eq!(cloud["events"].as_array().unwrap().len(), 1);
+
+    let device = json!({ "id": "abc-123", "name": "Office PC" });
+    let own = report_body(&batch, Some(device.clone()));
+    assert_eq!(own["device"], device);
+    assert_eq!(own["events"], cloud["events"]);
   }
 
   #[test]

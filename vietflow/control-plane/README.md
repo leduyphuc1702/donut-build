@@ -1,6 +1,6 @@
 # Control plane tài khoản tự lưu trữ
 
-Máy chủ nhỏ này thay phần **tài khoản** của Donut cloud cho bản Vietflow. Nó trả về một tài khoản duy nhất với đầy đủ quyền cần dùng, không giới hạn số hồ sơ hay số lần tạo, và không phụ thuộc `api.donutbrowser.com`.
+Máy chủ nhỏ này thay phần **tài khoản** của Donut cloud cho bản Vietflow. Tài khoản cấu hình trong `.env` là **chủ sở hữu** của một nhóm; chủ sở hữu thêm nhân viên (nhiều người, mỗi người một đăng nhập riêng) ở trang `/admin`. Mọi người dùng chung gói và quyền của chủ sở hữu, không giới hạn số hồ sơ hay số lần tạo, và không phụ thuộc `api.donutbrowser.com`.
 
 Nó **không** chứa dữ liệu hồ sơ. Việc đồng bộ hồ sơ vẫn do [`../sync-server`](../sync-server) (`donut-sync`) đảm nhiệm.
 
@@ -8,12 +8,13 @@ Nó **không** chứa dữ liệu hồ sơ. Việc đồng bộ hồ sơ vẫn d
 
 | Nhóm | Đường dẫn | Ghi chú |
 | --- | --- | --- |
-| Đăng nhập | `/auth/link`, `/api/auth/device-code/*` | Trang nhập `CONTROL_TOKEN`, sinh mã dùng một lần |
-| Tài khoản | `/api/auth/me`, `/api/auth/token/refresh` | User + entitlements |
-| Sync token | `/api/auth/sync-token` | JWT `scope=server-sync`, gắn với `server` được hỏi |
-| Khóa hồ sơ | `/api/profile-locks/*` | Một chủ sở hữu; không chặn hai máy cùng mở một hồ sơ — dùng lease của `donut-sync` nếu cần |
-| Nhóm | `/api/teams/{id}/members`, `PUT .../members/{user}/access` | Nhóm một ghế: tài khoản là chủ sở hữu. Không giới hạn được ghế chủ |
-| Nhật ký hoạt động | `POST /api/teams/activity`, `GET /api/teams/{id}/activity`, `.../activity.csv` | Nhật ký cục bộ trong `DATA_DIR/team.json`, lọc và phân trang như cloud |
+| Đăng nhập | `/auth/link`, `/api/auth/device-code/*` | `/auth/link`: trang của chủ sở hữu, nhập `CONTROL_TOKEN` để lấy mã dùng một lần (10 phút). Nhân viên dùng mã từ `/admin` (7 ngày) |
+| Quản lý thành viên | `/admin`, `/admin/login`, `/admin/members/*` | Trang web cho chủ sở hữu: thêm nhân viên, cấp lại mã, đổi vai trò, đăng xuất các máy, xóa |
+| Tài khoản | `/api/auth/me`, `/api/auth/token/refresh` | Tài khoản của đúng người đang đăng nhập: `teamRole` là vai trò của họ, gói và entitlements là của chủ sở hữu |
+| Sync token | `/api/auth/sync-token` | JWT `scope=server-sync`, `sub` là người hỏi, gắn với `server` được hỏi |
+| Khóa hồ sơ | `/api/profile-locks/*` | Mỗi hồ sơ một người giữ khóa tại một thời điểm; khóa hết hạn sau 90 giây nếu máy giữ không gửi heartbeat (30 giây một lần) |
+| Nhóm | `GET /api/teams/{id}/members`, `PUT .../members/{user}/access` | Danh sách mọi người và nhóm hồ sơ mỗi người được dùng. Chủ sở hữu và quản trị viên mới xem/sửa được |
+| Nhật ký hoạt động | `POST /api/teams/activity`, `GET /api/teams/{id}/activity`, `.../activity.csv` | Nhật ký trong `DATA_DIR/team.json`: ai làm gì, trên máy nào. Chỉ chủ sở hữu và quản trị viên đọc được |
 | Agent | `/api/agent/credits`, `/api/agent/token`, `/api/agent/routines`, `.../routines/{id}/runs`, `/api/agent/runs/{id}` | Credits không giới hạn; routine và lần chạy lưu trong `DATA_DIR/agent.json` |
 | Vài endpoint phụ | `/api/auth/sync-profile-usage`, `/api/proxy/locations/countries`, `/api/feedback` | Trả lời rỗng/OK để app không lỗi |
 
@@ -25,18 +26,55 @@ Automation cloud, remote MCP, remote control và recipes theo lịch vẫn là d
 - `browserAutomation: true`, `requestsPerHour: 0` (không giới hạn)
 - `crossOsFingerprints: true` (mở phần sửa fingerprint; cổng chống lệch OS vẫn chạy như bình thường)
 - `profileLimit: 1000000`
-- `teamCollaboration: true`, `teamId`/`teamName` lấy từ `TEAM_ID`/`TEAM_NAME`, `teamRole: "owner"`
+- `teamCollaboration: true`, `teamId`/`teamName` lấy từ `TEAM_ID`/`TEAM_NAME`
+- `teamRole`: `owner` cho tài khoản trong `.env`; nhân viên là `admin`, `member` hoặc `launcher` theo vai trò chủ sở hữu đặt
 - `cookieBot`, `remoteInteractive`, `agent`: `true` (app dùng đường cục bộ; xem mục trên)
 - `cloudBackup`, `remoteControl`, `scheduledAutomation`: `false` (chỉ có trên Donut cloud)
 
-### Nhóm và nhật ký hoạt động cục bộ
+Mọi nhân viên nhận cùng gói và entitlements với chủ sở hữu; chỉ `id`, `email`, `teamRole` và `deviceCount` là của riêng họ.
 
-`TEAM_ID` là một chuỗi cố định (mặc định `local-team`). Mọi bản cài trỏ vào cùng control plane thấy cùng một nhóm và cùng một nhật ký; chưa có tài khoản thứ hai nên danh sách thành viên chỉ có ghế chủ.
+## Nhiều người dùng: thêm nhân viên
 
-- App báo các thay đổi hồ sơ/proxy/nhóm/VPN/extension vào `POST /api/teams/activity`; control plane ghi thêm lần mở/đóng hồ sơ khi nhận/trả profile lock. Nhật ký nằm ở `DATA_DIR/team.json` (Docker: volume `control_data`).
-- Nhật ký giữ 20.000 dòng gần nhất. Xóa file là xóa lịch sử; không có bản sao nào khác.
+Quy trình cho chủ sở hữu:
+
+1. Mở `https://<CONTROL_DOMAIN>/admin`, nhập `CONTROL_TOKEN`. Phiên tự hết hạn sau 30 phút không dùng.
+2. Ở mục **Thêm nhân viên**, nhập email và chọn vai trò, bấm **Thêm và tạo mã**.
+3. Trang hiện **mã đăng nhập** của người đó. Mã có hiệu lực **7 ngày**, dùng được **một lần** và chỉ hiện đúng lúc này. Gửi mã riêng cho đúng người đó. Cần mã mới (mất tin nhắn, mã hết hạn) thì bấm **Cấp lại mã** ở dòng của họ; mã cũ mất hiệu lực.
+4. Nhân viên cài Donut, vào **Tài khoản → Máy chủ**, nhập `https://<CONTROL_DOMAIN>`, lưu. Sau đó bấm **Đăng nhập**, bỏ qua trang web mở ra (trang đó dành cho chủ sở hữu) và **dán mã** vào ô trong Donut. Nếu bản build có `DONUT_SELF_HOST_KEY` thì máy mới mở sẽ tự đăng nhập bằng tài khoản chủ sở hữu; nhân viên cần **Đăng xuất** trước rồi mới đăng nhập bằng mã của mình.
+5. Muốn xem nhật ký: chủ sở hữu hoặc quản trị viên vào **Tài khoản → Hoạt động của nhóm** (lọc theo người, loại, thời gian; xuất CSV).
+
+Vai trò:
+
+| Vai trò | Làm được |
+| --- | --- |
+| `owner` | Tài khoản trong `.env`. Quản lý thành viên ở `/admin`, đọc nhật ký, đặt quyền nhóm cho bất kỳ ai ngoài chính mình |
+| `admin` (Quản trị viên) | Đọc nhật ký, xem danh sách thành viên, đặt quyền nhóm cho người không phải `admin`. Không đổi được quyền của `admin` khác hay của chủ sở hữu |
+| `member` (Thành viên) | Làm việc với hồ sơ; không đọc nhật ký, không xem danh sách thành viên |
+| `launcher` (Người khởi chạy) | Chỉ mở hồ sơ, không sửa cài đặt của nhóm (app tự khóa chỉnh sửa cho vai trò này) |
+
+Các thao tác trên `/admin` (mỗi dòng của một nhân viên):
+
+- **Đổi** vai trò: có hiệu lực ngay ở request kế tiếp, không cần đăng nhập lại.
+- **Đăng xuất các máy**: mọi token đang có của người đó hết hiệu lực; họ đăng nhập lại bằng mã mới (**Cấp lại mã**).
+- **Xóa** (phải tick **Xác nhận**): người đó mất quyền truy cập ngay, token cũ không dùng được nữa và khóa hồ sơ họ đang giữ được trả lại. Thêm lại cùng email sẽ tạo một người mới.
+
+Ngoài ra, chủ sở hữu và quản trị viên đặt **nhóm hồ sơ** mỗi người được dùng trong app (**Tài khoản → Quyền truy cập của nhóm**). Control plane lưu và trả lại lựa chọn đó (`groupAccess`) và ghi `member.access_change`. **Lưu ý:** việc chặn dữ liệu thật do server đồng bộ thi hành. Khi `donut-sync` dùng `SYNC_TOKEN` chung (cách duy nhất hiện bật được, xem mục Đồng bộ hồ sơ), nó không biết ai đang gọi nên chưa chặn theo nhóm; đừng coi đây là ranh giới bảo mật.
+
+### Nhật ký hoạt động
+
+`TEAM_ID` là một chuỗi cố định (mặc định `local-team`). Mọi bản cài trỏ vào cùng control plane thấy cùng một nhóm và cùng một nhật ký.
+
+- App báo các thay đổi hồ sơ/proxy/nhóm/VPN/extension, **và mỗi lần mở/đóng hồ sơ** (kể cả do REST API hoặc MCP, không ghi địa chỉ trang), vào `POST /api/teams/activity`. Mỗi lô kèm `device` (`id` ngẫu nhiên của bản cài và tên máy). Control plane ghi **người gửi** theo token, không tin người gửi tự khai, và chỉ nhận `device` hợp lệ (`id` tối đa 128 ký tự `A-Za-z0-9_-`, tên tối đa 64 ký tự, bỏ ký tự điều khiển).
+- Lần mở/đóng hồ sơ do app báo, không còn do control plane suy ra từ khóa hồ sơ. Vì vậy chỉ máy có team collaboration mới báo, và máy cũ chưa cập nhật chỉ có các sửa đổi, không có mở/đóng.
+- Control plane tự ghi các sự kiện thành viên (`member.invite`, `member.join` ở lần đăng nhập đầu, `member.role_change`, `member.remove`, `member.access_change`); app không được báo các sự kiện `member.*`/`invitation.*`.
+- Mỗi dòng hiện người làm, tên máy (trong ngoặc, màu nhạt) và việc đã làm. CSV có thêm cột cuối `device`. Ô CSV bắt đầu bằng `=`, `+`, `-`, `@` được thêm dấu `'` phía trước để Excel không chạy thành công thức.
+- Nhật ký nằm ở `DATA_DIR/team.json` và giữ 20.000 dòng gần nhất. Xóa file là xóa lịch sử; không có bản sao nào khác.
 - Lọc `action` (hỗ trợ `profile.*`), `actorUserId`, `targetType`, `since`; phân trang bằng `cursor`/`limit`; xuất CSV qua `activity.csv`.
-- Vì chỉ có một tài khoản, "phân quyền theo nhóm" không có người thứ hai để áp dụng. Cần nhiều người dùng thật thì phải bổ sung xác thực đa tài khoản trước.
+- Danh sách thành viên, mã đăng nhập (chỉ lưu dạng băm SHA-256) và máy mỗi người dùng nằm ở `DATA_DIR/members.json`. File hỏng được đổi tên thành `members.json.corrupt-<thời gian>` thay vì bị ghi đè.
+
+### Khóa hồ sơ
+
+Khi một người mở hồ sơ đang đồng bộ, app xin khóa; người thứ hai xin trong lúc khóa còn hiệu lực sẽ bị từ chối và app báo hồ sơ đang do ai dùng. Cùng một người xin lại thì được (mở lại trên máy khác của chính họ). Khóa nằm trong bộ nhớ và tự hết hạn sau 90 giây không có heartbeat, nên máy sập không giữ hồ sơ mãi; khởi động lại control plane cũng xóa khóa, và app xin lại khi trình duyệt vẫn đang chạy.
 
 ## Chạy trên VPS
 
@@ -115,7 +153,7 @@ npm test
 
 ## Nối app vào control plane
 
-Trong Donut: **Tài khoản → Server**, nhập `https://<CONTROL_DOMAIN>`, bấm **Lưu**. Thay đổi này đăng xuất tài khoản cũ (một phiên chỉ thuộc về máy chủ đã phát hành nó).
+Trong Donut: **Tài khoản → Máy chủ**, nhập `https://<CONTROL_DOMAIN>`, bấm **Lưu**. Thay đổi này đăng xuất tài khoản cũ (một phiên chỉ thuộc về máy chủ đã phát hành nó).
 
 Sau đó bấm **Đăng nhập**:
 
@@ -155,13 +193,16 @@ Nếu muốn dùng "Máy chủ đồng bộ của tài khoản" (account sync) t
 
 ## Bảo mật
 
-- `CONTROL_TOKEN` là mật khẩu lấy mã đăng nhập. Không commit `.env`, không gửi qua chat.
-- `JWT_SECRET` phải là chuỗi ngẫu nhiên riêng; đổi nó sẽ vô hiệu hóa mọi token cũ.
-- Chạy sau HTTPS. Không mở cổng control plane trực tiếp ra Internet.
-- Mã đăng nhập dùng một lần, hết hạn sau 10 phút.
+- `CONTROL_TOKEN` là mật khẩu của chủ sở hữu: lấy mã đăng nhập ở `/auth/link` và vào `/admin`. Không commit `.env`, không gửi qua chat, không đưa cho nhân viên (họ chỉ cần mã của mình).
+- `JWT_SECRET` phải là chuỗi ngẫu nhiên riêng; đổi nó sẽ vô hiệu hóa mọi token cũ, kể cả của chủ sở hữu.
+- Chạy sau HTTPS. Không mở cổng control plane trực tiếp ra Internet. Cookie của `/admin` là `HttpOnly`, `SameSite=Strict`, chỉ gắn cho đường dẫn `/admin` và thêm `Secure` khi proxy gửi `X-Forwarded-Proto: https` (Caddy làm việc này). Mọi thao tác thay đổi là POST có token CSRF của phiên và bị từ chối nếu `Origin` không phải chính trang này.
+- Mỗi token JWT ghi người sở hữu (`sub`) và phiên bản đăng nhập của họ (`tv`). Xóa người hoặc **Đăng xuất các máy** làm token cũ hỏng ngay, không cần chờ hết hạn 30 ngày. Vai trò đọc từ máy chủ ở mỗi request, nên đổi vai trò có hiệu lực ngay. Token cấp trước khi có tính năng thành viên (không có `tv`) vẫn dùng được như của chủ sở hữu.
+- Mã đăng nhập dùng một lần: 10 phút nếu lấy ở `/auth/link`, 7 ngày nếu cấp ở `/admin` cho nhân viên. Mã chỉ lưu dạng băm; ai đọc được `members.json` cũng không đăng nhập được bằng nó.
 - Server không ghi log token, mã đăng nhập hay nội dung request.
-- Một tài khoản duy nhất. "Nhóm" chỉ có nghĩa một ghế chủ; muốn nhiều người thật phải bổ sung xác thực và phân quyền trước khi mở ra ngoài.
-- `DATA_DIR/team.json` chứa nhật ký hoạt động (không chứa mật khẩu, token hay nội dung trang). Ai đọc được volume này đọc được lịch sử thao tác của tài khoản.
+- Ai cầm mã còn hạn là đăng nhập được thành nhân viên đó. Gửi mã qua kênh riêng và cấp lại nếu nghi ngờ.
+- Tên máy do chính máy đó khai và chỉ để tham khảo, không phải bằng chứng danh tính: người gửi luôn được xác định bằng token. Tên máy đã bỏ ký tự điều khiển và được escape khi hiện trên `/admin`.
+- Nhật ký mở/đóng hồ sơ do chính app của nhân viên báo. Người cố tình sửa app có thể không báo hoặc báo thiếu; nhật ký đáng tin cho vận hành hằng ngày, không phải cho điều tra đối kháng.
+- `DATA_DIR/team.json` chứa nhật ký hoạt động (không chứa mật khẩu, token hay nội dung trang) và `DATA_DIR/members.json` chứa danh sách người, vai trò, máy và mã đã băm. Ai đọc được volume này đọc được lịch sử thao tác của cả nhóm.
 
 ## Kiểm thử
 
@@ -170,4 +211,4 @@ cd vietflow/control-plane
 npm test
 ```
 
-Các bài test chạy server thật trên cổng ngẫu nhiên: đăng nhập một lần, dùng lại mã, refresh, sync token, profile lock, nhóm một ghế, nhật ký hoạt động (lọc, phân trang, CSV, lần mở/đóng hồ sơ), route lạ và các route cloud-only.
+Các bài test chạy server thật trên cổng ngẫu nhiên: đăng nhập một lần, dùng lại mã, refresh, sync token, nhiều thành viên (mỗi người một tài khoản, đổi vai trò, xóa, đăng xuất các máy, mã hết hạn, khởi động lại), quyền theo vai trò, trang `/admin` (đăng nhập, cookie, CSRF, escape), nhật ký hoạt động (người gửi, máy, lọc, phân trang, CSV), khóa hồ sơ (xung đột, heartbeat, hết hạn), route lạ và các route cloud-only.

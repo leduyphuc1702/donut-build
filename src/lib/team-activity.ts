@@ -4,7 +4,14 @@ import { invoke } from "@tauri-apps/api/core";
 export interface TeamActivityItem {
   id: number;
   at: string;
-  actor: { userId: string | null; email: string | null; kind: string };
+  actor: {
+    userId: string | null;
+    email: string | null;
+    kind: string;
+    /** The computer the entry came from; a self-hosted control plane names it. */
+    deviceId?: string | null;
+    deviceName?: string | null;
+  };
   action: string;
   target: { type: string | null; id: string | null; name: string | null };
   detail: Record<string, unknown> | null;

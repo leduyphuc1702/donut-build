@@ -76,6 +76,16 @@ impl Engine {
     }
   }
 
+  /// The engine a profile gets. A profile on Apostate has none of Wayfern's
+  /// native domains, whatever its stored Wayfern version says.
+  pub fn for_profile(profile: &crate::profile::BrowserProfile) -> Self {
+    if crate::apostate::uses_apostate(profile) {
+      Self::Fallback
+    } else {
+      Self::for_version(&profile.version)
+    }
+  }
+
   /// Serde default for results the browser produced: they are, by definition,
   /// the native engine's.
   fn wayfern() -> Self {

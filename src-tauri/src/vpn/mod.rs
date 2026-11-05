@@ -8,6 +8,7 @@
 mod config;
 pub mod socks5_server;
 mod storage;
+pub mod tcp_shape;
 mod tunnel;
 mod wireguard;
 

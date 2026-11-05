@@ -1,4 +1,5 @@
 use super::config::{VpnError, WireGuardConfig};
+use super::tcp_shape::{self, OsStack, PacketShaper};
 use boringtun::noise::{Tunn, TunnResult};
 use boringtun::x25519::{PublicKey, StaticSecret};
 use smoltcp::iface::{Config as IfaceConfig, Interface, PollResult, SocketHandle, SocketSet};
@@ -13,15 +14,36 @@ use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::sync::{Arc, Mutex};
 use tokio::net::{TcpListener, TcpStream};
 
-const SMOLTCP_TCP_RX_BUF: usize = 65536;
+/// One byte short of 64 KiB on purpose: smoltcp scales its advertised window by
+/// `bit_length(capacity) - 16`, so 65535 keeps that shift at 0 and the window
+/// field it writes is the real window in bytes. `tcp_shape` then scales it to
+/// the shift the profile's OS announced in its SYN.
+const SMOLTCP_TCP_RX_BUF: usize = 65535;
 const SMOLTCP_TCP_TX_BUF: usize = 65536;
 const SMOLTCP_UDP_BUF: usize = 65536;
-/// The TTL this machine's own network stack starts packets with: 128 on
-/// Windows, 64 on macOS and Linux. This worker builds the browser's packets
-/// itself, and they leave the tunnel's far end with their TTL intact, so a
-/// site reading it (a common way to tell the OS behind a connection) must see
-/// the OS the browser runs on, not smoltcp's default of 64.
-const HOST_TTL: u8 = if cfg!(windows) { 128 } else { 64 };
+
+/// The tunnel MTU when the WireGuard config sets none.
+const DEFAULT_TUNNEL_MTU: usize = 1420;
+const MIN_TUNNEL_MTU: usize = 1280;
+const MAX_TUNNEL_MTU: usize = 1500;
+
+/// The `[Interface] MTU` of the config, kept within what IPv6 and an Ethernet
+/// link allow; 1420 when it sets none.
+fn tunnel_mtu(configured: Option<u16>) -> usize {
+  configured.map_or(DEFAULT_TUNNEL_MTU, |mtu| {
+    usize::from(mtu).clamp(MIN_TUNNEL_MTU, MAX_TUNNEL_MTU)
+  })
+}
+
+/// The per-socket half of an OS stack: its TTL, and TCP timestamps for an OS
+/// that sends them, so smoltcp stamps every segment the way `tcp_shape` stamps
+/// the SYN.
+fn configure_tcp_socket(socket: &mut TcpSocket<'_>, os: OsStack) {
+  socket.set_hop_limit(Some(os.ttl()));
+  if os.timestamps() {
+    socket.set_tsval_generator(Some(tcp_shape::tsval_now));
+  }
+}
 
 /// How often boringtun's timers run: handshake renewal, keepalives.
 const WG_TIMER_INTERVAL: std::time::Duration = std::time::Duration::from_millis(250);
@@ -118,12 +140,39 @@ fn build_udp_datagram(src: IpEndpoint, payload: &[u8]) -> Vec<u8> {
   out
 }
 
+/// The IP packets between smoltcp and the tunnel. Packets leave it shaped to
+/// the OS the profile claims and packets arriving are looked at first (see
+/// `tcp_shape`). It is smoltcp's `Device`.
+struct PacketPipe {
+  rx_queue: VecDeque<Vec<u8>>,
+  tx_queue: VecDeque<Vec<u8>>,
+  shaper: PacketShaper,
+  mtu: usize,
+}
+
+impl PacketPipe {
+  fn new(os: OsStack, mtu: usize) -> Self {
+    Self {
+      rx_queue: VecDeque::new(),
+      tx_queue: VecDeque::new(),
+      shaper: PacketShaper::new(os, rand::random()),
+      mtu,
+    }
+  }
+
+  fn push_inbound(&mut self, packet: Vec<u8>) {
+    self
+      .shaper
+      .observe_inbound(&packet, std::time::Instant::now());
+    self.rx_queue.push_back(packet);
+  }
+}
+
 struct WgDevice {
   tunn: Arc<Mutex<Box<Tunn>>>,
   udp_socket: Arc<UdpSocket>,
   peer_addr: SocketAddr,
-  rx_queue: VecDeque<Vec<u8>>,
-  tx_queue: VecDeque<Vec<u8>>,
+  pipe: PacketPipe,
 }
 
 impl WgDevice {
@@ -140,7 +189,7 @@ impl WgDevice {
           let result = tunn.decapsulate(None, &recv_buf[..len], &mut dst);
           match result {
             TunnResult::WriteToTunnelV4(data, _) | TunnResult::WriteToTunnelV6(data, _) => {
-              self.rx_queue.push_back(data.to_vec());
+              self.pipe.push_inbound(data.to_vec());
             }
             TunnResult::WriteToNetwork(response) => {
               let _ = self.udp_socket.send_to(response, self.peer_addr);
@@ -158,7 +207,7 @@ impl WgDevice {
   /// Encrypt and send what smoltcp queued. Returns how many packets.
   fn flush_tx_queue(&mut self) -> usize {
     let mut sent = 0;
-    while let Some(ip_packet) = self.tx_queue.pop_front() {
+    while let Some(ip_packet) = self.pipe.tx_queue.pop_front() {
       sent += 1;
       let mut dst = vec![0u8; ip_packet.len() + 256];
       let mut tunn = self.tunn.lock().unwrap();
@@ -213,6 +262,7 @@ impl RxToken for WgRxToken {
 
 struct WgTxToken<'a> {
   tx_queue: &'a mut VecDeque<Vec<u8>>,
+  shaper: &'a mut PacketShaper,
 }
 
 impl<'a> TxToken for WgTxToken<'a> {
@@ -222,38 +272,40 @@ impl<'a> TxToken for WgTxToken<'a> {
   {
     let mut buf = vec![0u8; len];
     let result = f(&mut buf);
+    self
+      .shaper
+      .shape_outbound(&mut buf, std::time::Instant::now());
     self.tx_queue.push_back(buf);
     result
   }
 }
 
-impl Device for WgDevice {
+impl Device for PacketPipe {
   type RxToken<'a> = WgRxToken;
   type TxToken<'a> = WgTxToken<'a>;
 
   fn receive(&mut self, _timestamp: SmolInstant) -> Option<(Self::RxToken<'_>, Self::TxToken<'_>)> {
-    if let Some(data) = self.rx_queue.pop_front() {
-      Some((
-        WgRxToken { data },
-        WgTxToken {
-          tx_queue: &mut self.tx_queue,
-        },
-      ))
-    } else {
-      None
-    }
+    let data = self.rx_queue.pop_front()?;
+    Some((
+      WgRxToken { data },
+      WgTxToken {
+        tx_queue: &mut self.tx_queue,
+        shaper: &mut self.shaper,
+      },
+    ))
   }
 
   fn transmit(&mut self, _timestamp: SmolInstant) -> Option<Self::TxToken<'_>> {
     Some(WgTxToken {
       tx_queue: &mut self.tx_queue,
+      shaper: &mut self.shaper,
     })
   }
 
   fn capabilities(&self) -> DeviceCapabilities {
     let mut caps = DeviceCapabilities::default();
     caps.medium = Medium::Ip;
-    caps.max_transmission_unit = 1420;
+    caps.max_transmission_unit = self.mtu;
     caps
   }
 }
@@ -346,11 +398,13 @@ fn smol_to_std_ip(ip: IpAddress) -> std::net::IpAddr {
 pub struct WireGuardSocks5Server {
   config: WireGuardConfig,
   port: u16,
+  /// The OS the profile claims; its TCP/IP stack is what the exit sees.
+  os: OsStack,
 }
 
 impl WireGuardSocks5Server {
-  pub fn new(config: WireGuardConfig, port: u16) -> Self {
-    Self { config, port }
+  pub fn new(config: WireGuardConfig, port: u16, os: OsStack) -> Self {
+    Self { config, port, os }
   }
 
   fn create_tunnel(&self) -> Result<Box<Tunn>, VpnError> {
@@ -498,16 +552,17 @@ impl WireGuardSocks5Server {
     let tunn_arc = Arc::new(Mutex::new(tunn));
     let udp_arc = Arc::new(udp_socket);
 
+    let os = self.os;
+    let mtu = tunnel_mtu(self.config.mtu);
     let mut device = WgDevice {
       tunn: tunn_arc.clone(),
       udp_socket: udp_arc.clone(),
       peer_addr,
-      rx_queue: VecDeque::new(),
-      tx_queue: VecDeque::new(),
+      pipe: PacketPipe::new(os, mtu),
     };
 
     let iface_config = IfaceConfig::new(HardwareAddress::Ip);
-    let mut iface = Interface::new(iface_config, &mut device, SmolInstant::now());
+    let mut iface = Interface::new(iface_config, &mut device.pipe, SmolInstant::now());
     iface.update_ip_addrs(|addrs| {
       for (cidr, _) in &local_addrs {
         let _ = addrs.push(*cidr);
@@ -592,8 +647,9 @@ impl WireGuardSocks5Server {
     }
 
     log::info!(
-      "Worker started kind=vpn id={config_id} pid={} listen=127.0.0.1:{actual_port} vpn={vpn_id} vpn_type=wireguard peer={peer_addr} handshake_attempts={handshake_attempts} elapsed_ms={}",
+      "Worker started kind=vpn id={config_id} pid={} listen=127.0.0.1:{actual_port} vpn={vpn_id} vpn_type=wireguard os={} mtu={mtu} peer={peer_addr} handshake_attempts={handshake_attempts} elapsed_ms={}",
       std::process::id(),
+      os.as_str(),
       started.elapsed().as_millis()
     );
 
@@ -619,7 +675,8 @@ impl WireGuardSocks5Server {
     // the tunnel by iface.poll like every other socket. Build the query storage
     // without vec![None; N] since DnsQuery isn't Clone.
     let dns_queries: Vec<Option<dns::DnsQuery>> = (0..64).map(|_| None).collect();
-    let dns_socket = dns::Socket::new(&dns_servers, dns_queries);
+    let mut dns_socket = dns::Socket::new(&dns_servers, dns_queries);
+    dns_socket.set_hop_limit(Some(os.ttl()));
     let dns_handle = sockets.add(dns_socket);
 
     // A live SOCKS5 UDP ASSOCIATE: the loopback relay socket the browser sends
@@ -670,7 +727,7 @@ impl WireGuardSocks5Server {
         let tcp_rx = SocketBuffer::new(vec![0u8; SMOLTCP_TCP_RX_BUF]);
         let tcp_tx = SocketBuffer::new(vec![0u8; SMOLTCP_TCP_TX_BUF]);
         let mut tcp_socket = TcpSocket::new(tcp_rx, tcp_tx);
-        tcp_socket.set_hop_limit(Some(HOST_TTL));
+        configure_tcp_socket(&mut tcp_socket, os);
         let handle = sockets.add(tcp_socket);
 
         connections.push(Connection {
@@ -693,7 +750,7 @@ impl WireGuardSocks5Server {
 
       // Poll the smoltcp interface
       let timestamp = SmolInstant::now();
-      if iface.poll(timestamp, &mut device, &mut sockets) == PollResult::SocketStateChanged {
+      if iface.poll(timestamp, &mut device.pipe, &mut sockets) == PollResult::SocketStateChanged {
         active = true;
       }
 
@@ -1026,7 +1083,7 @@ impl WireGuardSocks5Server {
                 vec![0u8; SMOLTCP_UDP_BUF],
               );
               let mut udp_socket = udp::Socket::new(udp_rx, udp_tx);
-              udp_socket.set_hop_limit(Some(HOST_TTL));
+              udp_socket.set_hop_limit(Some(os.ttl()));
               let local_port = 20000 + (rand::random::<u16>() % 40000);
               if udp_socket.bind(local_port).is_err() {
                 completed.push(idx);
@@ -1249,16 +1306,283 @@ impl WireGuardSocks5Server {
 mod tests {
   use super::*;
 
+  fn new_socket(rx: usize) -> TcpSocket<'static> {
+    TcpSocket::new(
+      SocketBuffer::new(vec![0u8; rx]),
+      SocketBuffer::new(vec![0u8; 64]),
+    )
+  }
+
   #[test]
-  fn tunnel_packets_carry_the_ttl_of_this_machines_os() {
-    let expected = if cfg!(windows) { 128 } else { 64 };
-    assert_eq!(HOST_TTL, expected);
-    let mut socket = TcpSocket::new(
-      SocketBuffer::new(vec![0u8; 16]),
-      SocketBuffer::new(vec![0u8; 16]),
+  fn a_socket_takes_the_ttl_and_timestamps_of_its_os() {
+    for (os, ttl, timestamps) in [
+      (OsStack::Windows, 128, false),
+      (OsStack::MacOs, 64, true),
+      (OsStack::Linux, 64, true),
+    ] {
+      let mut socket = new_socket(16);
+      configure_tcp_socket(&mut socket, os);
+      assert_eq!(socket.hop_limit(), Some(ttl), "{os:?}");
+      assert_eq!(socket.timestamp_enabled(), timestamps, "{os:?}");
+    }
+  }
+
+  #[test]
+  fn the_receive_buffer_keeps_smoltcps_window_shift_at_zero() {
+    assert_eq!(
+      usize::BITS - SMOLTCP_TCP_RX_BUF.leading_zeros(),
+      16,
+      "a 16-bit buffer length means no internal window scaling"
     );
-    socket.set_hop_limit(Some(HOST_TTL));
-    assert_eq!(socket.hop_limit(), Some(expected));
+    assert!(SMOLTCP_TCP_RX_BUF <= usize::from(u16::MAX));
+  }
+
+  #[test]
+  fn the_tunnel_mtu_follows_the_config_within_bounds() {
+    assert_eq!(tunnel_mtu(None), 1420);
+    assert_eq!(tunnel_mtu(Some(1380)), 1380);
+    assert_eq!(tunnel_mtu(Some(1280)), 1280);
+    assert_eq!(tunnel_mtu(Some(1500)), 1500);
+    assert_eq!(tunnel_mtu(Some(576)), 1280, "below the IPv6 minimum");
+    assert_eq!(tunnel_mtu(Some(9000)), 1500, "above Ethernet");
+    assert_eq!(tunnel_mtu(Some(0)), 1280);
+
+    let pipe = PacketPipe::new(OsStack::Linux, tunnel_mtu(Some(1360)));
+    assert_eq!(pipe.capabilities().max_transmission_unit, 1360);
+  }
+
+  struct Side {
+    iface: Interface,
+    pipe: PacketPipe,
+    sockets: SocketSet<'static>,
+    handle: SocketHandle,
+  }
+
+  impl Side {
+    fn new(os: OsStack, mtu: usize, ip: IpAddress, rx_buffer: usize) -> Self {
+      let mut pipe = PacketPipe::new(os, mtu);
+      let mut iface = Interface::new(
+        IfaceConfig::new(HardwareAddress::Ip),
+        &mut pipe,
+        SmolInstant::from_millis(0),
+      );
+      let prefix = if matches!(ip, IpAddress::Ipv4(_)) {
+        24
+      } else {
+        64
+      };
+      iface.update_ip_addrs(|addrs| {
+        let _ = addrs.push(IpCidr::new(ip, prefix));
+      });
+      let mut sockets = SocketSet::new(vec![]);
+      let mut socket = TcpSocket::new(
+        SocketBuffer::new(vec![0u8; rx_buffer]),
+        SocketBuffer::new(vec![0u8; SMOLTCP_TCP_TX_BUF]),
+      );
+      configure_tcp_socket(&mut socket, os);
+      let handle = sockets.add(socket);
+      Self {
+        iface,
+        pipe,
+        sockets,
+        handle,
+      }
+    }
+
+    fn socket(&mut self) -> &mut TcpSocket<'static> {
+      self.sockets.get_mut::<TcpSocket>(self.handle)
+    }
+  }
+
+  fn pattern(offset: usize) -> u8 {
+    (offset ^ (offset >> 8) ^ (offset >> 16)) as u8
+  }
+
+  /// What a client segment says, after smoltcp's parser has checked its length
+  /// and both checksums.
+  struct Seen {
+    syn: bool,
+    ack: bool,
+    window: u16,
+    options: Vec<u8>,
+    ttl: u8,
+  }
+
+  fn inspect(packet: &[u8]) -> Seen {
+    use smoltcp::wire::{Ipv4Packet, Ipv6Packet, TcpPacket};
+    let (src, dst, ttl, payload) = if packet[0] >> 4 == 4 {
+      let ip = Ipv4Packet::new_checked(packet).expect("ipv4");
+      assert!(ip.verify_checksum(), "ipv4 header checksum");
+      assert!(ip.dont_frag(), "DF");
+      assert_ne!(ip.ident(), 0, "ip id");
+      (
+        IpAddress::Ipv4(ip.src_addr()),
+        IpAddress::Ipv4(ip.dst_addr()),
+        ip.hop_limit(),
+        ip.payload(),
+      )
+    } else {
+      let ip = Ipv6Packet::new_checked(packet).expect("ipv6");
+      (
+        IpAddress::Ipv6(ip.src_addr()),
+        IpAddress::Ipv6(ip.dst_addr()),
+        ip.hop_limit(),
+        ip.payload(),
+      )
+    };
+    let tcp = TcpPacket::new_checked(payload).expect("tcp");
+    assert!(tcp.verify_checksum(&src, &dst), "tcp checksum");
+    Seen {
+      syn: tcp.syn(),
+      ack: tcp.ack(),
+      window: tcp.window_len(),
+      options: tcp.options().to_vec(),
+      ttl,
+    }
+  }
+
+  /// A client of `os` and a plain peer run a real TCP connection back to back
+  /// through `PacketPipe`, each sending `total` bytes to the other. The
+  /// transfer finishing intact proves the window rewrite never stalls or
+  /// corrupts a connection; the inspected segments prove what the peer saw.
+  fn transfer(os: OsStack, v6: bool, mtu: usize, total: usize) {
+    let (client_ip, server_ip) = if v6 {
+      (
+        IpAddress::Ipv6(smoltcp::wire::Ipv6Address::new(0xfd00, 0, 0, 0, 0, 0, 0, 2)),
+        IpAddress::Ipv6(smoltcp::wire::Ipv6Address::new(0xfd00, 0, 0, 0, 0, 0, 0, 1)),
+      )
+    } else {
+      (
+        IpAddress::Ipv4(Ipv4Address::new(10, 0, 0, 2)),
+        IpAddress::Ipv4(Ipv4Address::new(10, 0, 0, 1)),
+      )
+    };
+    let mut client = Side::new(os, mtu, client_ip, SMOLTCP_TCP_RX_BUF);
+    // A peer with a larger buffer, so its SYN-ACK scales by a different shift.
+    let mut server = Side::new(OsStack::Linux, mtu, server_ip, 262_144);
+    server.socket().listen(443).unwrap();
+    let handle = client.handle;
+    client
+      .sockets
+      .get_mut::<TcpSocket>(handle)
+      .connect(client.iface.context(), (server_ip, 443), 40000)
+      .unwrap();
+
+    let ip_header = if v6 { 40 } else { 20 };
+    let expected_mss = (mtu - ip_header - 20) as u16;
+    let mut syn_seen = None;
+    let mut max_window_after_syn = 0u16;
+    let (mut sent_c, mut recv_c, mut sent_s, mut recv_s) = (0usize, 0usize, 0usize, 0usize);
+    let mut finished_at = None;
+
+    for step in 0..60_000i64 {
+      let now = SmolInstant::from_millis(step);
+      client
+        .iface
+        .poll(now, &mut client.pipe, &mut client.sockets);
+      while let Some(packet) = client.pipe.tx_queue.pop_front() {
+        let seen = inspect(&packet);
+        assert_eq!(seen.ttl, os.ttl());
+        if seen.syn {
+          assert!(!seen.ack);
+          syn_seen.get_or_insert(seen);
+        } else if seen.ack {
+          max_window_after_syn = max_window_after_syn.max(seen.window);
+        }
+        server.pipe.push_inbound(packet);
+      }
+      server
+        .iface
+        .poll(now, &mut server.pipe, &mut server.sockets);
+      while let Some(packet) = server.pipe.tx_queue.pop_front() {
+        client.pipe.push_inbound(packet);
+      }
+
+      for (side, sent, received) in [
+        (&mut client, &mut sent_c, &mut recv_c),
+        (&mut server, &mut sent_s, &mut recv_s),
+      ] {
+        let socket = side.socket();
+        if socket.may_send() && *sent < total {
+          let from = *sent;
+          let n = socket
+            .send(|buf| {
+              let n = buf.len().min(total - from);
+              for (i, byte) in buf[..n].iter_mut().enumerate() {
+                *byte = pattern(from + i);
+              }
+              (n, n)
+            })
+            .unwrap();
+          *sent += n;
+        }
+        if socket.can_recv() {
+          let from = *received;
+          let n = socket
+            .recv(|data| {
+              for (i, byte) in data.iter().enumerate() {
+                assert_eq!(*byte, pattern(from + i), "corrupt byte at {}", from + i);
+              }
+              (data.len(), data.len())
+            })
+            .unwrap();
+          *received += n;
+        }
+      }
+      if (sent_c, recv_c, sent_s, recv_s) == (total, total, total, total) {
+        finished_at = Some(step);
+        break;
+      }
+    }
+
+    let finished_at = finished_at.unwrap_or_else(|| {
+      panic!(
+        "{os:?} v6={v6}: stalled, client sent {sent_c} got {recv_c}, server sent {sent_s} got {recv_s}"
+      )
+    });
+    assert!(
+      finished_at < 30_000,
+      "{os:?} v6={v6}: took {finished_at} simulated ms"
+    );
+
+    let syn = syn_seen.expect("the client sent a SYN");
+    assert_eq!(syn.window, os.syn_window(), "{os:?} SYN window");
+    assert_eq!(syn.options.len(), os.syn_options(expected_mss, 0).len());
+    assert_eq!(
+      &syn.options[..4],
+      &[2, 4, (expected_mss >> 8) as u8, expected_mss as u8]
+    );
+    if os == OsStack::Windows {
+      assert_eq!(syn.options, os.syn_options(expected_mss, 0));
+    }
+
+    let cap = u16::MAX >> os.window_shift();
+    assert!(
+      (1..=cap).contains(&max_window_after_syn),
+      "{os:?}: scaled window field {max_window_after_syn} must be within 1..={cap}"
+    );
+  }
+
+  #[test]
+  fn a_windows_client_moves_5_mb_each_way_over_ipv4() {
+    transfer(OsStack::Windows, false, 1420, 5 * 1024 * 1024);
+  }
+
+  #[test]
+  fn a_macos_client_moves_5_mb_each_way_over_ipv4() {
+    transfer(OsStack::MacOs, false, 1420, 5 * 1024 * 1024);
+  }
+
+  #[test]
+  fn a_linux_client_moves_5_mb_each_way_over_ipv4() {
+    transfer(OsStack::Linux, false, 1420, 5 * 1024 * 1024);
+  }
+
+  #[test]
+  fn every_os_moves_data_over_ipv6_at_the_smallest_mtu() {
+    for os in [OsStack::Windows, OsStack::MacOs, OsStack::Linux] {
+      transfer(os, true, 1280, 1024 * 1024);
+    }
   }
 
   #[test]

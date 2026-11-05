@@ -226,7 +226,7 @@
       "recordSites": "Ghi lại trang đã truy cập",
       "recordSitesDescription": "Thống kê lưu lượng liệt kê các trang mà mỗi hồ sơ đã truy cập. Khi tắt, chỉ lưu tổng dung lượng dữ liệu. Hồ sơ có mật khẩu và hồ sơ tạm thời không bao giờ ghi lại trang.",
       "pasteTyping": "Dán bằng cách gõ",
-      "pasteTypingDescription": "{{keys}} gõ nội dung đã copy vào ô đang chọn, từng phím như người nhập tay, thay vì dán. Nhấn Esc hoặc bấm chuột để dừng. Chuyển bộ gõ tiếng Việt (Unikey, EVKey) sang chế độ tiếng Anh trước; số thẻ không bị ảnh hưởng."
+      "pasteTypingDescription": "Trong trình duyệt do Donut mở, {{paste}} gõ nội dung đã sao chép vào ô đang nhập, từng phím như người thật, thay vì dán. Liên kết, văn bản dài và nhiều dòng vẫn dán như bình thường. {{keys}} gõ trong mọi ứng dụng. Nhấn Escape hoặc bấm chuột để dừng."
     },
     "trashRetention": "Giữ hồ sơ đã xóa trong",
     "trashRetentionDescription": "Hồ sơ đã xóa được giữ trong thùng rác và có thể khôi phục cho đến lúc đó. Sau đó chúng sẽ bị xóa vĩnh viễn.",
@@ -1491,6 +1491,7 @@
   },
   "fingerprint": {
     "crossOsWarning": "Giả mạo vân tay cho hệ điều hành khác kém tin cậy hơn vì không thể mô phỏng hoàn hảo tất cả thành phần nền tảng. Hãy sử dụng thận trọng.",
+    "crossOsApostateWarning": "Hồ sơ này mở bằng engine mã nguồn mở Apostate, được tải xuống ở lần đầu cần dùng. Cần có VPN hoặc proxy vì kết nối không được xuất phát từ máy tính này. Trên Apple silicon, hồ sơ hiện ra như một laptop Windows chạy ARM.",
     "crossOsLimitations": "Giả mạo vân tay xuyên hệ điều hành có giới hạn. Các API cấp hệ thống vẫn có thể phản ánh hệ điều hành thực tế của bạn, và một số tính năng có thể bị giảm hiệu suất.",
     "osLabel": "Vân tay hệ điều hành",
     "selectOSPlaceholder": "Chọn hệ điều hành",
@@ -2766,6 +2767,10 @@
     "wayfernFingerprintGenerationFailed": "Không thể tạo dấu vân tay cho hồ sơ này. {{detail}}",
     "wayfernGenerationLimitReached": "Đã đạt giới hạn tạm thời về tạo dấu vân tay. Vui lòng thử lại sau.",
     "wayfernCrossOsRequiresPlan": "Hồ sơ này chạy dưới dạng {{detail}}, còn máy tính này dùng hệ điều hành khác. Để mở hồ sơ ở đây, bạn cần gói Pro hoặc Team.",
+    "apostateDownloadFailed": "Không tải được engine trình duyệt Apostate. {{detail}}",
+    "apostateChecksumMismatch": "Engine trình duyệt Apostate đã tải về không khớp với checksum được công bố nên đã bị loại bỏ. Hãy thử lại.",
+    "apostateUnsupportedHost": "Không có engine trình duyệt Apostate cho máy tính này nên không thể mở hồ sơ của hệ điều hành khác ở đây.",
+    "apostateFeatureUnsupported": "Hồ sơ này chạy trên engine Apostate, vốn không hỗ trợ tính năng này.",
     "wayfernCrossOsPrimaryDevice": "Hồ sơ này chạy dưới dạng {{detail}}. Hồ sơ cho hệ điều hành khác chỉ chạy trên thiết bị chính của bạn. Hãy đăng xuất Donut Browser trên các máy tính khác, rồi thử lại.",
     "wayfernIdentityRefused": "Trình duyệt không khởi động với danh tính của hồ sơ này nên đã bị đóng. {{detail}}",
     "wayfernInstanceLimitReached": "Có quá nhiều trình duyệt đang mở so với gói của bạn. Hãy đóng một trình duyệt rồi thử lại.",

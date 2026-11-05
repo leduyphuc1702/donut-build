@@ -1056,6 +1056,7 @@ impl ProfileImporter {
     let final_wayfern_config = if mapped == "wayfern" {
       let mut config = wayfern_config.unwrap_or_default();
       config.sanitize_launch_args().await;
+      config.engine = crate::apostate::engine_for_new_profile(config.os.as_deref());
 
       // A caller-supplied device is a set of explicit field choices, not a
       let supplied_device = if crate::wayfern_manager::supports_wayfern_152(&version) {

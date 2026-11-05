@@ -907,6 +907,8 @@ impl SynchronizerManager {
     if leader.browser != "wayfern" {
       return Err("Synchronizer only supports Wayfern profiles.".to_string());
     }
+    // The input capture it relies on is Wayfern's own CDP domain.
+    crate::apostate::refuse_wayfern_only(&leader)?;
 
     // Check leader is not already running
     if leader.process_id.is_some() {
@@ -933,6 +935,7 @@ impl SynchronizerManager {
           fp.name
         ));
       }
+      crate::apostate::refuse_wayfern_only(&fp)?;
       follower_profiles.push(fp);
     }
 

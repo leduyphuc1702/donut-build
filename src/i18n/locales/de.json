@@ -226,7 +226,7 @@
       "recordSites": "Besuchte Websites aufzeichnen",
       "recordSitesDescription": "Die Traffic-Statistik listet die Websites, die jedes Profil erreicht hat. Wenn deaktiviert, werden nur Datenmengen gespeichert. Passwortgeschützte und flüchtige Profile zeichnen nie Websites auf.",
       "pasteTyping": "Einfügen als Tippen",
-      "pasteTypingDescription": "{{keys}} tippt das Kopierte Taste für Taste wie ein Mensch in das aktive Feld, statt es einzufügen. Escape oder ein Klick stoppt es. Stelle ein vietnamesisches Tastaturtool (Unikey, EVKey) vorher auf Englisch; Kartennummern sind nicht betroffen."
+      "pasteTypingDescription": "In Browsern, die Donut öffnet, tippt {{paste}} das Kopierte Taste für Taste wie ein Mensch in das aktuelle Feld, statt es einzufügen. Links, langer Text und mehrere Zeilen werden wie gewohnt eingefügt. {{keys}} tippt in jeder App. Escape oder ein Klick stoppt es."
     },
     "trashRetention": "Gelöschte Profile aufbewahren für",
     "trashRetentionDescription": "Gelöschte Profile bleiben im Papierkorb und können bis dahin wiederhergestellt werden. Danach werden sie endgültig entfernt.",
@@ -1491,6 +1491,7 @@
   },
   "fingerprint": {
     "crossOsWarning": "Einen Fingerprint für ein anderes Betriebssystem vorzutäuschen ist weniger zuverlässig, da sich nicht alle zugrunde liegenden Komponenten perfekt nachahmen lassen. Mit Vorsicht verwenden.",
+    "crossOsApostateWarning": "Dieses Profil öffnet sich in der quelloffenen Apostate-Engine, die beim ersten Bedarf heruntergeladen wird. Es braucht ein VPN oder einen Proxy, weil seine Verbindung nicht von diesem Computer ausgehen darf. Auf Apple Silicon erscheint es als Windows-on-ARM-Laptop.",
     "crossOsLimitations": "Betriebssystemübergreifende Fingerprints haben Grenzen. APIs auf Systemebene können weiterhin Ihr tatsächliches Betriebssystem verraten, und manche Funktionen laufen eventuell langsamer.",
     "osLabel": "Betriebssystem-Fingerprint",
     "selectOSPlaceholder": "Betriebssystem auswählen",
@@ -2766,6 +2767,10 @@
     "wayfernFingerprintGenerationFailed": "Für dieses Profil konnte kein Fingerprint erstellt werden. {{detail}}",
     "wayfernGenerationLimitReached": "Vorübergehendes Limit für die Fingerprint-Erzeugung erreicht. Versuchen Sie es später erneut.",
     "wayfernCrossOsRequiresPlan": "Dieses Profil läuft als {{detail}}, und dieser Computer nutzt ein anderes Betriebssystem. Um es hier zu öffnen, ist ein Pro- oder Team-Tarif nötig.",
+    "apostateDownloadFailed": "Die Apostate-Browser-Engine konnte nicht heruntergeladen werden. {{detail}}",
+    "apostateChecksumMismatch": "Die heruntergeladene Apostate-Browser-Engine stimmte nicht mit ihrer veröffentlichten Prüfsumme überein und wurde verworfen. Bitte erneut versuchen.",
+    "apostateUnsupportedHost": "Für diesen Computer gibt es keine Apostate-Browser-Engine, deshalb lässt sich hier kein Profil für ein anderes Betriebssystem öffnen.",
+    "apostateFeatureUnsupported": "Dieses Profil läuft in der Apostate-Engine, die diese Funktion nicht unterstützt.",
     "wayfernCrossOsPrimaryDevice": "Dieses Profil läuft als {{detail}}. Profile für ein anderes Betriebssystem laufen nur auf Ihrem Hauptgerät. Melden Sie sich auf Ihren anderen Computern von Donut Browser ab und versuchen Sie es dann erneut.",
     "wayfernIdentityRefused": "Der Browser ist nicht mit der Identität dieses Profils gestartet und wurde daher geschlossen. {{detail}}",
     "wayfernInstanceLimitReached": "Für Ihren Tarif sind zu viele Browser geöffnet. Schließen Sie einen Browser und versuchen Sie es erneut.",

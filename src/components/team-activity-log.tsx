@@ -332,6 +332,17 @@ export function TeamActivityLog() {
                           ? t("teamActivity.system")
                           : t("teamActivity.formerMember"))}
                     </span>{" "}
+                    {item.actor.deviceName && (
+                      <>
+                        <span
+                          className="text-muted-foreground"
+                          title={t("account.fields.device")}
+                          data-testid="team-activity-device"
+                        >
+                          ({item.actor.deviceName})
+                        </span>{" "}
+                      </>
+                    )}
                     {describe(item)}
                   </span>
                   <time

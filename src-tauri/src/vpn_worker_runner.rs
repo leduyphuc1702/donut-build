@@ -1,7 +1,9 @@
+use crate::profile::types::BrowserProfile;
 use crate::proxy_runner::find_sidecar_executable;
 use crate::proxy_storage::is_process_running;
+use crate::vpn::tcp_shape::OsStack;
 use crate::vpn_worker_storage::{
-  delete_vpn_worker_config, find_vpn_worker_by_vpn_id, generate_vpn_worker_id,
+  delete_vpn_worker_config, find_vpn_worker, find_vpn_workers_by_vpn_id, generate_vpn_worker_id,
   get_vpn_worker_config, list_vpn_worker_configs, save_vpn_worker_config, vpn_worker_config_path,
   VpnWorkerConfig,
 };
@@ -125,7 +127,18 @@ async fn wait_for_vpn_worker_ready(
 /// `xray_worker_runner::XRAY_START_LOCK`.
 static VPN_START_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// How many in-flight launches currently hold a worker for each vpn_id.
+/// The OS whose TCP/IP stack a profile's tunnel traffic must imitate: the one
+/// its fingerprint claims, or this machine's when the claim is not a desktop OS.
+pub fn profile_stack_os(profile: &BrowserProfile) -> OsStack {
+  OsStack::parse(&crate::launch_gate::claimed_fingerprint_os(profile)).unwrap_or_else(OsStack::host)
+}
+
+/// The key a worker is shared under: one per VPN and claimed OS.
+fn worker_key(vpn_id: &str, os: OsStack) -> String {
+  format!("{vpn_id}@{}", os.as_str())
+}
+
+/// How many in-flight launches currently hold a worker for each (vpn_id, os).
 ///
 /// A launch is invisible to `vpn_id_in_use_by_running_browser` until its
 /// browser PID is persisted, which happens seconds after the worker is adopted:
@@ -148,32 +161,33 @@ fn launch_claims() -> std::sync::MutexGuard<'static, HashMap<String, usize>> {
 /// the count outside `start_vpn_worker_tracked`, so a panicking launch cannot
 /// pin a worker up for good.
 pub struct VpnLaunchClaim {
-  vpn_id: String,
+  key: String,
 }
 
 impl VpnLaunchClaim {
-  fn take(vpn_id: &str) -> Self {
-    *launch_claims().entry(vpn_id.to_string()).or_insert(0) += 1;
-    Self {
-      vpn_id: vpn_id.to_string(),
-    }
+  fn take(vpn_id: &str, os: OsStack) -> Self {
+    let key = worker_key(vpn_id, os);
+    *launch_claims().entry(key.clone()).or_insert(0) += 1;
+    Self { key }
   }
 }
 
 impl Drop for VpnLaunchClaim {
   fn drop(&mut self) {
     let mut claims = launch_claims();
-    if let Some(count) = claims.get_mut(&self.vpn_id) {
+    if let Some(count) = claims.get_mut(&self.key) {
       *count = count.saturating_sub(1);
       if *count == 0 {
-        claims.remove(&self.vpn_id);
+        claims.remove(&self.key);
       }
     }
   }
 }
 
-fn vpn_id_is_claimed_by_launch(vpn_id: &str) -> bool {
-  launch_claims().get(vpn_id).is_some_and(|count| *count > 0)
+fn worker_is_claimed_by_launch(vpn_id: &str, os: OsStack) -> bool {
+  launch_claims()
+    .get(&worker_key(vpn_id, os))
+    .is_some_and(|count| *count > 0)
 }
 
 /// A started VPN worker plus whether *this* call spawned it.
@@ -187,14 +201,15 @@ pub struct VpnWorkerStart {
   pub claim: VpnLaunchClaim,
 }
 
-/// Whether any profile with a live browser process is routing through this VPN.
+/// Whether any profile with a live browser process is routing through this
+/// VPN's worker for `os`.
 ///
 /// Extracted from the startup sweep so the launch guard and the sweep agree on
 /// what "in use" means instead of each carrying its own copy.
-pub fn vpn_id_in_use_by_running_browser(vpn_id: &str) -> bool {
+pub fn vpn_id_in_use_by_running_browser(vpn_id: &str, os: OsStack) -> bool {
   // A launch that has taken the worker but has not yet persisted its browser
   // PID is invisible to the profile scan below, so consult the claims first.
-  if vpn_id_is_claimed_by_launch(vpn_id) {
+  if worker_is_claimed_by_launch(vpn_id, os) {
     return true;
   }
   let Ok(profiles) = crate::profile::ProfileManager::instance().list_profiles() else {
@@ -204,7 +219,7 @@ pub fn vpn_id_in_use_by_running_browser(vpn_id: &str) -> bool {
   profiles
     .iter()
     .filter(|p| p.process_id.is_some_and(is_process_running))
-    .any(|p| p.vpn_id.as_deref() == Some(vpn_id))
+    .any(|p| p.vpn_id.as_deref() == Some(vpn_id) && profile_stack_os(p) == os)
 }
 
 /// Hold the start lock across an adopt-sensitive section (a launch guard
@@ -213,12 +228,18 @@ pub async fn lock_vpn_starts() -> tokio::sync::MutexGuard<'static, ()> {
   VPN_START_LOCK.lock().await
 }
 
+/// A worker for `vpn_id` imitating this machine's OS, for callers that have no
+/// profile (connecting or checking a VPN from the VPN page).
 pub async fn start_vpn_worker(vpn_id: &str) -> Result<VpnWorkerConfig, Box<dyn std::error::Error>> {
-  start_vpn_worker_tracked(vpn_id).await.map(|s| s.config)
+  start_vpn_worker_tracked(vpn_id, OsStack::host())
+    .await
+    .map(|s| s.config)
 }
 
+/// Start the worker for `vpn_id` as seen from `os`, or adopt the running one.
 pub async fn start_vpn_worker_tracked(
   vpn_id: &str,
+  os: OsStack,
 ) -> Result<VpnWorkerStart, Box<dyn std::error::Error>> {
   let _start_guard = VPN_START_LOCK.lock().await;
   crate::proxy_runner::ensure_sidecar_version().await?;
@@ -227,23 +248,24 @@ pub async fn start_vpn_worker_tracked(
     if !vpn_worker_alive(&config) {
       if let Some(pid) = config.pid {
         log::info!(
-          "VPN worker exited, record removed id={} pid={pid} vpn={}",
+          "VPN worker exited, record removed id={} pid={pid} vpn={} os={}",
           config.id,
-          config.vpn_id
+          config.vpn_id,
+          config.os
         );
       }
       delete_vpn_worker_config(&config.id);
     }
   }
 
-  // Check if a VPN worker for this vpn_id already exists and is running
-  if let Some(existing) = find_vpn_worker_by_vpn_id(vpn_id) {
+  // Check if a VPN worker for this vpn_id and OS already exists and is running
+  if let Some(existing) = find_vpn_worker(vpn_id, os) {
     if vpn_worker_alive(&existing) {
       if vpn_worker_accepting_connections(&existing).await {
         return Ok(VpnWorkerStart {
           config: existing,
           created: false,
-          claim: VpnLaunchClaim::take(vpn_id),
+          claim: VpnLaunchClaim::take(vpn_id, os),
         });
       }
 
@@ -252,7 +274,7 @@ pub async fn start_vpn_worker_tracked(
         .map(|config| VpnWorkerStart {
           config,
           created: false,
-          claim: VpnLaunchClaim::take(vpn_id),
+          claim: VpnLaunchClaim::take(vpn_id, os),
         });
     }
     // Worker config exists but process is dead, clean up
@@ -271,9 +293,10 @@ pub async fn start_vpn_worker_tracked(
 
   let vpn_type_str = "wireguard";
 
-  // Write decrypted config to a temp file
+  // Write decrypted config to a temp file. One per OS, because stopping a
+  // worker deletes its file and a sibling worker may be starting from it.
   let config_file_path = std::env::temp_dir()
-    .join(format!("donut_vpn_{}.conf", vpn_id))
+    .join(format!("donut_vpn_{}_{}.conf", vpn_id, os.as_str()))
     .to_string_lossy()
     .to_string();
 
@@ -299,6 +322,7 @@ pub async fn start_vpn_worker_tracked(
     vpn_id.to_string(),
     vpn_type_str.to_string(),
     config_file_path,
+    os,
   );
   save_vpn_worker_config(&config)?;
 
@@ -399,19 +423,21 @@ pub async fn start_vpn_worker_tracked(
   match wait_for_vpn_worker_ready(&id).await {
     Ok(config) => {
       log::info!(
-        "VPN worker started id={id} pid={} port={local_port} vpn={vpn_id} elapsed_ms={}",
+        "VPN worker started id={id} pid={} port={local_port} vpn={vpn_id} os={} elapsed_ms={}",
         config.pid.unwrap_or_default(),
+        os.as_str(),
         started.elapsed().as_millis()
       );
       Ok(VpnWorkerStart {
         config,
         created: true,
-        claim: VpnLaunchClaim::take(vpn_id),
+        claim: VpnLaunchClaim::take(vpn_id, os),
       })
     }
     Err(e) => {
       log::warn!(
-        "VPN worker did not become ready id={id} vpn={vpn_id} elapsed_ms={}",
+        "VPN worker did not become ready id={id} vpn={vpn_id} os={} elapsed_ms={}",
+        os.as_str(),
         started.elapsed().as_millis()
       );
       Err(e)
@@ -475,12 +501,13 @@ pub async fn stop_vpn_worker(id: &str) -> Result<bool, Box<dyn std::error::Error
     };
     log::log!(
       level,
-      "VPN worker stopped id={id} pid={} vpn={} how={how}",
+      "VPN worker stopped id={id} pid={} vpn={} os={} how={how}",
       config
         .pid
         .map(|pid| pid.to_string())
         .unwrap_or_else(|| "none".to_string()),
-      config.vpn_id
+      config.vpn_id,
+      config.os
     );
     return Ok(true);
   }
@@ -488,11 +515,13 @@ pub async fn stop_vpn_worker(id: &str) -> Result<bool, Box<dyn std::error::Error
   Ok(false)
 }
 
+/// Stop every worker of a VPN, whichever OS each imitates.
 pub async fn stop_vpn_worker_by_vpn_id(vpn_id: &str) -> Result<bool, Box<dyn std::error::Error>> {
-  if let Some(config) = find_vpn_worker_by_vpn_id(vpn_id) {
-    return stop_vpn_worker(&config.id).await;
+  let mut stopped = false;
+  for config in find_vpn_workers_by_vpn_id(vpn_id) {
+    stopped |= stop_vpn_worker(&config.id).await?;
   }
-  Ok(false)
+  Ok(stopped)
 }
 
 pub async fn stop_all_vpn_workers() -> Result<(), Box<dyn std::error::Error>> {
@@ -517,6 +546,7 @@ mod tests {
       local_url: None,
       pid,
       pid_start_time,
+      os: "linux".to_string(),
     }
   }
 
@@ -549,20 +579,105 @@ mod tests {
     // observed here nor disturbed by it.
     let vpn_id = format!("vpn_claim_test_{}", rand::random::<u32>());
 
-    assert!(!vpn_id_is_claimed_by_launch(&vpn_id));
+    assert!(!worker_is_claimed_by_launch(&vpn_id, OsStack::Linux));
 
-    let creator = VpnLaunchClaim::take(&vpn_id);
-    assert!(vpn_id_is_claimed_by_launch(&vpn_id));
+    let creator = VpnLaunchClaim::take(&vpn_id, OsStack::Linux);
+    assert!(worker_is_claimed_by_launch(&vpn_id, OsStack::Linux));
 
     // An adopter joins, then the creator's launch fails: the worker is still
     // covered, which is what stops the creator's guard tearing it down.
-    let adopter = VpnLaunchClaim::take(&vpn_id);
+    let adopter = VpnLaunchClaim::take(&vpn_id, OsStack::Linux);
     drop(creator);
-    assert!(vpn_id_is_claimed_by_launch(&vpn_id));
+    assert!(worker_is_claimed_by_launch(&vpn_id, OsStack::Linux));
 
     // With no launch left holding it, nothing keeps the worker up. A creator
     // whose launch fails alone must still be able to stop what it started.
     drop(adopter);
-    assert!(!vpn_id_is_claimed_by_launch(&vpn_id));
+    assert!(!worker_is_claimed_by_launch(&vpn_id, OsStack::Linux));
+  }
+
+  #[test]
+  fn a_launch_claim_covers_only_the_worker_of_its_own_os() {
+    let vpn_id = format!("vpn_claim_os_test_{}", rand::random::<u32>());
+
+    let windows = VpnLaunchClaim::take(&vpn_id, OsStack::Windows);
+    assert!(worker_is_claimed_by_launch(&vpn_id, OsStack::Windows));
+    assert!(!worker_is_claimed_by_launch(&vpn_id, OsStack::MacOs));
+    assert!(!worker_is_claimed_by_launch(&vpn_id, OsStack::Linux));
+
+    // A failing macOS launch may stop its own worker even while the Windows
+    // one on the same VPN is held.
+    let macos = VpnLaunchClaim::take(&vpn_id, OsStack::MacOs);
+    drop(macos);
+    assert!(!worker_is_claimed_by_launch(&vpn_id, OsStack::MacOs));
+    assert!(worker_is_claimed_by_launch(&vpn_id, OsStack::Windows));
+    drop(windows);
+  }
+
+  #[test]
+  fn workers_are_shared_per_vpn_and_os() {
+    let mut windows = worker(None, None);
+    windows.os = "windows".to_string();
+    let mut macos = worker(None, None);
+    macos.os = "macos".to_string();
+
+    assert!(windows.serves("vpn_test", OsStack::Windows));
+    assert!(!windows.serves("vpn_test", OsStack::MacOs));
+    assert!(!windows.serves("vpn_test", OsStack::Linux));
+    assert!(macos.serves("vpn_test", OsStack::MacOs));
+    assert!(!macos.serves("vpn_test", OsStack::Windows));
+    assert!(
+      !windows.serves("vpn_other", OsStack::Windows),
+      "another VPN is never shared"
+    );
+
+    assert_ne!(
+      worker_key("vpn_test", OsStack::Windows),
+      worker_key("vpn_test", OsStack::MacOs)
+    );
+    assert_eq!(
+      worker_key("vpn_test", OsStack::Linux),
+      worker_key("vpn_test", OsStack::Linux)
+    );
+  }
+
+  #[test]
+  fn a_worker_record_without_an_os_reads_as_this_machines() {
+    let old = r#"{
+      "id": "vpnw_1", "vpn_id": "vpn_1", "vpn_type": "wireguard",
+      "config_file_path": "/tmp/x.conf", "local_port": null, "local_url": null, "pid": null
+    }"#;
+    let parsed: VpnWorkerConfig = serde_json::from_str(old).unwrap();
+    assert_eq!(parsed.os, OsStack::host().as_str());
+    assert!(parsed.serves("vpn_1", OsStack::host()));
+
+    let mut garbled = parsed.clone();
+    garbled.os = "plan9".to_string();
+    assert_eq!(garbled.stack_os(), OsStack::host());
+
+    let round_trip: VpnWorkerConfig =
+      serde_json::from_str(&serde_json::to_string(&worker(None, None)).unwrap()).unwrap();
+    assert_eq!(round_trip.os, "linux");
+  }
+
+  #[test]
+  fn a_profile_runs_through_the_worker_of_the_os_it_claims() {
+    let mut profile = BrowserProfile {
+      wayfern_config: Some(crate::wayfern_manager::WayfernConfig {
+        os: Some("Windows".to_string()),
+        ..Default::default()
+      }),
+      ..Default::default()
+    };
+    assert_eq!(profile_stack_os(&profile), OsStack::Windows);
+
+    profile.wayfern_config.as_mut().unwrap().os = Some("macos".to_string());
+    assert_eq!(profile_stack_os(&profile), OsStack::MacOs);
+
+    profile.wayfern_config.as_mut().unwrap().os = Some("android".to_string());
+    assert_eq!(profile_stack_os(&profile), OsStack::host());
+
+    profile.wayfern_config = None;
+    assert_eq!(profile_stack_os(&profile), OsStack::host());
   }
 }

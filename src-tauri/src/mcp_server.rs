@@ -1143,7 +1143,7 @@ impl AgentContext {
   /// The engine is read from the profile HERE, at the point of use, never
   /// cached: a profile updated to 152 gets the native path on its next call.
   pub(crate) fn new(profile: BrowserProfile, target: CdpTarget) -> Self {
-    let engine = Engine::for_version(&profile.version);
+    let engine = Engine::for_profile(&profile);
     Self {
       profile,
       target,
@@ -11770,7 +11770,7 @@ impl McpServer {
     // browser types through Vellum, which paces the keys itself, so the plan
     // below is only built for the fallback engine.
     let profile = self.get_wayfern_profile(profile_id)?;
-    let engine = Engine::for_version(&profile.version);
+    let engine = Engine::for_profile(&profile);
     let humanized = engine.is_wayfern() && !instant;
 
     // PLANNED FIRST, before anything touches the page. The planner can refuse
@@ -12164,7 +12164,7 @@ impl McpServer {
 
     // Engine first, then budgets, then the page: see handle_type_text.
     let profile = self.get_wayfern_profile(profile_id)?;
-    let engine = Engine::for_version(&profile.version);
+    let engine = Engine::for_profile(&profile);
     let humanized = engine.is_wayfern() && !instant;
 
     // PLANNED FIRST, before anything touches the page. The planner can refuse
@@ -16843,7 +16843,7 @@ mod tests {
         .unwrap_or_else(|| panic!("{handler} must exist"));
       let body = &rest[..rest.find("\n  async fn ").unwrap_or(rest.len())];
       let engine = body
-        .find("Engine::for_version(&profile.version)")
+        .find("Engine::for_profile(&profile)")
         .unwrap_or_else(|| panic!("{handler} must read the engine off the profile"));
       let budget = body
         .find("vellum_typing_budget(")

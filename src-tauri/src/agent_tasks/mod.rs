@@ -697,6 +697,8 @@ fn checked_profiles(profile_ids: Vec<String>) -> Result<Vec<String>, String> {
   if profile_ids.len() > batch::MAX_PROFILES {
     return Err(crate::backend_error("AGENT_TOO_MANY_PROFILES"));
   }
+  // The agent engine is Wayfern's own CDP domain.
+  crate::apostate::refuse_wayfern_only_ids(&profile_ids)?;
   Ok(profile_ids)
 }
 

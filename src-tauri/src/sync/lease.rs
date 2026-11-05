@@ -124,7 +124,7 @@ fn held() -> std::sync::MutexGuard<'static, HashMap<String, Held>> {
 }
 
 /// This install's id: random, kept beside the app's data.
-fn device_id() -> String {
+pub(crate) fn device_id() -> String {
   static ID: OnceLock<String> = OnceLock::new();
   ID.get_or_init(|| {
     let path = crate::app_dirs::data_dir().join("device-id");
@@ -149,7 +149,7 @@ fn device_id() -> String {
   .clone()
 }
 
-fn device_name() -> String {
+pub(crate) fn device_name() -> String {
   sysinfo::System::host_name()
     .ok()
     .map(|h| h.trim().to_string())

@@ -226,7 +226,7 @@
       "recordSites": "Registrar sitios visitados",
       "recordSitesDescription": "Las estadísticas de tráfico muestran los sitios a los que llegó cada perfil. Si se desactiva, solo se guardan los totales de datos. Los perfiles con contraseña y los efímeros nunca registran sitios.",
       "pasteTyping": "Pegar escribiendo",
-      "pasteTypingDescription": "{{keys}} escribe lo que copiaste en el campo activo, tecla a tecla como una persona, en lugar de pegarlo. Escape o un clic lo detiene. Cambia antes a inglés una herramienta de teclado vietnamita (Unikey, EVKey); los números de tarjeta no se ven afectados."
+      "pasteTypingDescription": "En los navegadores que abre Donut, {{paste}} escribe lo que copiaste en el campo en el que estás, tecla a tecla como una persona, en lugar de pegarlo. Los enlaces, el texto largo y varias líneas se pegan como siempre. {{keys}} escribe en cualquier app. Escape o un clic lo detiene."
     },
     "trashRetention": "Conservar perfiles eliminados durante",
     "trashRetentionDescription": "Los perfiles eliminados esperan en la papelera y se pueden restaurar hasta entonces. Después se eliminan definitivamente.",
@@ -1502,6 +1502,7 @@
   },
   "fingerprint": {
     "crossOsWarning": "La suplantación de huella digital para un sistema operativo diferente es menos fiable porque es imposible imitar perfectamente todos los componentes subyacentes. Usar con precaución.",
+    "crossOsApostateWarning": "Este perfil se abre con el motor de código abierto Apostate, que se descarga la primera vez que hace falta. Necesita una VPN o un proxy, porque su conexión no debe salir de este ordenador. En Apple silicon se presenta como un portátil Windows con ARM.",
     "crossOsLimitations": "La suplantación de huella digital entre sistemas operativos tiene limitaciones. Las APIs a nivel de sistema pueden seguir reflejando su sistema operativo real y algunas funciones pueden tener un rendimiento reducido.",
     "osLabel": "Huella digital del sistema operativo",
     "selectOSPlaceholder": "Seleccionar sistema operativo",
@@ -2785,6 +2786,10 @@
     "wayfernFingerprintGenerationFailed": "No se pudo crear una huella digital para este perfil. {{detail}}",
     "wayfernGenerationLimitReached": "Se alcanzó el límite temporal de generación de huellas digitales. Inténtalo de nuevo más tarde.",
     "wayfernCrossOsRequiresPlan": "Este perfil se ejecuta como {{detail}} y este equipo usa otro sistema operativo. Para abrirlo aquí se necesita un plan Pro o Team.",
+    "apostateDownloadFailed": "No se pudo descargar el motor de navegador Apostate. {{detail}}",
+    "apostateChecksumMismatch": "El motor de navegador Apostate descargado no coincide con su suma de comprobación publicada, así que se descartó. Inténtalo de nuevo.",
+    "apostateUnsupportedHost": "No hay un motor de navegador Apostate para este ordenador, así que aquí no se puede abrir un perfil de otro sistema operativo.",
+    "apostateFeatureUnsupported": "Este perfil se ejecuta con el motor Apostate, que no admite esta función.",
     "wayfernCrossOsPrimaryDevice": "Este perfil se ejecuta como {{detail}}. Los perfiles de otro sistema operativo solo funcionan en tu dispositivo principal. Cierra la sesión de Donut Browser en tus otros equipos y vuelve a intentarlo.",
     "wayfernIdentityRefused": "El navegador no se inició con la identidad de este perfil, así que se cerró. {{detail}}",
     "wayfernInstanceLimitReached": "Hay demasiados navegadores abiertos para tu plan. Cierra un navegador e inténtalo de nuevo.",

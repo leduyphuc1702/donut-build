@@ -1693,6 +1693,7 @@ export function SettingsDialog({
                     id="settings-paste-typing"
                     label={t("settings.privacy.pasteTyping")}
                     description={t("settings.privacy.pasteTypingDescription", {
+                      paste: isMacOS ? "⌘V" : "Ctrl+V",
                       keys: isMacOS ? "⌘⌥V" : "Ctrl+Alt+V",
                     })}
                     changed={isChanged("paste_typing_enabled")}

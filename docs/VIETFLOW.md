@@ -6,8 +6,11 @@ Bản fork này dựa trên Donut Browser và chuyển sang giấy phép MIT. So
   - Máy muốn dùng profile gửi yêu cầu. Máy đang giữ đóng trình duyệt sao cho cookie kịp ghi xuống đĩa, đẩy bản mới nhất lên rồi nhả khóa. Sau đó máy yêu cầu mới mở.
   - Máy bị chiếm cưỡng chế cũng tự đóng trình duyệt, để hai máy không bao giờ chạy cùng một phiên.
   - Phần client nằm ở `src-tauri/src/sync/lease.rs`, phần máy chủ ở `donut-sync/src/locks.rs`.
-- **"Dán bằng cách gõ"**: phím tắt Ctrl+Alt+V (⌘⌥V trên Mac).
-  - Gõ nội dung đã copy vào ô đang chọn, từng phím như người, thay vì dán. Kết quả cuối luôn đúng từng ký tự.
+- **"Dán bằng cách gõ"**: trong trình duyệt do Donut mở, cứ nhấn **Ctrl+V (⌘V trên Mac) như bình thường**.
+  - Nội dung ngắn một dòng (số thẻ, tên, địa chỉ, email, tối đa 120 ký tự) được gõ vào ô đang chọn, từng phím như người, thay vì dán. Kết quả cuối luôn đúng từng ký tự.
+  - Link, văn bản dài, nhiều dòng, ảnh: vẫn dán bình thường. Ứng dụng khác ngoài trình duyệt của Donut không bị ảnh hưởng.
+  - Ctrl+Alt+V (⌘⌥V) gõ trong mọi ứng dụng, kể cả văn bản dài tới 500 ký tự.
+  - Không áp dụng cho: **Dán** trong menu chuột phải và **tự điền (autofill)** của trình duyệt. Hai cách này không đi qua bàn phím; muốn trang thấy thao tác gõ thì dùng Ctrl+V/⌘V, và đừng lưu thẻ/địa chỉ vào autofill của hồ sơ mua hàng.
   - Nhấn Esc hoặc bấm chuột để dừng. Bật/tắt trong Cài đặt → Quyền riêng tư.
   - Mã nguồn: `src-tauri/src/paste_typing.rs`.
 - **Cập nhật tự động từ repo này** (`leduyphuc1702/donutbrowser`), không lấy bản gốc (`src-tauri/src/app_auto_updater.rs`).
@@ -29,7 +32,7 @@ Tải file cài ở [Releases](https://github.com/leduyphuc1702/donutbrowser/rel
     ```sh
     xattr -dr com.apple.quarantine /Applications/Donut.app
     ```
-  - Lần đầu dùng "Dán bằng cách gõ", macOS hỏi quyền Trợ năng: bật Donut trong Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Trợ năng.
+  - Lần đầu một trình duyệt của Donut được đưa lên trước, macOS hỏi quyền Trợ năng cho "Dán bằng cách gõ": bật Donut trong Cài đặt hệ thống → Quyền riêng tư & Bảo mật → Trợ năng. Chưa cấp quyền thì Ctrl+V/⌘V vẫn dán bình thường.
   - Vì bản build chưa có chứng chỉ Apple, sau mỗi lần cập nhật có thể phải tắt rồi bật lại quyền này.
 - **Windows:**
   - Chạy `Donut_<phiên bản>_x64-setup.exe`. Windows SmartScreen sẽ cảnh báo vì chưa ký số: bấm "More info" → "Run anyway".
@@ -76,7 +79,7 @@ Không công cụ nào cam kết kín 100% trước mọi thuật toán: độ t
    - Hồ sơ dùng chung nên chạy trên các máy có màn hình cỡ gần nhau.
    - Log của Donut cảnh báo `Claimed screen larger than the display` khi màn hình khai báo lớn hơn màn hình thật.
 7. **Gỡ AnyDesk/TeamViewer** khỏi máy dùng để mua. Một số trang từng dò cổng của chúng.
-8. **Gõ thay vì dán** (Ctrl+Alt+V / ⌘⌥V). Với Shopify, đừng đi thẳng link → giỏ hàng → thanh toán trong vài chục giây: xem thêm 1–2 trang trước.
+8. **Gõ thay vì dán**: dùng ⌘V/Ctrl+V, không dùng "Dán" ở menu chuột phải hay autofill. Với Shopify, đừng đi thẳng link → giỏ hàng → thanh toán trong vài chục giây: xem thêm 1–2 trang trước.
 9. **Hạn chế số tài khoản trên cùng một IP.** Mọi hồ sơ dùng chung một WireGuard thì ra cùng một IP. Vài tài khoản trên một IP nhà dân là bình thường; vài chục tài khoản cùng một IP, cùng thẻ, cùng kho nhận hàng thì bị liên kết với nhau. Khi số tài khoản tăng, cần thêm lối ra Mỹ thứ hai, thứ ba.
 
 **Còn hở, không phần mềm nào vá được:**
@@ -147,10 +150,29 @@ Bản build phát cho cả công ty không cần bước 3: build với `DONUT_S
 Trên tài khoản tự host, hồ sơ mới không gọi `Wayfern.createIdentity` và không cần token của Donut cloud. Donut tự dựng thiết bị (`src-tauri/src/fingerprint_generator.rs`): User-Agent, platform, màn hình, CPU/RAM, WebGL, font, voice, audio, battery, … theo OS của máy, rồi ghi toàn bộ vào `wayfern_config.fingerprint`. Khi mở, thiết bị được áp bằng `Wayfern.setFingerprint`.
 
 - Cùng một profile id luôn ra cùng một thiết bị; hai hồ sơ khác nhau ra hai thiết bị khác nhau.
+- Màn hình, GPU, số nhân CPU và RAM được bốc theo tần suất thật của máy để bàn (`src-tauri/src/fingerprint_devices.json`, lấy từ dữ liệu của Apify fingerprint-suite, giấy phép Apache-2.0): khoảng 40 cỡ màn hình và 30–90 GPU mỗi OS. Donut tự ghép cho hợp lý: chip Apple M chỉ đi với số nhân nó có (M1 = 8, M4 = 10, ...), RAM khai tối đa 8 GB như Chrome, và GPU cùng hãng với GPU thật của máy (Mac Apple Silicon chỉ khai chip Apple M; máy Windows chỉ khai hãng có driver trong máy) vì WebGL vẫn vẽ bằng GPU thật.
 - Múi giờ, ngôn ngữ và tọa độ lấy từ lối ra của hồ sơ (proxy/VPN) lúc tạo, không lấy từ máy. Nếu không đo được lối ra mà hồ sơ có proxy/VPN, các trường vị trí bị bỏ trống để lần đo sau điền lại.
-- Chỉ hỗ trợ Windows/macOS/Linux, và chỉ mở được khi OS khai báo trùng OS đang chạy app. Android/iOS bị từ chối.
+- Chỉ hỗ trợ Windows/macOS/Linux. Hồ sơ khai báo cùng OS với máy chạy Wayfern như trước; hồ sơ khai báo OS khác máy chạy engine Apostate (xem mục "Mở hồ sơ Windows trên Mac" bên dưới) và cần proxy hoặc VPN. Android/iOS bị từ chối.
 - Hồ sơ cũ dùng `identity_id` (Wayfern sinh trước bản này) vẫn sửa được bằng nút **Tạo lại vân tay**: lần tạo lại chuyển hồ sơ sang thiết bị cục bộ. Nếu chưa tạo lại, sửa tay trên hồ sơ cũ vẫn cần token Donut và sẽ bị từ chối khi mở.
-- Đây là bước đầu của việc thay engine. Wayfern vẫn là binary đóng: WebGPU, Client Hints, font và TLS/p0f chưa do Donut kiểm soát hoàn toàn. p0f/TCP-IP vẫn phụ thuộc OS của máy và lối ra; launch gate đã chặn khai OS khác máy.
+- Đây là bước đầu của việc thay engine. Wayfern vẫn là binary đóng: WebGPU, Client Hints, font và TLS/p0f chưa do Donut kiểm soát hoàn toàn. p0f/TCP-IP vẫn phụ thuộc OS của máy và lối ra; launch gate chỉ cho khai OS khác máy khi hồ sơ có proxy/VPN và chạy bằng Apostate.
+
+## Mở hồ sơ Windows trên Mac
+
+Wayfern từ chối mở hồ sơ khai báo OS khác máy nếu không có token Donut cloud. Với máy Mac muốn mở hồ sơ Windows (hoặc Linux), Donut dùng engine mã nguồn mở **Apostate** (`github.com/heretic-tech/apostate`, bản 0.5.1, Chromium 155, GPL-3.0). Apostate là file chạy tải riêng, Donut không liên kết vào mã của mình.
+
+- **Tự động, không có nút chọn engine.** Engine được quyết định một lần lúc tạo hồ sơ: OS khai báo khác OS máy (chỉ tính Windows/macOS/Linux) thì hồ sơ dùng Apostate; cùng OS vẫn dùng Wayfern. Hồ sơ đã có không bị đổi. Trong hộp thoại tạo hồ sơ, các OS máy tính để bàn luôn chọn được; Android/iOS vẫn bị khóa.
+- **Cần proxy hoặc VPN.** Hồ sơ Apostate khác OS chỉ mở được khi có proxy hoặc VPN đã chạy: múi giờ, ngôn ngữ và tọa độ lấy từ lối ra đó. Không có lối ra thì launch gate báo `FINGERPRINT_HOST_OS_MISMATCH` và không mở.
+- **Mac Apple silicon khai báo Windows-on-ARM.** Trên Mac Apple silicon, Apostate dựng thiết bị Windows ARM (GPU Adreno) chứ không phải Windows x64 với card NVIDIA/Intel, vì đó là loại phần cứng Mac có thể giả gần nhất. Donut chỉ truyền hạt giống (id hồ sơ), OS, ngôn ngữ và múi giờ; thiết bị cụ thể do Apostate chọn.
+- **Tải về lần đầu.** Lần đầu có hồ sơ Apostate, Donut tải đúng bản đã ghim từ GitHub (~160 MB), kiểm tra sha256 rồi giải nén vào thư mục binaries. Sai checksum thì xóa và báo `APOSTATE_CHECKSUM_MISMATCH`; lỗi mạng báo `APOSTATE_DOWNLOAD_FAILED`.
+- **Font Windows.** Để hồ sơ Windows không lộ font của Mac, cài font trên máy bằng `apostate fonts install windows` (Donut không phát hành lại các font này, chỉ dùng nội bộ). Chưa cài thì Donut vẫn mở và ghi cảnh báo `Persona fonts missing` trong log.
+- **Tính năng chỉ có ở Wayfern** (làm mới vân tay, agent, ghi recipe, synchronizer, xem danh tính) từ chối hồ sơ Apostate bằng mã `APOSTATE_FEATURE_UNSUPPORTED`.
+
+Những gì vẫn còn lộ:
+
+- WebGL/WebGPU vẫn vẽ bằng GPU Apple thật nên giới hạn và kết quả vẽ không giống hẳn Adreno.
+- Số nhân CPU và RAM của máy thật là trần; hồ sơ không khai nhiều hơn máy có.
+- Camera và micro của Mac vẫn là thiết bị người dùng thấy.
+- p0f/TCP-IP vẫn là của máy chạy app, không phải của OS khai báo.
 
 ## Phụ thuộc vào máy chủ bên ngoài
 
@@ -161,6 +183,7 @@ Khi dùng tài khoản tự host, ứng dụng chỉ gọi ra ngoài các địa
 | `github.com/leduyphuc1702/donutbrowser` | Kiểm tra và tải bản cập nhật | Đã là repo của Vietflow |
 | `donutbrowser.com/wayfern.json` | Biết phiên bản Wayfern mới nhất để tải; kết quả được lưu lại cục bộ | Chưa; nếu địa chỉ này mất, máy mới không biết tải bản Wayfern nào |
 | `download.wayfern.com` | Tải trình duyệt Wayfern (mã đóng, của bên thứ ba) | Không. Wayfern là phụ thuộc cứng duy nhất của Donut |
+| `github.com/heretic-tech/apostate/releases` | Tải engine Apostate (mã nguồn mở) khi có hồ sơ khai báo OS khác máy; bản và sha256 được ghim trong `src-tauri/src/apostate.rs` | Có thể mirror, nhưng phải đổi `RELEASE_BASE`; không cần nếu không dùng hồ sơ khác OS |
 | GitHub (cơ sở dữ liệu GeoIP) | Định vị IP lối ra | Có thể tự host, chưa cần |
 | Control plane của Vietflow | Tài khoản, entitlements, khóa hồ sơ | Đã tự host (`vietflow/control-plane/`) |
 | Máy chủ đồng bộ của Vietflow | Đồng bộ hồ sơ và khóa phiên | Đã tự host (`vietflow/sync-server/`) |

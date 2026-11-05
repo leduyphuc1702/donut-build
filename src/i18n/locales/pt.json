@@ -226,7 +226,7 @@
       "recordSites": "Registrar sites visitados",
       "recordSitesDescription": "As estatísticas de tráfego listam os sites que cada perfil acessou. Desativado, só os totais de dados são mantidos. Perfis protegidos por senha e efêmeros nunca registram sites.",
       "pasteTyping": "Colar digitando",
-      "pasteTypingDescription": "{{keys}} digita o que você copiou no campo ativo, tecla por tecla como uma pessoa, em vez de colar. Esc ou um clique interrompe. Mude antes para inglês uma ferramenta de teclado vietnamita (Unikey, EVKey); números de cartão não são afetados."
+      "pasteTypingDescription": "Nos navegadores que o Donut abre, {{paste}} digita o que você copiou no campo em que você está, tecla por tecla como uma pessoa, em vez de colar. Links, textos longos e várias linhas são colados como sempre. {{keys}} digita em qualquer app. Esc ou um clique interrompe."
     },
     "trashRetention": "Manter perfis excluídos por",
     "trashRetentionDescription": "Os perfis excluídos ficam na lixeira e podem ser restaurados até lá. Depois disso, são removidos permanentemente.",
@@ -1502,6 +1502,7 @@
   },
   "fingerprint": {
     "crossOsWarning": "A falsificação de impressão digital para um sistema operacional diferente é menos confiável porque é impossível imitar perfeitamente todos os componentes subjacentes. Use com cautela.",
+    "crossOsApostateWarning": "Este perfil abre no motor de código aberto Apostate, baixado na primeira vez que é preciso. Ele precisa de uma VPN ou de um proxy, porque a conexão não pode partir deste computador. Em Apple silicon, apresenta-se como um notebook Windows em ARM.",
     "crossOsLimitations": "A impressão digital entre sistemas operacionais tem limitações. APIs de nível de sistema ainda podem refletir seu sistema operacional real, e alguns recursos podem ter desempenho reduzido.",
     "osLabel": "Impressão digital do sistema operacional",
     "selectOSPlaceholder": "Selecionar sistema operacional",
@@ -2785,6 +2786,10 @@
     "wayfernFingerprintGenerationFailed": "Não foi possível criar uma impressão digital para este perfil. {{detail}}",
     "wayfernGenerationLimitReached": "Limite temporário de geração de impressões digitais atingido. Tente novamente mais tarde.",
     "wayfernCrossOsRequiresPlan": "Este perfil é executado como {{detail}} e este computador usa outro sistema operativo. Para o abrir aqui, é necessário um plano Pro ou Team.",
+    "apostateDownloadFailed": "Não foi possível baixar o motor de navegador Apostate. {{detail}}",
+    "apostateChecksumMismatch": "O motor de navegador Apostate baixado não corresponde à soma de verificação publicada e foi descartado. Tente novamente.",
+    "apostateUnsupportedHost": "Não há motor de navegador Apostate para este computador, então um perfil de outro sistema operacional não pode ser aberto aqui.",
+    "apostateFeatureUnsupported": "Este perfil roda no motor Apostate, que não oferece suporte a este recurso.",
     "wayfernCrossOsPrimaryDevice": "Este perfil é executado como {{detail}}. Os perfis de outro sistema operativo só funcionam no seu dispositivo principal. Saia do Donut Browser nos seus outros computadores e tente novamente.",
     "wayfernIdentityRefused": "O navegador não iniciou com a identidade deste perfil, então foi fechado. {{detail}}",
     "wayfernInstanceLimitReached": "Há navegadores abertos demais para o seu plano. Feche um navegador e tente novamente.",

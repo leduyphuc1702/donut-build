@@ -1,4 +1,5 @@
-use crate::proxy_storage::get_storage_dir;
+use crate::proxy_storage::{get_storage_dir, is_process_running};
+use crate::vpn::tcp_shape::OsStack;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -17,10 +18,26 @@ pub struct VpnWorkerConfig {
   /// because configs written before this field existed must still deserialize.
   #[serde(default)]
   pub pid_start_time: Option<u64>,
+  /// The OS (`windows`, `macos` or `linux`) whose TCP/IP stack this worker's
+  /// packets imitate: the one the profile using it claims. One WireGuard
+  /// config gets one worker per OS. Defaulted to this machine's OS, which is
+  /// what workers written before this field existed imitated.
+  #[serde(default = "host_os_name")]
+  pub os: String,
+}
+
+fn host_os_name() -> String {
+  OsStack::host().as_str().to_string()
 }
 
 impl VpnWorkerConfig {
-  pub fn new(id: String, vpn_id: String, vpn_type: String, config_file_path: String) -> Self {
+  pub fn new(
+    id: String,
+    vpn_id: String,
+    vpn_type: String,
+    config_file_path: String,
+    os: OsStack,
+  ) -> Self {
     Self {
       id,
       vpn_id,
@@ -30,7 +47,20 @@ impl VpnWorkerConfig {
       local_url: None,
       pid: None,
       pid_start_time: None,
+      os: os.as_str().to_string(),
     }
+  }
+
+  /// The stack this worker imitates; an unreadable name reads as this machine's.
+  pub fn stack_os(&self) -> OsStack {
+    OsStack::parse(&self.os).unwrap_or_else(OsStack::host)
+  }
+
+  /// Whether this is the worker for `vpn_id` as seen from `os`. Workers are
+  /// shared per (VPN, OS): two profiles on one WireGuard config share a tunnel
+  /// only when they claim the same OS.
+  pub fn serves(&self, vpn_id: &str, os: OsStack) -> bool {
+    self.vpn_id == vpn_id && self.stack_os() == os
   }
 }
 
@@ -122,10 +152,27 @@ pub fn list_vpn_worker_configs() -> Vec<VpnWorkerConfig> {
   configs
 }
 
-pub fn find_vpn_worker_by_vpn_id(vpn_id: &str) -> Option<VpnWorkerConfig> {
+/// Every worker of a VPN, one per OS that has used it.
+pub fn find_vpn_workers_by_vpn_id(vpn_id: &str) -> Vec<VpnWorkerConfig> {
   list_vpn_worker_configs()
     .into_iter()
-    .find(|c| c.vpn_id == vpn_id)
+    .filter(|c| c.vpn_id == vpn_id)
+    .collect()
+}
+
+/// Any worker of a VPN, a running one first. For callers that only ask whether
+/// the VPN has a tunnel up, whatever OS it imitates.
+pub fn find_vpn_worker_by_vpn_id(vpn_id: &str) -> Option<VpnWorkerConfig> {
+  let mut workers = find_vpn_workers_by_vpn_id(vpn_id);
+  workers.sort_by_key(|worker| !worker.pid.is_some_and(is_process_running));
+  workers.into_iter().next()
+}
+
+/// The worker that serves `vpn_id` for profiles claiming `os`.
+pub fn find_vpn_worker(vpn_id: &str, os: OsStack) -> Option<VpnWorkerConfig> {
+  list_vpn_worker_configs()
+    .into_iter()
+    .find(|c| c.serves(vpn_id, os))
 }
 
 pub fn generate_vpn_worker_id() -> String {

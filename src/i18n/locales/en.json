@@ -226,7 +226,7 @@
       "recordSites": "Record visited sites",
       "recordSitesDescription": "Traffic stats list the sites each profile reached. When off, only data totals are kept. Password-protected and ephemeral profiles never record sites.",
       "pasteTyping": "Paste as typing",
-      "pasteTypingDescription": "{{keys}} types what you copied into the field you are in, key by key like a person, instead of pasting it. Escape or a click stops it. Switch a Vietnamese keyboard tool (Unikey, EVKey) to English first; card numbers are not affected."
+      "pasteTypingDescription": "In browsers Donut opens, {{paste}} types what you copied into the field you are in, key by key like a person, instead of pasting it. Links, long text and several lines paste as usual. {{keys}} types in any app. Escape or a click stops it."
     },
     "trashRetention": "Keep deleted profiles for",
     "trashRetentionDescription": "Deleted profiles wait in the trash and can be restored until then. After that they are removed for good.",
@@ -1491,6 +1491,7 @@
   },
   "fingerprint": {
     "crossOsWarning": "Spoofing fingerprint for a different operating system is less reliable because it is impossible to perfectly mimic all underlying components. Use with caution.",
+    "crossOsApostateWarning": "This profile opens on the open-source Apostate engine, downloaded the first time it is needed. It needs a VPN or a proxy, because its connection must not start from this computer. On Apple silicon it presents a Windows-on-ARM laptop.",
     "crossOsLimitations": "Cross-OS fingerprinting has limitations. System-level APIs may still reflect your actual operating system, and some features may have degraded performance.",
     "osLabel": "Operating system fingerprint",
     "selectOSPlaceholder": "Select operating system",
@@ -2766,6 +2767,10 @@
     "wayfernFingerprintGenerationFailed": "Could not create a fingerprint for this profile. {{detail}}",
     "wayfernGenerationLimitReached": "Temporary fingerprint generation limit reached. Try again later.",
     "wayfernCrossOsRequiresPlan": "This profile runs as {{detail}}, and this computer runs another operating system. Opening it here needs a Pro or Team plan.",
+    "apostateDownloadFailed": "The Apostate browser engine could not be downloaded. {{detail}}",
+    "apostateChecksumMismatch": "The downloaded Apostate browser engine did not match its published checksum, so it was discarded. Try again.",
+    "apostateUnsupportedHost": "There is no Apostate browser engine for this computer, so a profile for another operating system cannot open here.",
+    "apostateFeatureUnsupported": "This profile runs on the Apostate engine, which does not support this feature.",
     "wayfernCrossOsPrimaryDevice": "This profile runs as {{detail}}. Profiles for another operating system run only on your primary device. Sign out of Donut Browser on your other computers, then try again.",
     "wayfernIdentityRefused": "The browser did not start on this profile's identity, so it was closed. {{detail}}",
     "wayfernInstanceLimitReached": "Too many browsers are open for your plan. Close a browser and try again.",

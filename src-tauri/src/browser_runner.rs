@@ -426,6 +426,7 @@ impl BrowserRunner {
       struct VpnLaunchGuard {
         worker_id: Option<String>,
         vpn_id: String,
+        os: crate::vpn::tcp_shape::OsStack,
         created: bool,
         /// This launch's own hold on the worker, kept until the guard goes out
         /// of scope so a sibling launch cannot stop the worker while this one
@@ -444,13 +445,17 @@ impl BrowserRunner {
             return;
           }
           let vpn_id = self.vpn_id.clone();
+          let os = self.os;
           tauri::async_runtime::spawn(async move {
             // Serialize against worker startup for the whole check-then-stop.
             // Without it another launch can adopt this worker between the
             // in-use check and the kill, and lose its tunnel a moment later.
             let _adopt_guard = crate::vpn_worker_runner::lock_vpn_starts().await;
-            if crate::vpn_worker_runner::vpn_id_in_use_by_running_browser(&vpn_id) {
-              log::debug!("VPN worker kept, another browser uses it vpn={vpn_id} id={worker_id}");
+            if crate::vpn_worker_runner::vpn_id_in_use_by_running_browser(&vpn_id, os) {
+              log::debug!(
+                "VPN worker kept, another browser uses it vpn={vpn_id} os={} id={worker_id}",
+                os.as_str()
+              );
               return;
             }
             if let Err(error) = crate::vpn_worker_runner::stop_vpn_worker(&worker_id).await {
@@ -467,12 +472,14 @@ impl BrowserRunner {
       // If profile has a VPN instead of proxy, start VPN worker and use it as upstream
       if upstream_proxy.is_none() {
         if let Some(ref vpn_id) = profile.vpn_id {
-          match crate::vpn_worker_runner::start_vpn_worker_tracked(vpn_id).await {
+          let stack_os = crate::vpn_worker_runner::profile_stack_os(profile);
+          match crate::vpn_worker_runner::start_vpn_worker_tracked(vpn_id, stack_os).await {
             Ok(started) => {
               vpn_worker_id = Some(started.config.id.clone());
               vpn_launch_guard = Some(VpnLaunchGuard {
                 worker_id: Some(started.config.id.clone()),
                 vpn_id: vpn_id.clone(),
+                os: stack_os,
                 created: started.created,
                 claim: Some(started.claim),
               });
@@ -506,7 +513,7 @@ impl BrowserRunner {
       // it: the gate returns early for several kinds of profile and answers a
       // question ("may this launch proceed"), while this is a preparation step
       // every spawn needs, including a profile with no route to check.
-      crate::launch_gate::enforce_host_os(profile)
+      crate::launch_gate::enforce_host_os(profile, upstream_proxy.is_some())
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
       crate::launch_gate::enforce_route_required(profile, upstream_proxy.is_some())
         .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
@@ -920,6 +927,11 @@ impl BrowserRunner {
         "{launched} elapsed_ms={}",
         launch_started.elapsed().as_millis()
       );
+      crate::team_activity::launched(
+        &profile_id_str,
+        &updated_profile.name,
+        kind == crate::wayfern_manager::LaunchKind::Automation,
+      );
 
       // The browser returned a config to store, and it is on disk already.
       if let Some(stored) = wayfern_result.stored_profile.as_ref() {
@@ -1235,12 +1247,16 @@ impl BrowserRunner {
       }
 
       let mut process_actually_stopped = false;
+      // Whether a browser was found to stop, and its pid: a stop that finds
+      // none is not an end worth reporting.
+      let mut ended_browser: Option<Option<u32>> = None;
       match self
         .wayfern_manager
         .find_wayfern_by_profile(&profile_path_str)
         .await
       {
         Some(wayfern_process) => {
+          ended_browser = Some(wayfern_process.processId);
           match self.wayfern_manager.stop_wayfern(&wayfern_process.id).await {
             Ok(_) => {
               if let Some(pid) = wayfern_process.processId {
@@ -1412,6 +1428,9 @@ impl BrowserRunner {
       self
         .save_process_info(&updated_profile)
         .map_err(|e| format!("Failed to update profile: {e}"))?;
+      if let Some(pid) = ended_browser {
+        crate::team_activity::stopped(&profile_id_str, &profile.name, pid);
+      }
       if let Some(pid) = profile.process_id {
         PROXY_MANAGER.stop_worker_of_exited_browser(pid).await;
       }

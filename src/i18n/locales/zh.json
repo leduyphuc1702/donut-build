@@ -226,7 +226,7 @@
       "recordSites": "记录访问过的网站",
       "recordSitesDescription": "流量统计会列出每个配置文件访问过的网站。关闭后仅保留数据总量。受密码保护的配置文件和临时配置文件从不记录网站。",
       "pasteTyping": "以输入方式粘贴",
-      "pasteTypingDescription": "{{keys}} 会把复制的内容像人一样逐键输入到当前输入框，而不是直接粘贴。按 Esc 或点击鼠标即可停止。请先把越南语输入工具（Unikey、EVKey）切换到英文模式；卡号不受影响。"
+      "pasteTypingDescription": "在 Donut 打开的浏览器中，{{paste}} 会像真人一样逐键把复制的内容输入到当前输入框，而不是直接粘贴。链接、长文本和多行文本照常粘贴。{{keys}} 可在任何应用中输入。按 Esc 或点击鼠标即可停止。"
     },
     "trashRetention": "已删除配置文件的保留时间",
     "trashRetentionDescription": "已删除的配置文件会保留在回收站中，在此期间可以恢复。之后将被永久删除。",
@@ -1491,6 +1491,7 @@
   },
   "fingerprint": {
     "crossOsWarning": "伪装不同操作系统的指纹不太可靠，因为不可能完美模拟所有底层组件。请谨慎使用。",
+    "crossOsApostateWarning": "此配置文件使用开源的 Apostate 引擎打开，引擎会在首次需要时下载。它需要 VPN 或代理，因为连接不能从这台电脑发出。在 Apple 芯片上，它会呈现为一台 ARM 版 Windows 笔记本。",
     "crossOsLimitations": "跨操作系统指纹伪装存在局限性。系统级 API 可能仍会反映您的实际操作系统，某些功能的性能可能会降低。",
     "osLabel": "操作系统指纹",
     "selectOSPlaceholder": "选择操作系统",
@@ -2766,6 +2767,10 @@
     "wayfernFingerprintGenerationFailed": "无法为此配置文件创建指纹。{{detail}}",
     "wayfernGenerationLimitReached": "已达到临时指纹生成上限。请稍后再试。",
     "wayfernCrossOsRequiresPlan": "此配置文件以 {{detail}} 身份运行，而这台电脑使用其他操作系统。要在此处打开，需要 Pro 或 Team 套餐。",
+    "apostateDownloadFailed": "无法下载 Apostate 浏览器引擎。{{detail}}",
+    "apostateChecksumMismatch": "下载的 Apostate 浏览器引擎与公布的校验和不一致，已被丢弃。请重试。",
+    "apostateUnsupportedHost": "这台电脑没有 Apostate 浏览器引擎，因此无法在此打开其他操作系统的配置文件。",
+    "apostateFeatureUnsupported": "此配置文件运行在 Apostate 引擎上，该引擎不支持此功能。",
     "wayfernCrossOsPrimaryDevice": "此配置文件以 {{detail}} 身份运行。其他操作系统的配置文件只能在您的主设备上运行。请在其他电脑上退出 Donut Browser 登录，然后重试。",
     "wayfernIdentityRefused": "浏览器未以此配置文件的身份启动，因此已被关闭。{{detail}}",
     "wayfernInstanceLimitReached": "当前套餐下打开的浏览器过多。请关闭一个浏览器后重试。",

@@ -13,6 +13,8 @@ use tokio::process::Command as TokioCommand;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 
+mod apostate_launch;
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct WayfernConfig {
   #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -92,9 +94,19 @@ pub struct WayfernConfig {
   /// piece of device state an identity-backed profile persists.
   #[serde(default)]
   pub location: Option<String>,
+  /// The engine that runs the profile. `None` is Wayfern; `"apostate"` is set
+  /// once, at creation, for a desktop OS other than the creating machine's,
+  /// and never changes afterwards so the persona survives a move to another
+  /// machine.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub engine: Option<String>,
 }
 
 impl WayfernConfig {
+  pub fn uses_apostate(&self) -> bool {
+    self.engine.as_deref() == Some(crate::apostate::ENGINE)
+  }
+
   pub async fn checked_launch_args(&self) -> Result<Vec<String>, String> {
     let has_args = self.launch_args.iter().any(|arg| !arg.trim().is_empty());
     let allowed = !has_args
@@ -341,6 +353,36 @@ fn validate_launch_args(args: &[String], allowed: bool) -> Result<Vec<String>, S
     result.push(arg.to_string());
   }
   Ok(result)
+}
+
+// Prefetch* / NoStatePrefetch: cross-site Speculation-Rules prefetch uses an
+// isolated NetworkContext that defaults to DIRECT egress (real host IP leaks
+// past the per-profile proxy). Disabling via a LAUNCH FLAG cannot be re-enabled
+// by an imported/synced network_prediction_options pref (which a compile-time
+// pref default could be).
+const LEAK_FEATURES_SWITCH: &str = "--disable-features=DialMediaRouteProvider,DnsOverHttps,AsyncDns,Prefetch,PrefetchProxy,SpeculationRulesPrefetchFuture,NoStatePrefetch";
+
+/// The switches that send a browser through Donut's local proxy. SOCKS5 lets
+/// Chromium route UDP (QUIC/WebRTC) and resolve DNS through the proxy; PROXY
+/// is HTTP CONNECT (TCP only). The host:port is the same either way.
+fn proxy_switches(proxy: &str) -> Vec<String> {
+  let (pac_directive, host_port) = if let Some(rest) = proxy.strip_prefix("socks5://") {
+    ("SOCKS5", rest)
+  } else {
+    (
+      "PROXY",
+      proxy
+        .trim_start_matches("http://")
+        .trim_start_matches("https://"),
+    )
+  };
+  let pac_data = format!(
+    "data:application/x-ns-proxy-autoconfig,function FindProxyForURL(url,host){{return \"{pac_directive} {host_port}\";}}",
+  );
+  vec![
+    format!("--proxy-pac-url={pac_data}"),
+    "--dns-prefetch-disable".to_string(),
+  ]
 }
 
 fn apply_launch_args(args: &mut Vec<String>, custom: &[String]) {
@@ -1034,6 +1076,7 @@ fn browser_line_level(line: &str) -> Option<log::Level> {
   // control port opens says why only there.
   if line.contains("Wayfern")
     || line.contains("wayfern_")
+    || line.starts_with("apostate:")
     || line.contains(":ERROR:")
     || line.contains(":FATAL:")
   {
@@ -2922,8 +2965,14 @@ impl WayfernManager {
     // A self-hosted account has no Wayfern token, and the closed engine will
     // not accept the custom/cross-OS calls a token unlocks. Build the device
     // here instead and store it as a full payload, which the engine applies
-    // without asking Donut cloud for anything.
-    if crate::fingerprint_generator::local_generation_enabled() {
+    // without asking Donut cloud for anything. A profile that runs Apostate
+    // never talks to Wayfern: its persona comes from the engine's own seed, and
+    // this payload only describes it, with the exit's location resolved
+    // through the profile's route.
+    if config.uses_apostate()
+      || crate::apostate::engine_for_new_profile(Some(os)).is_some()
+      || crate::fingerprint_generator::local_generation_enabled()
+    {
       return Self::generate_local_fingerprint(profile, config, os).await;
     }
 
@@ -3087,7 +3136,7 @@ impl WayfernManager {
     profile: &BrowserProfile,
   ) -> Result<Option<String>, String> {
     let config = profile.wayfern_config.clone().unwrap_or_default();
-    if config.fingerprint.is_some() {
+    if config.fingerprint.is_some() || config.uses_apostate() {
       return Ok(config.fingerprint);
     }
     let Some(mut params) = Self::identity_params(&config, &profile.native_os())
@@ -3188,6 +3237,23 @@ impl WayfernManager {
     headless: bool,
     kind: LaunchKind,
   ) -> Result<WayfernLaunchResult, Box<dyn std::error::Error + Send + Sync>> {
+    if config.uses_apostate() {
+      return self
+        .launch_apostate(
+          _app_handle,
+          profile,
+          profile_path,
+          config,
+          url,
+          proxy_url,
+          ephemeral,
+          extension_paths,
+          remote_debugging_port,
+          headless,
+          kind,
+        )
+        .await;
+    }
     let custom_launch_args = match config.checked_launch_args().await {
       Ok(args) => args,
       Err(error) => {
@@ -3233,12 +3299,7 @@ impl WayfernManager {
       "--enable-logging=stderr".to_string(),
       "--log-level=0".to_string(),
       "--disable-infobars".to_string(),
-      // Prefetch* / NoStatePrefetch: cross-site Speculation-Rules prefetch uses
-      // an isolated NetworkContext that defaults to DIRECT egress (real host IP
-      // leaks past the per-profile proxy). Disabling via a LAUNCH FLAG cannot be
-      // re-enabled by an imported/synced network_prediction_options pref (which a
-      // compile-time pref default could be).
-      "--disable-features=DialMediaRouteProvider,DnsOverHttps,AsyncDns,Prefetch,PrefetchProxy,SpeculationRulesPrefetchFuture,NoStatePrefetch".to_string(),
+      LEAK_FEATURES_SWITCH.to_string(),
       "--use-mock-keychain".to_string(),
       "--password-store=basic".to_string(),
     ];
@@ -3399,24 +3460,7 @@ impl WayfernManager {
     }
 
     if let Some(proxy) = proxy_url {
-      // Map the local proxy scheme to the matching PAC directive. SOCKS5 lets
-      // Chromium route UDP (QUIC/WebRTC) and resolve DNS through the proxy;
-      // PROXY is HTTP CONNECT (TCP only). The host:port is the same either way.
-      let (pac_directive, host_port) = if let Some(rest) = proxy.strip_prefix("socks5://") {
-        ("SOCKS5", rest)
-      } else {
-        (
-          "PROXY",
-          proxy
-            .trim_start_matches("http://")
-            .trim_start_matches("https://"),
-        )
-      };
-      let pac_data = format!(
-        "data:application/x-ns-proxy-autoconfig,function FindProxyForURL(url,host){{return \"{pac_directive} {host_port}\";}}",
-      );
-      args.push(format!("--proxy-pac-url={pac_data}"));
-      args.push("--dns-prefetch-disable".to_string());
+      args.extend(proxy_switches(proxy));
     }
 
     // A 152 browser takes the identity on its command line and commits it

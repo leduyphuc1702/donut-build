@@ -256,9 +256,9 @@ test("profile creation stays compact and saves basic, protected, and ephemeral p
         { description: "More options closes" },
       );
       await app.capture("profile-create-compact-wide");
-      // The device's operating system is chosen on the dialog itself. Without
-      // a plan that includes cross-OS fingerprints, only this computer's
-      // system can be picked.
+      // The device's operating system is chosen on the dialog itself. Every
+      // desktop system can be picked (another one opens on Apostate); without
+      // a plan that includes cross-OS fingerprints, mobile ones stay locked.
       const hostOs =
         { darwin: "macOS", win32: "Windows" }[process.platform] ?? "Linux";
       assert.equal(
@@ -284,7 +284,7 @@ test("profile creation stays compact and saves basic, protected, and ephemeral p
       assert.equal(osOptions.length, 5, JSON.stringify(osOptions));
       assert.deepEqual(
         osOptions.filter((option) => !option.disabled).map((o) => o.text),
-        [hostOs],
+        ["Windows", "macOS", "Linux"],
       );
       assert.ok(
         osOptions
@@ -758,6 +758,13 @@ test("the open-link dialog names the link, lists the profiles, and opens the cho
       ]) {
         await createUiProfile(app, name);
       }
+      await app.waitFor(
+        async () =>
+          (await app.execute(
+            `return document.querySelectorAll("tbody tr").length;`,
+          )) === 6,
+        { description: "the table lists six profiles" },
+      );
       await app.invoke("plugin:event|emit", {
         event: "show-profile-selector",
         payload: "https://example.org/",

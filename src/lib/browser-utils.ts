@@ -28,6 +28,7 @@ export { getCurrentOS } from "@/lib/platform";
 export function getBrowserDisplayName(browserType: string): string {
   const browserNames: Record<string, string> = {
     wayfern: "Wayfern",
+    apostate: "Apostate",
   };
 
   return browserNames[browserType] || browserType;

@@ -226,7 +226,7 @@
       "recordSites": "訪問したサイトを記録",
       "recordSitesDescription": "トラフィック統計には各プロファイルがアクセスしたサイトが記録されます。オフにするとデータ量の合計だけが残ります。パスワード保護されたプロファイルと一時プロファイルはサイトを記録しません。",
       "pasteTyping": "入力して貼り付け",
-      "pasteTypingDescription": "{{keys}} でコピーした内容を、貼り付けではなく人が打つように 1 キーずつ、選択中の入力欄に入力します。Esc キーかクリックで止まります。ベトナム語入力ツール (Unikey、EVKey) は先に英語モードにしてください。カード番号には影響しません。"
+      "pasteTypingDescription": "Donut が開いたブラウザでは、{{paste}} でコピーした内容を貼り付けずに、人のように1キーずつ今の入力欄へ入力します。リンク、長い文章、複数行は通常どおり貼り付けます。{{keys}} はどのアプリでも入力します。Esc キーかクリックで止まります。"
     },
     "trashRetention": "削除したプロファイルの保持期間",
     "trashRetentionDescription": "削除したプロファイルはゴミ箱に保管され、期限まで復元できます。期限を過ぎると完全に削除されます。",
@@ -1491,6 +1491,7 @@
   },
   "fingerprint": {
     "crossOsWarning": "異なるオペレーティングシステムのフィンガープリント偽装は、すべての基盤コンポーネントを完璧に模倣することが不可能なため、信頼性が低くなります。注意してご使用ください。",
+    "crossOsApostateWarning": "このプロファイルはオープンソースの Apostate エンジンで開きます。エンジンは初めて必要になったときにダウンロードされます。接続がこのコンピューターから発信されてはいけないため、VPN またはプロキシが必要です。Apple シリコンでは Windows on ARM のノート PC として振る舞います。",
     "crossOsLimitations": "クロスOSフィンガープリントには制限があります。システムレベルのAPIは実際のオペレーティングシステムを反映する場合があり、一部の機能のパフォーマンスが低下する可能性があります。",
     "osLabel": "オペレーティングシステムのフィンガープリント",
     "selectOSPlaceholder": "オペレーティングシステムを選択",
@@ -2766,6 +2767,10 @@
     "wayfernFingerprintGenerationFailed": "このプロファイルのフィンガープリントを作成できませんでした。{{detail}}",
     "wayfernGenerationLimitReached": "一時的なフィンガープリント生成上限に達しました。しばらくしてから再度お試しください。",
     "wayfernCrossOsRequiresPlan": "このプロファイルは {{detail}} として動作し、このコンピューターでは別のオペレーティングシステムが動作しています。ここで開くには Pro または Team プランが必要です。",
+    "apostateDownloadFailed": "Apostate ブラウザエンジンをダウンロードできませんでした。{{detail}}",
+    "apostateChecksumMismatch": "ダウンロードした Apostate ブラウザエンジンが公開されているチェックサムと一致しなかったため、破棄しました。もう一度お試しください。",
+    "apostateUnsupportedHost": "このコンピューター向けの Apostate ブラウザエンジンはないため、別のオペレーティングシステム用のプロファイルはここでは開けません。",
+    "apostateFeatureUnsupported": "このプロファイルは Apostate エンジンで動作しており、この機能には対応していません。",
     "wayfernCrossOsPrimaryDevice": "このプロファイルは {{detail}} として動作します。別のオペレーティングシステムのプロファイルは、プライマリデバイスでのみ実行できます。ほかのコンピューターで Donut Browser からサインアウトしてから、もう一度お試しください。",
     "wayfernIdentityRefused": "ブラウザーがこのプロファイルのアイデンティティで起動しなかったため、終了しました。{{detail}}",
     "wayfernInstanceLimitReached": "ご利用のプランでは、開いているブラウザーが多すぎます。ブラウザーを1つ閉じてからもう一度お試しください。",

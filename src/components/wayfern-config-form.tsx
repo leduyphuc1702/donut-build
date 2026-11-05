@@ -379,6 +379,18 @@ export function WayfernConfigForm({
   };
 
   const selectedOS = config.os || nativeOS || currentOS;
+  // A new profile may claim any desktop OS: another one than this machine's
+  // opens on Apostate, which needs no plan. A saved profile keeps its engine.
+  const opensOnApostate = (os: WayfernOS) =>
+    os !== currentOS &&
+    (isCreating
+      ? os === "windows" || os === "macos" || os === "linux"
+      : config.engine === "apostate" && os === selectedOS);
+  const isOsLocked = (os: WayfernOS) =>
+    os !== currentOS && !crossOsUnlocked && !opensOnApostate(os);
+  const showCrossOsNotice =
+    selectedOS !== currentOS &&
+    (crossOsUnlocked || opensOnApostate(selectedOS));
 
   useEffect(() => {
     if (isCreating && typeof window !== "undefined") {
@@ -586,7 +598,7 @@ export function WayfernConfigForm({
               {(
                 ["windows", "macos", "linux", "android", "ios"] as WayfernOS[]
               ).map((os) => {
-                const isDisabled = os !== currentOS && !crossOsUnlocked;
+                const isDisabled = isOsLocked(os);
                 return (
                   <SelectItem key={os} value={os} disabled={isDisabled}>
                     <span className="flex items-center gap-2">
@@ -598,10 +610,14 @@ export function WayfernConfigForm({
               })}
             </SelectContent>
           </Select>
-          {selectedOS !== currentOS && crossOsUnlocked && (
+          {showCrossOsNotice && (
             <Alert className="mt-2">
               <AlertDescription>
-                {t("fingerprint.crossOsWarning")}
+                {t(
+                  opensOnApostate(selectedOS)
+                    ? "fingerprint.crossOsApostateWarning"
+                    : "fingerprint.crossOsWarning",
+                )}
               </AlertDescription>
             </Alert>
           )}
@@ -1752,7 +1768,7 @@ export function WayfernConfigForm({
                         "ios",
                       ] as WayfernOS[]
                     ).map((os) => {
-                      const isDisabled = os !== currentOS && !crossOsUnlocked;
+                      const isDisabled = isOsLocked(os);
                       return (
                         <SelectItem key={os} value={os} disabled={isDisabled}>
                           <span className="flex items-center gap-2">
@@ -1764,10 +1780,14 @@ export function WayfernConfigForm({
                     })}
                   </SelectContent>
                 </Select>
-                {selectedOS !== currentOS && crossOsUnlocked && (
+                {showCrossOsNotice && (
                   <Alert className="mt-2">
                     <AlertDescription>
-                      {t("fingerprint.crossOsLimitations")}
+                      {t(
+                        opensOnApostate(selectedOS)
+                          ? "fingerprint.crossOsApostateWarning"
+                          : "fingerprint.crossOsLimitations",
+                      )}
                     </AlertDescription>
                   </Alert>
                 )}

@@ -33,5 +33,10 @@
     ".next/dev/types/**/*.ts",
     "dist/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "src-tauri/target", "donut-sync"]
+  "exclude": [
+    "node_modules",
+    "src-tauri/target",
+    "e2e/app/target",
+    "donut-sync"
+  ]
 }

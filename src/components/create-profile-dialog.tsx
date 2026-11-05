@@ -109,6 +109,11 @@ const MAX_BULK_CREATE = 100;
 
 const OS_OPTIONS: WayfernOS[] = ["windows", "macos", "linux", "android", "ios"];
 
+// A desktop OS other than this machine's opens on the open-source Apostate
+// engine, which needs no plan, so only mobile claims stay behind the plan.
+const isDesktopOs = (os: WayfernOS) =>
+  os === "windows" || os === "macos" || os === "linux";
+
 const getCurrentOS = (): WayfernOS => {
   if (typeof navigator === "undefined") return "linux";
   const platform = navigator.platform.toLowerCase();
@@ -830,7 +835,8 @@ export function CreateProfileDialog({
                   <CommandList id={osListboxId}>
                     <CommandGroup>
                       {OS_OPTIONS.map((os) => {
-                        const locked = os !== hostOs && !crossOsUnlocked;
+                        const locked =
+                          os !== hostOs && !isDesktopOs(os) && !crossOsUnlocked;
                         const Icon = getOSIcon(os);
                         return (
                           <CommandItem
@@ -1228,7 +1234,11 @@ export function CreateProfileDialog({
                 className="mt-0.5 size-3.5 shrink-0"
                 aria-hidden="true"
               />
-              {t("fingerprint.crossOsWarning")}
+              {t(
+                isDesktopOs(selectedOs)
+                  ? "fingerprint.crossOsApostateWarning"
+                  : "fingerprint.crossOsWarning",
+              )}
             </motion.p>
           )}
 

@@ -633,8 +633,11 @@ async fn main() {
             ),
           };
 
-          let server =
-            donutbrowser_lib::vpn::socks5_server::WireGuardSocks5Server::new(wg_config, port);
+          let server = donutbrowser_lib::vpn::socks5_server::WireGuardSocks5Server::new(
+            wg_config,
+            port,
+            config.stack_os(),
+          );
           if let Err(e) = server
             .run(id.clone(), config_path.map(std::path::PathBuf::from))
             .await

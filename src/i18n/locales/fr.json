@@ -226,7 +226,7 @@
       "recordSites": "Enregistrer les sites visités",
       "recordSitesDescription": "Les statistiques de trafic listent les sites atteints par chaque profil. Désactivé, seuls les volumes de données sont conservés. Les profils protégés par mot de passe et éphémères n'enregistrent jamais de sites.",
       "pasteTyping": "Coller en tapant",
-      "pasteTypingDescription": "{{keys}} tape ce que vous avez copié dans le champ actif, touche par touche comme une personne, au lieu de le coller. Échap ou un clic l'arrête. Passez d'abord un outil de saisie vietnamien (Unikey, EVKey) en anglais ; les numéros de carte ne sont pas concernés."
+      "pasteTypingDescription": "Dans les navigateurs ouverts par Donut, {{paste}} tape ce que vous avez copié dans le champ actif, touche par touche comme une personne, au lieu de le coller. Les liens, les textes longs et les textes sur plusieurs lignes se collent comme d'habitude. {{keys}} tape dans n'importe quelle app. Échap ou un clic l'arrête."
     },
     "trashRetention": "Conserver les profils supprimés pendant",
     "trashRetentionDescription": "Les profils supprimés attendent dans la corbeille et peuvent être restaurés jusque-là. Ensuite, ils sont supprimés définitivement.",
@@ -1502,6 +1502,7 @@
   },
   "fingerprint": {
     "crossOsWarning": "L'usurpation d'empreinte pour un système d'exploitation différent est moins fiable car il est impossible d'imiter parfaitement tous les composants sous-jacents. À utiliser avec précaution.",
+    "crossOsApostateWarning": "Ce profil s'ouvre avec le moteur open source Apostate, téléchargé la première fois qu'il est nécessaire. Il faut un VPN ou un proxy, car sa connexion ne doit pas partir de cet ordinateur. Sur Apple silicon, il se présente comme un portable Windows sur ARM.",
     "crossOsLimitations": "L'usurpation d'empreinte inter-OS a des limitations. Les APIs au niveau du système peuvent toujours refléter votre système d'exploitation réel et certaines fonctionnalités peuvent avoir des performances réduites.",
     "osLabel": "Empreinte du système d'exploitation",
     "selectOSPlaceholder": "Sélectionner le système d'exploitation",
@@ -2785,6 +2786,10 @@
     "wayfernFingerprintGenerationFailed": "Impossible de créer une empreinte pour ce profil. {{detail}}",
     "wayfernGenerationLimitReached": "Limite temporaire de génération d'empreintes atteinte. Réessayez plus tard.",
     "wayfernCrossOsRequiresPlan": "Ce profil s'exécute en tant que {{detail}}, et cet ordinateur utilise un autre système d'exploitation. Pour l'ouvrir ici, il faut une formule Pro ou Team.",
+    "apostateDownloadFailed": "Le moteur de navigateur Apostate n'a pas pu être téléchargé. {{detail}}",
+    "apostateChecksumMismatch": "Le moteur de navigateur Apostate téléchargé ne correspond pas à sa somme de contrôle publiée ; il a été supprimé. Réessayez.",
+    "apostateUnsupportedHost": "Il n'existe pas de moteur de navigateur Apostate pour cet ordinateur : un profil d'un autre système d'exploitation ne peut pas s'y ouvrir.",
+    "apostateFeatureUnsupported": "Ce profil utilise le moteur Apostate, qui ne prend pas en charge cette fonction.",
     "wayfernCrossOsPrimaryDevice": "Ce profil s'exécute en tant que {{detail}}. Les profils d'un autre système d'exploitation ne fonctionnent que sur votre appareil principal. Déconnectez-vous de Donut Browser sur vos autres ordinateurs, puis réessayez.",
     "wayfernIdentityRefused": "Le navigateur n'a pas démarré avec l'identité de ce profil, il a donc été fermé. {{detail}}",
     "wayfernInstanceLimitReached": "Trop de navigateurs sont ouverts pour votre forfait. Fermez un navigateur et réessayez.",

@@ -44,9 +44,21 @@ pub fn generate(
   let major = browser_major(browser_version);
   let os = DesktopOs::from_name(os).unwrap_or(DesktopOs::Linux);
 
-  let screen = picker.pick(os.screens());
-  let gpu = picker.pick(os.gpus());
-  let cores = picker.pick(os.cores());
+  let catalog = &catalog().of(os);
+  let screen = picker.weighted(&catalog.screens, |s| s.4);
+  let gpus = coherent_gpus(os, &catalog.gpus);
+  let gpu = picker.weighted(&gpus, |g| g.2);
+  let (vendor, renderer) = (gpu.0.as_str(), gpu.1.as_str());
+  let cores = match apple_chip_cores(renderer) {
+    Some(counts) => *picker.pick(counts),
+    None => picker.weighted(&catalog.cores, |c| c.1).0,
+  };
+  // Chrome reports at most 8 GB, and a machine with many cores has that.
+  let memory = if cores >= 8 || matches!(os, DesktopOs::Macos) {
+    8
+  } else {
+    picker.weighted(&catalog.memory, |m| m.1).0
+  };
   let dark = picker.bool();
 
   let mut device = Map::new();
@@ -58,21 +70,27 @@ pub fn generate(
 
   device.insert("hardwareConcurrency".into(), json!(cores));
   device.insert("maxTouchPoints".into(), json!(0));
-  device.insert("deviceMemory".into(), json!(8));
+  device.insert("deviceMemory".into(), json!(memory));
 
-  let avail_height = screen.height.saturating_sub(screen.taskbar);
+  let (width, height, avail_height, dpr, _) = *screen;
   let outer_height = avail_height.saturating_sub(60).max(480);
   let inner_height = outer_height.saturating_sub(80).max(400);
-  device.insert("screenWidth".into(), json!(screen.width));
-  device.insert("screenHeight".into(), json!(screen.height));
-  device.insert("screenAvailWidth".into(), json!(screen.width));
+  // A Retina panel reports 30-bit color on macOS; everything else 24.
+  let depth = if matches!(os, DesktopOs::Macos) && dpr >= 2.0 {
+    30
+  } else {
+    24
+  };
+  device.insert("screenWidth".into(), json!(width));
+  device.insert("screenHeight".into(), json!(height));
+  device.insert("screenAvailWidth".into(), json!(width));
   device.insert("screenAvailHeight".into(), json!(avail_height));
-  device.insert("screenColorDepth".into(), json!(24));
-  device.insert("screenPixelDepth".into(), json!(24));
-  device.insert("devicePixelRatio".into(), json!(screen.dpr));
-  device.insert("windowOuterWidth".into(), json!(screen.width));
+  device.insert("screenColorDepth".into(), json!(depth));
+  device.insert("screenPixelDepth".into(), json!(depth));
+  device.insert("devicePixelRatio".into(), json!(dpr));
+  device.insert("windowOuterWidth".into(), json!(width));
   device.insert("windowOuterHeight".into(), json!(outer_height));
-  device.insert("windowInnerWidth".into(), json!(screen.width));
+  device.insert("windowInnerWidth".into(), json!(width));
   device.insert("windowInnerHeight".into(), json!(inner_height));
   device.insert("screenX".into(), json!(0));
   device.insert("screenY".into(), json!(0));
@@ -85,8 +103,8 @@ pub fn generate(
   device.insert("sessionStorage".into(), json!(true));
   device.insert("indexedDb".into(), json!(true));
 
-  device.insert("webglVendor".into(), json!(gpu.vendor));
-  device.insert("webglRenderer".into(), json!(gpu.renderer));
+  device.insert("webglVendor".into(), json!(vendor));
+  device.insert("webglRenderer".into(), json!(renderer));
   device.insert("webglVersion".into(), json!(WEBGL_VERSION));
   device.insert(
     "webglShadingLanguageVersion".into(),
@@ -95,7 +113,8 @@ pub fn generate(
   device.insert(
     "webglParameters".into(),
     json!(webgl_parameters(
-      gpu,
+      vendor,
+      renderer,
       WEBGL_VERSION,
       WEBGL_SHADING_LANGUAGE_VERSION
     )),
@@ -103,7 +122,8 @@ pub fn generate(
   device.insert(
     "webgl2Parameters".into(),
     json!(webgl_parameters(
-      gpu,
+      vendor,
+      renderer,
       WEBGL2_VERSION,
       WEBGL2_SHADING_LANGUAGE_VERSION
     )),
@@ -192,10 +212,15 @@ fn noise_seed(seed: &str, purpose: &str) -> String {
   hash.to_hex().chars().take(32).collect()
 }
 
-fn webgl_parameters(gpu: &Gpu, version: &str, shading_language_version: &str) -> String {
+fn webgl_parameters(
+  vendor: &str,
+  renderer: &str,
+  version: &str,
+  shading_language_version: &str,
+) -> String {
   json!({
-    "7936": gpu.vendor,
-    "7937": gpu.renderer,
+    "7936": vendor,
+    "7937": renderer,
     "7938": version,
     "35724": shading_language_version,
     "34921": 16,
@@ -250,6 +275,158 @@ impl Picker {
   fn bool(&mut self) -> bool {
     self.next() & 1 == 1
   }
+
+  /// One of `values`, each as likely as its weight.
+  fn weighted<'a, T>(&mut self, values: &'a [T], weight: impl Fn(&T) -> u64) -> &'a T {
+    let total: u64 = values.iter().map(&weight).sum();
+    if total == 0 {
+      return self.pick(values);
+    }
+    let mut at = self.next() % total;
+    for value in values {
+      let w = weight(value);
+      if at < w {
+        return value;
+      }
+      at -= w;
+    }
+    &values[values.len() - 1]
+  }
+}
+
+/// How often real desktops show each screen, GPU, core count and memory size.
+/// Built from Apify's fingerprint-suite (Apache-2.0, Copyright 2018 Apify
+/// Technologies s.r.o., https://github.com/apify/fingerprint-suite): software
+/// renderers, phone and VM GPUs, zoomed screens and impossible core counts are
+/// dropped, memory is rounded the way Chrome reports it. The values are
+/// marginals: what goes together is decided here, not by the data.
+const DEVICES_JSON: &str = include_str!("fingerprint_devices.json");
+
+#[derive(serde::Deserialize)]
+struct Catalog {
+  windows: OsCatalog,
+  macos: OsCatalog,
+  linux: OsCatalog,
+}
+
+#[derive(serde::Deserialize)]
+struct OsCatalog {
+  /// Width, height, available height, pixel ratio, weight.
+  screens: Vec<(u32, u32, u32, f64, u64)>,
+  /// WebGL vendor, renderer, weight.
+  gpus: Vec<(String, String, u64)>,
+  cores: Vec<(u32, u64)>,
+  memory: Vec<(u32, u64)>,
+}
+
+impl Catalog {
+  fn of(&self, os: DesktopOs) -> &OsCatalog {
+    match os {
+      DesktopOs::Windows => &self.windows,
+      DesktopOs::Macos => &self.macos,
+      DesktopOs::Linux => &self.linux,
+    }
+  }
+}
+
+fn catalog() -> &'static Catalog {
+  static CATALOG: std::sync::OnceLock<Catalog> = std::sync::OnceLock::new();
+  CATALOG.get_or_init(|| serde_json::from_str(DEVICES_JSON).expect("fingerprint_devices.json"))
+}
+
+/// The CPU cores an Apple chip has, from its WebGL renderer name.
+fn apple_chip_cores(renderer: &str) -> Option<&'static [u32]> {
+  let (_, chip) = renderer.split_once("Renderer: Apple ")?;
+  let chip = chip.split(',').next()?.trim();
+  Some(match chip {
+    "M1" | "M2" | "M3" => &[8],
+    "M1 Pro" => &[8, 10],
+    "M1 Max" => &[10],
+    "M1 Ultra" => &[20],
+    "M2 Pro" => &[10, 12],
+    "M2 Max" => &[12],
+    "M2 Ultra" => &[24],
+    "M3 Pro" => &[11, 12],
+    "M3 Max" => &[14, 16],
+    "M3 Ultra" => &[28, 32],
+    "M4" | "M5" => &[10],
+    "M4 Pro" => &[12, 14],
+    "M4 Max" => &[14, 16],
+    _ => return None,
+  })
+}
+
+/// The GPUs a profile can claim on this machine. WebGL draws on the real
+/// GPU, so a renderer of another vendor than the host's shows in its pixels;
+/// an Apple chip whose core count is unknown is left out.
+fn coherent_gpus(os: DesktopOs, gpus: &[(String, String, u64)]) -> Vec<(String, String, u64)> {
+  let vendors = if DesktopOs::host() == Some(os) {
+    host_gpu_vendors()
+  } else {
+    Vec::new()
+  };
+  let fits = |renderer: &str| {
+    let apple = renderer.starts_with("ANGLE (Apple");
+    (!apple || apple_chip_cores(renderer).is_some())
+      && (vendors.is_empty()
+        || vendors
+          .iter()
+          .any(|vendor| renderer.starts_with(&format!("ANGLE ({vendor}"))))
+  };
+  let coherent: Vec<_> = gpus.iter().filter(|g| fits(&g.1)).cloned().collect();
+  if coherent.is_empty() {
+    gpus.to_vec()
+  } else {
+    coherent
+  }
+}
+
+#[cfg(target_os = "macos")]
+fn host_gpu_vendors() -> Vec<&'static str> {
+  if cfg!(target_arch = "aarch64") {
+    vec!["Apple"]
+  } else {
+    vec!["Intel", "AMD"]
+  }
+}
+
+/// The display adapters Windows has drivers for.
+#[cfg(target_os = "windows")]
+fn host_gpu_vendors() -> Vec<&'static str> {
+  use winreg::{enums::HKEY_LOCAL_MACHINE, RegKey};
+  let Ok(class) = RegKey::predef(HKEY_LOCAL_MACHINE)
+    .open_subkey(r"SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}")
+  else {
+    return Vec::new();
+  };
+  let mut vendors = Vec::new();
+  for name in class.enum_keys().flatten() {
+    let Ok(adapter) = class.open_subkey(&name) else {
+      continue;
+    };
+    let Ok(description) = adapter.get_value::<String, _>("DriverDesc") else {
+      continue;
+    };
+    let description = description.to_ascii_lowercase();
+    let vendor = if description.contains("nvidia") {
+      "NVIDIA"
+    } else if description.contains("intel") {
+      "Intel"
+    } else if description.contains("amd") || description.contains("radeon") {
+      "AMD"
+    } else {
+      continue;
+    };
+    if !vendors.contains(&vendor) {
+      vendors.push(vendor);
+    }
+  }
+  vendors
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+fn host_gpu_vendors() -> Vec<&'static str> {
+  Vec::new()
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -266,6 +443,18 @@ impl DesktopOs {
       "macos" => Some(Self::Macos),
       "linux" => Some(Self::Linux),
       _ => None,
+    }
+  }
+
+  fn host() -> Option<Self> {
+    if cfg!(target_os = "windows") {
+      Some(Self::Windows)
+    } else if cfg!(target_os = "macos") {
+      Some(Self::Macos)
+    } else if cfg!(target_os = "linux") {
+      Some(Self::Linux)
+    } else {
+      None
     }
   }
 
@@ -296,138 +485,6 @@ impl DesktopOs {
       Self::Windows => "15.0.0",
       Self::Macos => "15.6.1",
       Self::Linux => "6.8.0",
-    }
-  }
-
-  fn cores(self) -> &'static [u32] {
-    match self {
-      Self::Windows => &[8, 12, 16],
-      Self::Macos => &[8, 10, 12],
-      Self::Linux => &[8, 12, 16],
-    }
-  }
-
-  fn screens(self) -> &'static [Screen] {
-    match self {
-      Self::Windows => &[
-        Screen {
-          width: 1920,
-          height: 1080,
-          dpr: 1.0,
-          taskbar: 40,
-        },
-        Screen {
-          width: 2560,
-          height: 1440,
-          dpr: 1.0,
-          taskbar: 40,
-        },
-        Screen {
-          width: 1366,
-          height: 768,
-          dpr: 1.0,
-          taskbar: 40,
-        },
-        Screen {
-          width: 1920,
-          height: 1080,
-          dpr: 1.25,
-          taskbar: 40,
-        },
-      ],
-      Self::Macos => &[
-        Screen {
-          width: 1512,
-          height: 982,
-          dpr: 2.0,
-          taskbar: 25,
-        },
-        Screen {
-          width: 1728,
-          height: 1117,
-          dpr: 2.0,
-          taskbar: 25,
-        },
-        Screen {
-          width: 1440,
-          height: 900,
-          dpr: 2.0,
-          taskbar: 25,
-        },
-        Screen {
-          width: 2560,
-          height: 1440,
-          dpr: 1.0,
-          taskbar: 25,
-        },
-      ],
-      Self::Linux => &[
-        Screen {
-          width: 1920,
-          height: 1080,
-          dpr: 1.0,
-          taskbar: 27,
-        },
-        Screen {
-          width: 2560,
-          height: 1440,
-          dpr: 1.0,
-          taskbar: 27,
-        },
-        Screen {
-          width: 1366,
-          height: 768,
-          dpr: 1.0,
-          taskbar: 27,
-        },
-      ],
-    }
-  }
-
-  fn gpus(self) -> &'static [Gpu] {
-    match self {
-      Self::Windows => &[
-        Gpu {
-          vendor: "Google Inc. (NVIDIA)",
-          renderer: "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 (0x00002503) Direct3D11 vs_5_0 ps_5_0, D3D11)",
-        },
-        Gpu {
-          vendor: "Google Inc. (Intel)",
-          renderer: "ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)",
-        },
-        Gpu {
-          vendor: "Google Inc. (AMD)",
-          renderer: "ANGLE (AMD, AMD Radeon RX 6600 (0x000073FF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
-        },
-      ],
-      Self::Macos => &[
-        Gpu {
-          vendor: "Google Inc. (Apple)",
-          renderer: "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
-        },
-        Gpu {
-          vendor: "Google Inc. (Apple)",
-          renderer: "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
-        },
-        Gpu {
-          vendor: "Google Inc. (Apple)",
-          renderer: "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
-        },
-      ],
-      Self::Linux => &[
-        Gpu {
-          vendor: "Google Inc. (Intel)",
-          renderer: "ANGLE (Intel, Mesa Intel(R) UHD Graphics 630 (CFL GT2), OpenGL 4.6)",
-        },
-        Gpu {
-          vendor: "Google Inc. (AMD)",
-          renderer: "ANGLE (AMD, AMD Radeon RX 6600 (radeonsi, navi23, LLVM 17.0.6, DRM 3.57, 6.8.0), OpenGL 4.6)",
-        },
-        Gpu {
-          vendor: "Google Inc. (NVIDIA)",
-          renderer: "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060/PCIe/SSE2, OpenGL 4.6.0 NVIDIA 550.54.14)",
-        },
-      ],
     }
   }
 
@@ -628,18 +685,6 @@ fn voice(name: &str, lang: &str, local: bool, default: bool) -> Value {
   })
 }
 
-struct Screen {
-  width: u32,
-  height: u32,
-  dpr: f64,
-  taskbar: u32,
-}
-
-struct Gpu {
-  vendor: &'static str,
-  renderer: &'static str,
-}
-
 const PLUGINS_JSON: &str = r#"[{"name":"PDF Viewer","filename":"internal-pdf-viewer","description":"Portable Document Format","mimeTypes":[{"type":"application/pdf","description":"Portable Document Format","suffixes":"pdf"}]},{"name":"Chrome PDF Viewer","filename":"internal-pdf-viewer","description":"Portable Document Format","mimeTypes":[{"type":"application/pdf","description":"Portable Document Format","suffixes":"pdf"}]},{"name":"Chromium PDF Viewer","filename":"internal-pdf-viewer","description":"Portable Document Format","mimeTypes":[{"type":"application/pdf","description":"Portable Document Format","suffixes":"pdf"}]},{"name":"Microsoft Edge PDF Viewer","filename":"internal-pdf-viewer","description":"Portable Document Format","mimeTypes":[{"type":"application/pdf","description":"Portable Document Format","suffixes":"pdf"}]},{"name":"WebKit built-in PDF","filename":"internal-pdf-viewer","description":"Portable Document Format","mimeTypes":[{"type":"application/pdf","description":"Portable Document Format","suffixes":"pdf"}]}]"#;
 
 const MIME_TYPES_JSON: &str =
@@ -732,6 +777,47 @@ mod tests {
     assert!(read("windowOuterHeight") <= read("screenAvailHeight"));
     assert!(read("screenAvailHeight") <= read("screenHeight"));
     assert_eq!(read("windowOuterWidth"), read("screenWidth"));
+  }
+
+  #[test]
+  fn many_profiles_spread_over_many_real_devices() {
+    let mut renderers = std::collections::HashSet::new();
+    let mut screens = std::collections::HashSet::new();
+    for i in 0..400 {
+      let device = device(&format!("profile-{i}"), "windows", None);
+      renderers.insert(device["webglRenderer"].as_str().unwrap().to_string());
+      screens.insert((
+        device["screenWidth"].as_u64().unwrap(),
+        device["screenHeight"].as_u64().unwrap(),
+      ));
+      assert!(device["deviceMemory"].as_u64().unwrap() <= 8);
+      assert_eq!(device["screenColorDepth"], json!(24));
+    }
+    assert!(renderers.len() >= 10, "{}", renderers.len());
+    assert!(screens.len() >= 6, "{}", screens.len());
+  }
+
+  #[test]
+  fn an_apple_chip_claims_the_cores_it_has() {
+    for i in 0..200 {
+      let device = device(&format!("mac-{i}"), "macos", None);
+      let renderer = device["webglRenderer"].as_str().unwrap();
+      let cores = device["hardwareConcurrency"].as_u64().unwrap() as u32;
+      if let Some(counts) = apple_chip_cores(renderer) {
+        assert!(counts.contains(&cores), "{renderer} with {cores} cores");
+      }
+      if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        assert!(renderer.starts_with("ANGLE (Apple"), "{renderer}");
+      }
+    }
+    assert_eq!(
+      apple_chip_cores("ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)"),
+      Some(&[8u32, 10][..])
+    );
+    assert_eq!(
+      apple_chip_cores("ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"),
+      None
+    );
   }
 
   #[test]

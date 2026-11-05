@@ -50,7 +50,7 @@ donutbrowser/
 │   │   ├── navigation_watch.rs      # Whether a CDP action navigated, so a click waits only for a load that comes
 │   │   ├── network_capture.rs       # MCP network capture: one browser-level socket per profile, in memory, credentials redacted
 │   │   ├── agent_uploads.rs         # Files an agent sends to file_upload, kept until the browser stops
-│   │   ├── paste_typing.rs          # Ctrl+Alt+V / ⌘⌥V types the clipboard into the focused field as OS key presses with human timing
+│   │   ├── paste_typing.rs          # Ctrl/⌘+V in a Donut browser (Ctrl+Alt+V / ⌘⌥V anywhere) types the clipboard as OS key presses with human timing
 │   │   ├── mcp_remote.rs            # Remote MCP bridge: outbound websocket to Donut cloud (Enterprise remote control)
 │   │   ├── mcp_integrations.rs      # 20-client MCP installer: remote endpoint with bearer, format-preserving JSONC/TOML edits
 │   │   ├── automation_rate_limiter.rs # Shared REST/MCP automation quota
@@ -61,12 +61,14 @@ donutbrowser/
 │   │   ├── cloud_api.rs             # Signed-in JSON calls to Donut cloud, with token refresh and error codes
 │   │   ├── feedback.rs              # Feedback to the Donut team from the dialog and the send_feedback MCP tool, optional redacted logs
 │   │   ├── sync/                    # Cloud sync (engine, encryption, manifest, scheduler, lease: one device at a time per profile)
-│   │   ├── vpn/                     # WireGuard tunnels
+│   │   ├── vpn/                     # WireGuard tunnels; tcp_shape.rs gives the worker's TCP/IP packets the claimed OS's SYN layout, TTL and window scaling
 │   │   ├── ramfs/                   # Windows RAM volume for ephemeral profiles: in-memory file system on WinFsp, hosted by donut-proxy
 │   │   ├── xray/                    # Xray share links (VLESS, VMess, Trojan, Hysteria2): parse, export, client config
 │   │   ├── xray_worker_runner.rs    # Xray-core sidecar lifecycle
 │   │   ├── xray_worker_storage.rs   # Private Xray worker state and runtime files
-│   │   ├── wayfern_manager.rs       # Wayfern (Chromium) browser management
+│   │   ├── wayfern_manager.rs       # Wayfern (Chromium) browser management; wayfern_manager/apostate_launch.rs launches Apostate profiles
+│   │   ├── apostate.rs              # Open-source Apostate engine for profiles claiming another desktop OS: pinned download, sha256, persona switches
+│   │   ├── fingerprint_generator.rs # Local device payloads, drawn from fingerprint_devices.json (weighted real-desktop marginals, Apache-2.0 Apify data)
 │   │   ├── downloader.rs           # Browser binary downloader
 │   │   ├── extraction.rs           # Archive extraction (zip, tar, dmg, msi)
 │   │   ├── portable_update.rs      # Portable Windows ZIP self-update: staged in .update/, files swapped at restart
@@ -81,7 +83,6 @@ donutbrowser/
 │   │   ├── profile_statuses.rs     # Synced profile statuses (name + color) set on profiles
 │   │   ├── totp.rs                 # RFC 6238 codes; profile_totp.rs keeps sealed per-profile keys (device only)
 │   │   ├── fingerprint_consistency.rs # Launch-time proxy exit vs fingerprint timezone/language check
-│   │   ├── fingerprint_generator.rs # Local full-device generation for self-hosted accounts
 │   │   ├── dns_blocklist.rs         # Hagezi DNS blocklists + user custom lists/allowlist
 │   │   ├── traffic_stats.rs         # Per-profile traffic stats + secure history erase
 │   │   ├── extension_manager.rs    # Browser extension management
@@ -100,7 +101,7 @@ donutbrowser/
 │   └── tests/                      # End-to-end tests: the binary against the compose S3 server
 │   └── src/                        # Controllers, services, auth, S3 sync
 ├── vietflow/sync-server/           # Vietflow fork: donut-sync deploy (VPS with Caddy HTTPS, or LAN) and its Vietnamese guide
-├── vietflow/control-plane/         # Self-hosted account/control plane (Node, no deps): device sign-in, unlimited entitlements, profile locks; cloud-only services off
+├── vietflow/control-plane/         # Self-hosted account/control plane (Node, no deps): team members and /admin page, per-user sign-in, unlimited entitlements, profile locks, per-device activity log
 ├── e2e/                            # Isolated native UI/sync/Wayfern E2E system
 │   ├── app/                        # Test-only Tauri harness that injects the private driver
 │   ├── lib/                        # WebDriver, CDP, fixtures, app-session helpers

@@ -19,7 +19,8 @@ services:
       TEAM_ID: ${TEAM_ID:-local-team}
       TEAM_NAME: ${TEAM_NAME:-Vietflow}
       DATA_DIR: /data
-    # The activity log is the only state this service keeps.
+    # The activity log, the agent routines and the member list are the only
+    # state this service keeps.
     volumes:
       - control_data:/data
     # Uncomment to reach it directly from the LAN instead of through Caddy:

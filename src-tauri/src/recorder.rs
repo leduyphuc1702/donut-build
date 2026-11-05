@@ -254,6 +254,7 @@ pub async fn start_recipe_recording(
     .into_iter()
     .find(|p| p.id.to_string() == profile_id)
     .ok_or_else(|| crate::backend_error("PROFILE_NOT_FOUND"))?;
+  crate::apostate::refuse_wayfern_only(&profile)?;
   if !crate::wayfern_manager::supports_wayfern_152(&profile.version) {
     return Err(err("WAYFERN_152_REQUIRED"));
   }

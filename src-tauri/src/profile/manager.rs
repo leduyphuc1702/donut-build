@@ -397,6 +397,11 @@ impl ProfileManager {
     let final_wayfern_config = if browser == "wayfern" {
       let mut config = wayfern_config.unwrap_or_default();
 
+      // The engine follows the OS the profile claims and is decided once, here:
+      // a desktop OS other than this machine's runs on Apostate, everything
+      // else on Wayfern. A caller cannot name it.
+      config.engine = crate::apostate::engine_for_new_profile(config.os.as_deref());
+
       // Always ensure executable_path is set to the user's binary location
       // Pass upstream proxy information to config for fingerprint generation
       if let Some(proxy_id_ref) = &proxy_id {
@@ -417,7 +422,8 @@ impl ProfileManager {
       // identity and the choices become overrides. A locally generated device
       // is already complete and has no identity to attach choices to, so it is
       // stored as the payload and applied directly.
-      let local_generation = crate::fingerprint_generator::local_generation_enabled();
+      let local_generation =
+        config.uses_apostate() || crate::fingerprint_generator::local_generation_enabled();
       let supplied_device =
         if crate::wayfern_manager::supports_wayfern_152(version) && !local_generation {
           config
@@ -609,6 +615,14 @@ impl ProfileManager {
 
       // Clear the proxy from config after fingerprint generation
       config.proxy = None;
+
+      // The engine is a download of its own. Start it now so the first launch
+      // does not wait for it; the launch fetches it if this did not finish.
+      if config.uses_apostate() {
+        tauri::async_runtime::spawn(async {
+          let _ = crate::apostate::ensure_installed().await;
+        });
+      }
 
       Some(config)
     } else {

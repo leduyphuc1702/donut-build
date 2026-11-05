@@ -1,0 +1,1248 @@
+{
+  "source": {
+    "name": "Apify fingerprint-suite (fingerprint-generator 2.1.89)",
+    "url": "https://github.com/apify/fingerprint-suite",
+    "license": "Apache-2.0",
+    "copyright": "Copyright 2018 Apify Technologies s.r.o."
+  },
+  "windows": {
+    "screens": [
+      [1536, 864, 816, 1.25, 7057],
+      [1920, 1080, 1032, 1, 6225],
+      [1920, 1080, 1040, 1, 2474],
+      [1280, 720, 672, 1.5, 2061],
+      [1366, 768, 728, 1, 1461],
+      [1366, 768, 720, 1, 1179],
+      [2560, 1440, 1392, 1, 1120],
+      [2560, 1440, 1440, 1, 1102],
+      [1680, 1050, 1050, 1.25, 1101],
+      [1536, 864, 824, 1.25, 1046],
+      [1920, 1080, 1080, 1, 962],
+      [1536, 960, 912, 1.25, 731],
+      [1536, 864, 864, 1.25, 683],
+      [1280, 800, 752, 1.5, 616],
+      [1280, 720, 680, 1.5, 446],
+      [3440, 1440, 1392, 1, 401],
+      [1366, 768, 768, 1, 345],
+      [1440, 900, 852, 2, 334],
+      [2560, 1440, 1392, 1.5, 320],
+      [1707, 1067, 1019, 1.5, 318],
+      [1280, 720, 720, 1.5, 305],
+      [2048, 1152, 1104, 1.25, 224],
+      [1920, 1200, 1152, 1, 213],
+      [1600, 900, 860, 1, 200],
+      [1680, 1050, 1050, 1, 192],
+      [1440, 900, 900, 1, 185],
+      [2560, 1440, 1400, 1, 170],
+      [1366, 768, 768, 1.5, 166],
+      [2560, 1080, 1032, 1, 156],
+      [3840, 2160, 2160, 1, 146],
+      [1707, 960, 912, 1.5, 143],
+      [1920, 1080, 1050, 1, 138],
+      [1280, 800, 752, 2, 137],
+      [1504, 1003, 955, 1.5, 117],
+      [1600, 900, 852, 1, 116],
+      [1280, 800, 800, 1.5, 110],
+      [1680, 1050, 1010, 1, 96],
+      [1366, 768, 738, 1, 93],
+      [2560, 1440, 1440, 1.5, 82],
+      [3840, 2160, 2160, 1.5, 79]
+    ],
+    "gpus": [
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x00009A49) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        2494
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics 620 (0x00005917) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        1403
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001638) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        1030
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics 620 (0x00003EA0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        966
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x00009B41) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        920
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x000046A8) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        820
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x000046A6) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        805
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x0000A7A1) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        751
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) HD Graphics 620 (0x00005916) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        712
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon(TM) Graphics (0x0000164C) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        705
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        645
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001636) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        626
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) HD Graphics 520 (0x00001916) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        608
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x000046A3) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        586
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x00008A56) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        554
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon (TM) Graphics (0x000015E7) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        511
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x00009BC4) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        505
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Arc(TM) Graphics (0x00007D55) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        501
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A78) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        459
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Iris(R) Xe Graphics (0x0000A7A0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        458
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x0000A7A8) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        450
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 (0x00002882) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        426
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 (0x00002504) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        371
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Graphics (0x00007D45) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        365
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x00004628) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        353
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon(TM) Vega 8 Graphics (0x000015D8) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        352
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) HD Graphics 4600 (0x00000412) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        343
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) HD Graphics 530 (0x00001912) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        311
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Iris(R) Plus Graphics (0x00008A52) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        305
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) HD Graphics 5500 (0x00001616) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        277
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A60) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        276
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon(TM) Graphics (0x000015D8) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        275
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics 730 (0x00004692) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        267
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x000046B3) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        262
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x00009A68) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        261
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001681) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        243
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon(TM) Graphics (0x00001506) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        240
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x0000A78B) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        224
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x0000A788) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        222
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce GTX 1050 Ti (0x00001C82) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        221
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) HD Graphics 630 (0x00005912) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        218
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x0000A721) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        214
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 (0x00001F82) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        214
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 SUPER (0x000021C4) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        207
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00009BC8) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        191
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) HD Graphics 4000 (0x00000166) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        187
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 (0x00001F99) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        186
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 Laptop GPU (0x000025A2) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        186
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 5060 Ti (0x00002D04) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        184
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 (0x00002484) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        180
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon 780M Graphics (0x00001900) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        175
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 5090 (0x00002B85) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        175
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 (0x00002786) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        169
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 (0x00002F04) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        160
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce GT 1030 (0x00001D01) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        156
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 5070 Ti (0x00002C05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        156
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) HD Graphics 630 (0x0000591B) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        150
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 5080 (0x00002C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        147
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) HD Graphics (0x00000152) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        147
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 2060 SUPER (0x00001F06) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        143
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics 600 (0x00003185) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        142
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 5060 (0x00002D05) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        137
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Ti (0x00002803) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        134
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 3070 Ti (0x00002482) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        133
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 3050 (0x00002584) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        131
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) HD Graphics 4600 (0x00000416) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        131
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics 770 (0x00004680) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        130
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon RX 580 2048SP (0x00006FDF) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        129
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce GTX 1660 Ti (0x00002182) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        128
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 3080 (0x00002216) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        126
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 3090 (0x00002204) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        123
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Laptop GPU (0x000028A0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        123
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Arc(TM) 140V GPU (16GB) (0x000064A0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        122
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Graphics (0x0000A7AC) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        118
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) HD Graphics 530 (0x0000191B) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        117
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 4060 Laptop GPU (0x000028E0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        117
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce GT 710 (0x0000128B) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        117
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 SUPER (0x00002783) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        115
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce GTX 1650 (0x00001F91) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        115
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E92) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        113
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 4070 Ti SUPER (0x00002705) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        110
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Ti (0x00002489) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        108
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 2070 SUPER (0x00001E84) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        108
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics (0x0000A7A9) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        105
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 4050 Laptop GPU (0x000028E1) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        105
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) Graphics (0x00007D67) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        103
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Laptop GPU (0x00002520) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        103
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce GTX 1060 3GB (0x00001C02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        102
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, NVIDIA GeForce GT 730 (0x00000F02) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        102
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Intel(R) UHD Graphics 770 (0x0000A780) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+        101
+      ]
+    ],
+    "cores": [
+      [8, 10172],
+      [12, 8290],
+      [4, 6075],
+      [16, 5193],
+      [20, 1529],
+      [24, 886],
+      [6, 879],
+      [32, 823],
+      [14, 502],
+      [28, 419],
+      [10, 212]
+    ],
+    "memory": [[2, 23], [4, 3313], [8, 34923]]
+  },
+  "macos": {
+    "screens": [
+      [1680, 1050, 1050, 2, 2079],
+      [1440, 900, 900, 2, 1612],
+      [1920, 1080, 1050, 1, 1611],
+      [1470, 956, 923, 2, 1385],
+      [1512, 982, 949, 2, 1359],
+      [1920, 1080, 1080, 2, 1061],
+      [1440, 900, 870, 2, 865],
+      [1920, 1080, 1050, 2, 727],
+      [1728, 1117, 1084, 2, 639],
+      [1920, 1080, 1080, 1, 603],
+      [1366, 768, 768, 2, 570],
+      [1440, 900, 875, 2, 542],
+      [1920, 1080, 1055, 1, 523],
+      [1470, 956, 924, 2, 446],
+      [2560, 1440, 1410, 1, 438],
+      [1512, 982, 950, 2, 407],
+      [2560, 1440, 1410, 2, 364],
+      [2560, 1440, 1440, 2, 361],
+      [2560, 1440, 1440, 1, 353],
+      [3440, 1440, 1410, 1, 331],
+      [1710, 1107, 1073, 2, 309],
+      [1728, 1117, 1085, 2, 277],
+      [1280, 800, 800, 2, 271],
+      [1800, 1169, 1130, 2, 251],
+      [1728, 1117, 1079, 2, 247],
+      [1512, 982, 944, 2, 246],
+      [1470, 956, 922, 2, 232],
+      [1512, 982, 868, 2, 226],
+      [2056, 1329, 1290, 2, 221],
+      [2560, 1440, 1415, 1, 215],
+      [1440, 900, 900, 1, 214],
+      [1920, 1080, 1049, 1, 206],
+      [1710, 1107, 1074, 2, 193],
+      [1920, 1080, 985, 1, 191],
+      [3840, 2160, 2160, 1, 177],
+      [1680, 1050, 1020, 2, 175],
+      [1512, 982, 948, 2, 158],
+      [2560, 1080, 1050, 1, 156],
+      [3440, 1440, 1415, 1, 154],
+      [3008, 1692, 1662, 2, 146]
+    ],
+    "gpus": [
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+        6672
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M1, Unspecified Version)",
+        5980
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)",
+        4507
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Pro, Unspecified Version)",
+        3829
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Pro, Unspecified Version)",
+        2992
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M3, Unspecified Version)",
+        2426
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Pro, Unspecified Version)",
+        1975
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Pro, Unspecified Version)",
+        1361
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Max, Unspecified Version)",
+        1232
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, ANGLE Metal Renderer: Intel(R) UHD Graphics 630, Unspecified Version)",
+        1219
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M4 Max, Unspecified Version)",
+        1104
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M5, Unspecified Version)",
+        1067
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Pro, Unspecified Version)",
+        657
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Max, Unspecified Version)",
+        624
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Max, Unspecified Version)",
+        608
+      ],
+      [
+        "Google Inc. (Intel Inc.)",
+        "ANGLE (Intel Inc., Intel(R) HD Graphics 6000, OpenGL 4.1)",
+        423
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, ANGLE Metal Renderer: Intel(R) Iris(TM) Plus Graphics 645, Unspecified Version)",
+        379
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, ANGLE Metal Renderer: Intel(R) Iris(TM) Plus Graphics, Unspecified Version)",
+        351
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)",
+        275
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, ANGLE Metal Renderer: Intel(R) Iris(TM) Plus Graphics 640, Unspecified Version)",
+        235
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, ANGLE Metal Renderer: Intel(R) Iris(TM) Plus Graphics 655, Unspecified Version)",
+        224
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, ANGLE Metal Renderer: Intel(R) UHD Graphics 617, Unspecified Version)",
+        177
+      ],
+      [
+        "Google Inc. (Intel Inc.)",
+        "ANGLE (Intel Inc., Intel(R) Iris(TM) Graphics 6100, OpenGL 4.1)",
+        121
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, ANGLE Metal Renderer: AMD Radeon Pro 5300, Unspecified Version)",
+        96
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, ANGLE Metal Renderer: Intel(R) HD Graphics 630, Unspecified Version)",
+        86
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M2 Ultra, Unspecified Version)",
+        79
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, ANGLE Metal Renderer: AMD Radeon Pro 555X, Unspecified Version)",
+        71
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, ANGLE Metal Renderer: Intel(R) HD Graphics 530, Unspecified Version)",
+        64
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M1 Ultra, Unspecified Version)",
+        56
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, ANGLE Metal Renderer: Intel(R) Iris(TM) Graphics 550, Unspecified Version)",
+        46
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, ANGLE Metal Renderer: AMD Radeon Pro 560X, Unspecified Version)",
+        39
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M3 Ultra, Unspecified Version)",
+        38
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, ANGLE Metal Renderer: AMD Radeon Pro 570X, Unspecified Version)",
+        36
+      ]
+    ],
+    "cores": [
+      [8, 13096],
+      [10, 10992],
+      [12, 2998],
+      [14, 2197],
+      [6, 1780],
+      [4, 1717],
+      [16, 738]
+    ],
+    "memory": [[2, 296], [4, 1809], [8, 37220]]
+  },
+  "linux": {
+    "screens": [
+      [1920, 1080, 1080, 1, 9176],
+      [2560, 1440, 1440, 1, 3710],
+      [1920, 1080, 1053, 1, 2306],
+      [1440, 900, 900, 1, 1207],
+      [1920, 1080, 1048, 1, 1088],
+      [2560, 1440, 1408, 1.5, 973],
+      [3840, 2160, 2160, 1, 792],
+      [1680, 1050, 1050, 1.25, 784],
+      [1366, 768, 768, 1, 685],
+      [1600, 900, 900, 1, 683],
+      [3440, 1440, 1440, 1, 666],
+      [1536, 864, 864, 1.25, 536],
+      [3072, 1728, 1728, 1.25, 535],
+      [1536, 864, 793, 1.25, 533],
+      [1920, 1080, 1080, 1.25, 526],
+      [2560, 1440, 1408, 1, 520],
+      [1920, 1080, 1080, 1.5, 520],
+      [1920, 1080, 1036, 1, 431],
+      [1280, 800, 800, 1, 408],
+      [2048, 1152, 1152, 1.25, 403],
+      [1366, 768, 768, 1.5, 390],
+      [1680, 1050, 1050, 1, 387],
+      [1600, 900, 898, 1, 315],
+      [1366, 768, 733, 1, 290],
+      [2560, 1440, 1392, 1, 289],
+      [1707, 960, 960, 1.5, 282],
+      [1920, 1200, 1200, 1.5, 273],
+      [1536, 864, 837, 1.25, 273],
+      [1680, 1050, 1050, 2, 251],
+      [2560, 1600, 1568, 1, 251],
+      [1280, 800, 800, 2, 228],
+      [5120, 1440, 1440, 1, 159],
+      [2560, 1440, 1358, 1, 151],
+      [1920, 1080, 1048, 1.5, 149],
+      [1366, 900, 900, 1, 148],
+      [1800, 1200, 1152, 1, 143],
+      [1280, 720, 720, 1, 143],
+      [1704, 1065, 1065, 1.5, 142],
+      [1920, 1080, 1052, 1, 140],
+      [1920, 1080, 972, 1, 137]
+    ],
+    "gpus": [
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon Graphics (radeonsi renoir ACO), OpenGL ES 3.2)",
+        2141
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL 4.5.0)",
+        1856
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics (CML GT2), OpenGL ES 3.2)",
+        1792
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Iris(R) Xe Graphics (TGL GT2), OpenGL ES 3.2)",
+        1057
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL ES 3.2)",
+        947
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 620 (KBL GT2), OpenGL ES 3.2)",
+        855
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon RX 580 Series (polaris10 LLVM 15.0.7), OpenGL 4.6)",
+        841
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (WHL GT2), OpenGL 4.6)",
+        828
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon Graphics (radeonsi renoir ACO), OpenGL 4.6)",
+        727
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics (TGL GT1), OpenGL 4.6)",
+        661
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 4600 (HSW GT2), OpenGL ES 3.2)",
+        605
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Graphics (ADL GT2), OpenGL 4.6)",
+        555
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (WHL GT2), OpenGL ES 3.2)",
+        530
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Graphics (RPL-P), OpenGL 4.6)",
+        521
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon 660M (radeonsi rembrandt LLVM 20.1.2), OpenGL 4.6)",
+        518
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Arc(tm) Graphics (MTL), OpenGL ES 3.2)",
+        514
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 3000 (SNB GT2), OpenGL 3.3)",
+        432
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 5090/PCIe/SSE2, OpenGL 4.5.0)",
+        429
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon 860M (radeonsi gfx1152 LLVM 20.1.2 DRM 3.64 6.17.0-14-generic), OpenGL ES 3.2)",
+        426
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics (ADL-S GT0.5), OpenGL ES 3.2)",
+        424
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 620 (KBL GT2), OpenGL 4.6)",
+        422
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Graphics (RPL-U), OpenGL 4.6)",
+        420
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, RENOIR(renoir LLVM 15.0.7), OpenGL 4.6)",
+        414
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Iris(R) Xe Graphics (RPL-P), OpenGL ES 3.2)",
+        411
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Graphics (ADL GT2), OpenGL ES 3.2)",
+        410
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1060 6GB/PCIe/SSE2, OpenGL 4.5.0)",
+        407
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 2500 (IVB GT1), OpenGL ES 3.0)",
+        405
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 5500 (BDW GT2), OpenGL 4.6)",
+        390
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 520 (SKL GT2), OpenGL ES 3.2)",
+        385
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Graphics (ARL), OpenGL 4.6)",
+        384
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics (ICL GT1), OpenGL ES 3.2)",
+        310
+      ],
+      [
+        "Google Inc. (NVIDIA)",
+        "ANGLE (NVIDIA, Vulkan 1.4.329 (NVIDIA NVIDIA GeForce RTX 3050 Laptop GPU (0x000025A2)), NVIDIA)",
+        307
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon Graphics (radeonsi gfx1152 LLVM 20.1.2), OpenGL 4.6)",
+        304
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Graphics (LNL), OpenGL ES 3.2)",
+        300
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics (TGL GT2), OpenGL ES 3.2)",
+        294
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Ryzen 9 9950X 16-Core Processor (radeonsi raphael_mendocino LLVM 20.1.2), OpenGL 4.6)",
+        292
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4070 Ti/PCIe/SSE2, OpenGL 4.5.0)",
+        285
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon Graphics (radeonsi gfx1150 LLVM 20.1.2), OpenGL ES 3.2)",
+        285
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3080 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+        283
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Graphics (RPL-P), OpenGL ES 3.2)",
+        283
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Graphics (ARL), OpenGL ES 3.2)",
+        283
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 520 (SKL GT2), OpenGL 4.6)",
+        283
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics (TGL GT2), OpenGL 4.6)",
+        282
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics (CML GT2), OpenGL 4.6)",
+        282
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4060/PCIe/SSE2, OpenGL 4.5.0)",
+        281
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon R7 200 Series (radeonsi oland ACO), OpenGL ES 3.2)",
+        279
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4080 SUPER/PCIe/SSE2, OpenGL 4.5.0)",
+        279
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Iris(R) Xe Graphics (TGL GT2), OpenGL 4.6)",
+        277
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Xe Graphics (TGL GT2), OpenGL 4.6)",
+        274
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 5070/PCIe/SSE2, OpenGL 4.5.0)",
+        271
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics 620 (KBL GT2), OpenGL 4.6)",
+        267
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics 630 (CFL GT2), OpenGL ES 3.2)",
+        264
+      ],
+      [
+        "Google Inc. (Intel Open Source Technology Center)",
+        "ANGLE (Intel Open Source Technology Center, Mesa DRI Intel(R) HD Graphics 4400 (HSW GT2), OpenGL 4.5)",
+        264
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1070/PCIe/SSE2, OpenGL ES 3.2)",
+        262
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon Vega 6 Graphics (radeonsi raven ACO), OpenGL 4.6)",
+        262
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4080 Laptop GPU/PCIe/SSE2, OpenGL ES 3.2)",
+        261
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1070 Ti/PCIe/SSE2, OpenGL 4.5.0)",
+        259
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 5080/PCIe/SSE2, OpenGL 4.5.0)",
+        258
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon 680M (radeonsi rembrandt ACO), OpenGL ES 3.2)",
+        162
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon 610M (radeonsi raphael_mendocino LLVM 20.1.2), OpenGL ES 3.2)",
+        162
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Graphics (MTL), OpenGL 4.6)",
+        161
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Ti/PCIe/SSE2, OpenGL ES 3.2)",
+        161
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 530 (SKL GT2), OpenGL 4.6)",
+        160
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics (ADL-S GT1), OpenGL ES 3.2)",
+        160
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 4600 (HSW GT2), OpenGL 4.6)",
+        154
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics 770 (ADL-S GT1), OpenGL 4.6)",
+        154
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon RX 470 Series (radeonsi polaris10 ACO), OpenGL ES 3.2)",
+        153
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4070 Laptop GPU/PCIe/SSE2, OpenGL 4.5.0)",
+        149
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 2060/PCIe/SSE2, OpenGL 4.5.0)",
+        148
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060 Laptop GPU/PCIe/SSE2, OpenGL 4.5.0)",
+        147
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Ryzen 9 9950X 16-Core Processor (radeonsi raphael_mendocino LLVM 21.1.7), OpenGL ES 3.2)",
+        147
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 5500 (BDW GT2), OpenGL ES 3.2)",
+        146
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon RX 6800 XT (radeonsi navi21 LLVM 20.1.2), OpenGL ES 3.2)",
+        146
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 5060 Ti/PCIe/SSE2, OpenGL 4.5.0)",
+        145
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Graphics (RPL-U), OpenGL ES 3.2)",
+        145
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics P630 (CFL GT2), OpenGL 4.6)",
+        145
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 615 (KBL GT2), OpenGL 4.6)",
+        144
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Arc(tm) Graphics (MTL), OpenGL 4.6)",
+        144
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) UHD Graphics (JSL), OpenGL 4.6)",
+        144
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon Graphics (radeonsi raphael_mendocino LLVM 19.1.7), OpenGL ES 3.2)",
+        144
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 400 (BSW), OpenGL 4.6)",
+        143
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon 860M Graphics (radeonsi krackan1 ACO DRM 3.64 7.0.2), OpenGL ES 3.2)",
+        142
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Radeon RX 9070 XT (radeonsi gfx1201 ACO), OpenGL ES 3.2)",
+        142
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 4070 Ti SUPER/PCIe/SSE2, OpenGL ES 3.2)",
+        142
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) HD Graphics 5000 (HSW GT3), OpenGL 4.6)",
+        142
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Graphics (RKL GT1), OpenGL ES 3.2)",
+        142
+      ],
+      [
+        "Google Inc. (NVIDIA Corporation)",
+        "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060/PCIe/SSE2, OpenGL 4.5.0)",
+        141
+      ],
+      [
+        "Google Inc. (Intel)",
+        "ANGLE (Intel, Mesa Intel(R) Iris(R) Xe Graphics (RPL-U), OpenGL 4.6)",
+        141
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Ryzen 5 9600X 6-Core Processor (radeonsi raphael_mendocino LLVM 20.1.2), OpenGL ES 3.2)",
+        141
+      ],
+      [
+        "Google Inc. (AMD)",
+        "ANGLE (AMD, AMD Ryzen 9 9950X3D 16-Core Processor (radeonsi raphael_mendocino LLVM 20.1.2), OpenGL 4.6)",
+        140
+      ]
+    ],
+    "cores": [
+      [8, 7132],
+      [12, 6190],
+      [16, 5267],
+      [4, 4411],
+      [32, 1763],
+      [24, 1714],
+      [20, 1230],
+      [10, 1067],
+      [6, 800],
+      [28, 385]
+    ],
+    "memory": [[2, 412], [4, 4995], [8, 31126]]
+  }
+}

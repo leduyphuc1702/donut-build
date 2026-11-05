@@ -166,6 +166,7 @@ fn e2e_automation_profile_dir() -> Option<std::path::PathBuf> {
 
 mod api_client;
 mod api_server;
+mod apostate;
 mod app_auto_updater;
 pub mod app_dirs;
 mod app_proxy;
@@ -1899,7 +1900,8 @@ pub async fn check_vpn_validity_core(
     .unwrap_or_default()
     .as_secs();
 
-  let had_existing_worker = vpn_worker_storage::find_vpn_worker_by_vpn_id(vpn_id).is_some();
+  let had_existing_worker =
+    vpn_worker_storage::find_vpn_worker(vpn_id, vpn::tcp_shape::OsStack::host()).is_some();
 
   let vpn_worker = vpn_worker_runner::start_vpn_worker(vpn_id)
     .await
@@ -3488,6 +3490,13 @@ pub fn run_with_builder(
                   // profiles thanks to the guards inside the helper.
                   if !is_running {
                     crate::team_lock::release_team_lock_if_needed(&profile).await;
+                  }
+
+                  // A browser this poll watched run and that is gone while its
+                  // pid is still stored closed on its own (the window). A Stop
+                  // clears the pid and reports its own end.
+                  if !is_running && last_state && had_pid {
+                    crate::team_activity::stopped(&profile_id, &profile.name, profile.process_id);
                   }
 
                   last_running_states.insert(profile_id, is_running);

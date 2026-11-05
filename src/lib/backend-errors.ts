@@ -363,6 +363,13 @@ export type BackendErrorCode =
   // offline one cannot apply it. Distinct from the generic apply failure because
   // signing in again is the fix; `detail` names the claimed OS.
   | "WAYFERN_CROSS_OS_REQUIRES_PLAN"
+  // The profile opens on the open-source Apostate engine: its download failed
+  // (`detail`), its checksum did not match, this machine has no build of it, or
+  // the feature needs Wayfern's own protocol.
+  | "APOSTATE_DOWNLOAD_FAILED"
+  | "APOSTATE_CHECKSUM_MISMATCH"
+  | "APOSTATE_UNSUPPORTED_HOST"
+  | "APOSTATE_FEATURE_UNSUPPORTED"
   // The plan includes it, but the server gives the token only to the account's
   // primary desktop. `detail` names the claimed OS.
   | "WAYFERN_CROSS_OS_PRIMARY_DEVICE"
@@ -1280,6 +1287,16 @@ export function translateBackendError(t: TFunction, err: unknown): string {
       });
     case "WAYFERN_GENERATION_LIMIT_REACHED":
       return t("backendErrors.wayfernGenerationLimitReached");
+    case "APOSTATE_DOWNLOAD_FAILED":
+      return t("backendErrors.apostateDownloadFailed", {
+        detail: parsed.params?.detail ?? "",
+      });
+    case "APOSTATE_CHECKSUM_MISMATCH":
+      return t("backendErrors.apostateChecksumMismatch");
+    case "APOSTATE_UNSUPPORTED_HOST":
+      return t("backendErrors.apostateUnsupportedHost");
+    case "APOSTATE_FEATURE_UNSUPPORTED":
+      return t("backendErrors.apostateFeatureUnsupported");
     case "WAYFERN_CROSS_OS_REQUIRES_PLAN":
       return t("backendErrors.wayfernCrossOsRequiresPlan", {
         detail: remoteOsLabel(parsed.params?.detail ?? ""),

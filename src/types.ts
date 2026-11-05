@@ -593,6 +593,7 @@ export interface PersonaField {
 }
 
 export interface WayfernConfig {
+  engine?: string; // "apostate" for a desktop OS other than this machine's; unset is Wayfern
   proxy?: string;
   screen_max_width?: number;
   screen_max_height?: number;

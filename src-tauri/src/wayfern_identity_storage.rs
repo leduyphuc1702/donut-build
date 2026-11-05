@@ -94,7 +94,8 @@ pub fn needs_conversion(profile: &BrowserProfile) -> bool {
     && supports_wayfern_152(&profile.version)
     && !supports_launch_result(&profile.version)
     && profile.wayfern_config.as_ref().is_some_and(|config| {
-      config.randomize_fingerprint_on_launch != Some(true)
+      !config.uses_apostate()
+        && config.randomize_fingerprint_on_launch != Some(true)
         && matches!(
           stored_shape(config),
           StoredShape::Payload | StoredShape::IdentityWithView

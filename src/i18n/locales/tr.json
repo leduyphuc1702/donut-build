@@ -226,7 +226,7 @@
       "recordSites": "Ziyaret edilen siteleri kaydet",
       "recordSitesDescription": "Trafik istatistikleri her profilin ulaştığı siteleri listeler. Kapalıyken yalnızca veri toplamları tutulur. Parola korumalı ve geçici profiller hiçbir zaman site kaydetmez.",
       "pasteTyping": "Yazarak yapıştır",
-      "pasteTypingDescription": "{{keys}} kopyaladığınızı yapıştırmak yerine bir insan gibi tuş tuş etkin alana yazar. Escape ya da bir tıklama durdurur. Vietnamca klavye aracını (Unikey, EVKey) önce İngilizceye alın; kart numaraları etkilenmez."
+      "pasteTypingDescription": "Donut'un açtığı tarayıcılarda {{paste}}, kopyaladığınızı yapıştırmak yerine bulunduğunuz alana bir insan gibi tuş tuş yazar. Bağlantılar, uzun metinler ve birden çok satır her zamanki gibi yapıştırılır. {{keys}} her uygulamada yazar. Escape veya bir tıklama durdurur."
     },
     "trashRetention": "Silinen profilleri şu süre boyunca sakla",
     "trashRetentionDescription": "Silinen profiller çöp kutusunda bekler ve o zamana kadar geri yüklenebilir. Sonrasında kalıcı olarak kaldırılır.",
@@ -1491,6 +1491,7 @@
   },
   "fingerprint": {
     "crossOsWarning": "Farklı bir işletim sistemi için parmak izi taklidi daha az güvenilirdir; çünkü altta yatan tüm bileşenleri kusursuz biçimde taklit etmek imkânsızdır. Dikkatli kullanın.",
+    "crossOsApostateWarning": "Bu profil, ilk gerektiğinde indirilen açık kaynaklı Apostate motoruyla açılır. Bağlantısı bu bilgisayardan çıkmamalı olduğu için VPN veya proxy gerekir. Apple silicon üzerinde ARM tabanlı bir Windows dizüstü olarak görünür.",
     "crossOsLimitations": "İşletim sistemleri arası parmak izi taklidinin sınırlamaları vardır. Sistem düzeyindeki API'ler yine de gerçek işletim sisteminizi yansıtabilir ve bazı özelliklerin performansı düşebilir.",
     "osLabel": "İşletim sistemi parmak izi",
     "selectOSPlaceholder": "İşletim sistemi seçin",
@@ -2766,6 +2767,10 @@
     "wayfernFingerprintGenerationFailed": "Bu profil için parmak izi oluşturulamadı. {{detail}}",
     "wayfernGenerationLimitReached": "Geçici parmak izi oluşturma sınırına ulaşıldı. Daha sonra tekrar deneyin.",
     "wayfernCrossOsRequiresPlan": "Bu profil {{detail}} olarak çalışıyor ve bu bilgisayarda başka bir işletim sistemi var. Burada açmak için Pro veya Team planı gerekir.",
+    "apostateDownloadFailed": "Apostate tarayıcı motoru indirilemedi. {{detail}}",
+    "apostateChecksumMismatch": "İndirilen Apostate tarayıcı motoru yayımlanan sağlama toplamıyla eşleşmedi ve silindi. Lütfen tekrar deneyin.",
+    "apostateUnsupportedHost": "Bu bilgisayar için Apostate tarayıcı motoru yok; bu yüzden başka bir işletim sistemine ait profil burada açılamaz.",
+    "apostateFeatureUnsupported": "Bu profil, bu özelliği desteklemeyen Apostate motorunda çalışıyor.",
     "wayfernCrossOsPrimaryDevice": "Bu profil {{detail}} olarak çalışıyor. Başka bir işletim sistemi için olan profiller yalnızca birincil cihazınızda çalışır. Diğer bilgisayarlarınızda Donut Browser oturumunu kapatın, ardından yeniden deneyin.",
     "wayfernIdentityRefused": "Tarayıcı bu profilin kimliğiyle başlamadığı için kapatıldı. {{detail}}",
     "wayfernInstanceLimitReached": "Planınız için çok fazla tarayıcı açık. Bir tarayıcıyı kapatıp tekrar deneyin.",

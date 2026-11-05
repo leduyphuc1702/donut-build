@@ -1,6 +1,8 @@
-//! Paste as typing: a global shortcut (Ctrl+Alt+V, ⌘⌥V on macOS) types the
-//! clipboard into the field that has the focus, one key at a time with a
-//! person's rhythm, so a site sees typing instead of a paste.
+//! Paste as typing: in a browser Donut opened, the paste keys (Ctrl+V, ⌘V on
+//! macOS) type the clipboard into the field that has the focus, one key at a
+//! time with a person's rhythm, so a site sees typing instead of a paste.
+//! Links, long text and several lines paste as usual. A global shortcut
+//! (Ctrl+Alt+V, ⌘⌥V) types in any app.
 //!
 //! Keys go through the OS (SendInput on Windows, CGEvent on macOS) as the
 //! physical keys of a US keyboard, each held down for a moment and then let
@@ -26,6 +28,8 @@ const GROUP_PAUSE_STD: f64 = 0.1;
 /// How long a key stays down: a keyboard is never pressed and let go at once.
 const DWELL_MEAN_MS: f64 = 85.0;
 const DWELL_STD_MS: f64 = 20.0;
+/// The longest text the paste keys type; longer text pastes as usual.
+pub const PASTE_KEYS_MAX_CHARS: usize = 120;
 /// How long the shortcut's own keys may still be held before typing starts.
 const KEYS_HELD_LIMIT: Duration = Duration::from_secs(3);
 
@@ -506,42 +510,118 @@ fn type_text(app: &AppHandle, text: &str) -> Result<bool, String> {
   outcome
 }
 
-fn run(app: AppHandle) {
+/// Which keys started it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Via {
+  /// The paste keys, in a browser Donut opened.
+  Paste,
+  /// The typing shortcut, in any app.
+  Shortcut,
+}
+
+/// What the paste keys type: one short line that is not a link, the size of
+/// a form field. `None` pastes as usual.
+pub fn types_on_paste(text: &str) -> Option<String> {
+  let text = text.trim();
+  let link = text.contains("://") || text.starts_with("www.");
+  let fits = !text.is_empty()
+    && !text.contains(['\r', '\n', '\t'])
+    && text.chars().count() <= PASTE_KEYS_MAX_CHARS;
+  (fits && !link).then(|| text.to_string())
+}
+
+fn run(app: AppHandle, via: Via) {
   let started = Instant::now();
-  let result = {
+  let text = {
     use tauri_plugin_clipboard_manager::ClipboardExt;
-    app
-      .clipboard()
-      .read_text()
-      .map_err(|_| crate::backend_error("PASTE_TYPING_EMPTY"))
-      .and_then(|text| sanitize(&text))
-      .and_then(|text| type_text(&app, &text).map(|done| (done, text.chars().count())))
+    app.clipboard().read_text()
   };
+  let text = match via {
+    Via::Shortcut => text
+      .map_err(|_| crate::backend_error("PASTE_TYPING_EMPTY"))
+      .and_then(|text| sanitize(&text)),
+    Via::Paste => match text.ok().as_deref().and_then(types_on_paste) {
+      Some(text) if watch::front_is_browser() => Ok(text),
+      _ => {
+        if let Err(e) = paste_normally(&app) {
+          log::warn!("Paste failed err=\"{e}\"");
+        }
+        TYPING.store(false, Ordering::SeqCst);
+        return;
+      }
+    },
+  };
+  let via_name = match via {
+    Via::Paste => "paste",
+    Via::Shortcut => "shortcut",
+  };
+  let result =
+    text.and_then(|text| type_text(&app, &text).map(|done| (done, text.chars().count())));
   match result {
     Ok((true, chars)) => log::info!(
-      "Paste typed chars={chars} elapsed_ms={}",
+      "Paste typed via={via_name} chars={chars} elapsed_ms={}",
       started.elapsed().as_millis()
     ),
     Ok((false, chars)) => log::info!(
-      "Paste typing stopped by the person chars={chars} elapsed_ms={}",
+      "Paste typing stopped by the person via={via_name} chars={chars} elapsed_ms={}",
       started.elapsed().as_millis()
     ),
     Err(error) => {
-      log::warn!("Paste typing failed err={error}");
+      log::warn!("Paste typing failed via={via_name} err={error}");
       let _ = crate::events::emit("paste-typing-failed", serde_json::json!({ "error": error }));
     }
   }
   TYPING.store(false, Ordering::SeqCst);
 }
 
-/// The shortcut: Ctrl+Alt+V, or ⌘⌥V on macOS.
+/// Gives the paste keys back for a moment and presses them, so the browser
+/// pastes as it always does.
+fn paste_normally(app: &AppHandle) -> Result<(), String> {
+  use enigo::{Direction, Key, Keyboard};
+  watch::HOLD_OFF.store(true, Ordering::SeqCst);
+  watch::hold_paste_keys(app, false);
+  let result = (|| {
+    let mut enigo = enigo::Enigo::new(&enigo::Settings::default()).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "macos")]
+    let modifier = Key::Meta;
+    #[cfg(not(target_os = "macos"))]
+    let modifier = Key::Control;
+    enigo
+      .key(modifier, Direction::Press)
+      .map_err(|e| e.to_string())?;
+    let pressed = enigo
+      .key(os_key('v'), Direction::Click)
+      .map_err(|e| e.to_string());
+    let released = enigo
+      .key(modifier, Direction::Release)
+      .map_err(|e| e.to_string());
+    pressed.and(released)
+  })();
+  // The pressed keys reach the system after the call returns; taking the
+  // keys back sooner would catch them again.
+  std::thread::sleep(Duration::from_millis(200));
+  watch::HOLD_OFF.store(false, Ordering::SeqCst);
+  result
+}
+
+/// The typing shortcut: Ctrl+Alt+V, or ⌘⌥V on macOS. It works in any app.
 pub fn shortcut() -> tauri_plugin_global_shortcut::Shortcut {
   use tauri_plugin_global_shortcut::{Code, Modifiers, Shortcut};
+  Shortcut::new(Some(primary_modifier() | Modifiers::ALT), Code::KeyV)
+}
+
+/// The paste keys: Ctrl+V, or ⌘V on macOS. Held only while a browser Donut
+/// opened is the frontmost app, so every other app pastes untouched.
+pub fn paste_keys() -> tauri_plugin_global_shortcut::Shortcut {
+  use tauri_plugin_global_shortcut::{Code, Shortcut};
+  Shortcut::new(Some(primary_modifier()), Code::KeyV)
+}
+
+fn primary_modifier() -> tauri_plugin_global_shortcut::Modifiers {
   #[cfg(target_os = "macos")]
-  let primary = Modifiers::SUPER;
+  return tauri_plugin_global_shortcut::Modifiers::SUPER;
   #[cfg(not(target_os = "macos"))]
-  let primary = Modifiers::CONTROL;
-  Shortcut::new(Some(primary | Modifiers::ALT), Code::KeyV)
+  return tauri_plugin_global_shortcut::Modifiers::CONTROL;
 }
 
 /// The global-shortcut plugin's handler.
@@ -550,20 +630,30 @@ pub fn on_shortcut(
   pressed: &tauri_plugin_global_shortcut::Shortcut,
   event: tauri_plugin_global_shortcut::ShortcutEvent,
 ) {
-  if *pressed != shortcut() || event.state() != tauri_plugin_global_shortcut::ShortcutState::Pressed
-  {
+  if event.state() != tauri_plugin_global_shortcut::ShortcutState::Pressed {
     return;
   }
+  let via = if *pressed == shortcut() {
+    Via::Shortcut
+  } else if *pressed == paste_keys() {
+    Via::Paste
+  } else {
+    return;
+  };
   if TYPING.swap(true, Ordering::SeqCst) {
     return;
   }
   let app = app.clone();
-  std::thread::spawn(move || run(app));
+  std::thread::spawn(move || run(app, via));
 }
 
-/// Takes or gives up the shortcut, following the setting.
+/// Takes or gives up the shortcuts, following the setting.
 pub fn apply(app: &AppHandle, enabled: bool) {
   use tauri_plugin_global_shortcut::GlobalShortcutExt;
+  watch::ENABLED.store(enabled, Ordering::SeqCst);
+  if enabled {
+    watch::start(app);
+  }
   let shortcuts = app.global_shortcut();
   let registered = shortcuts.is_registered(shortcut());
   let result = match (enabled, registered) {
@@ -574,6 +664,187 @@ pub fn apply(app: &AppHandle, enabled: bool) {
   match result {
     Ok(()) => log::info!("Paste typing shortcut enabled={enabled}"),
     Err(e) => log::warn!("Paste typing shortcut not changed enabled={enabled} err=\"{e}\""),
+  }
+}
+
+/// Follows the frontmost app and holds the paste keys while it is a browser
+/// Donut opened.
+mod watch {
+  use std::sync::atomic::{AtomicBool, Ordering};
+  use std::sync::{Mutex, OnceLock};
+  use std::time::{Duration, Instant};
+
+  use tauri::AppHandle;
+
+  use crate::log_streak::Streak;
+
+  pub static ENABLED: AtomicBool = AtomicBool::new(false);
+  /// Set while a normal paste goes through.
+  pub static HOLD_OFF: AtomicBool = AtomicBool::new(false);
+  static STARTED: OnceLock<()> = OnceLock::new();
+  static HELD: Mutex<bool> = Mutex::new(false);
+  static BROWSERS: Mutex<Option<(Instant, Vec<u32>)>> = Mutex::new(None);
+  static TAKE: Streak = Streak::new(module_path!(), "Paste keys take");
+
+  const TICK: Duration = Duration::from_millis(150);
+  /// How old the list of running browsers may get while the front app stays.
+  const BROWSERS_FRESH: Duration = Duration::from_secs(2);
+
+  pub fn start(app: &AppHandle) {
+    if STARTED.set(()).is_err() {
+      return;
+    }
+    let app = app.clone();
+    std::thread::Builder::new()
+      .name("paste-keys".into())
+      .spawn(move || run(app))
+      .map(|_| ())
+      .unwrap_or_else(|e| log::warn!("Paste keys watch not started err=\"{e}\""));
+  }
+
+  fn run(app: AppHandle) {
+    let mut last_front = None;
+    let mut asked = false;
+    loop {
+      std::thread::sleep(TICK);
+      if !ENABLED.load(Ordering::SeqCst) {
+        hold_paste_keys(&app, false);
+        continue;
+      }
+      let front = front_pid();
+      if front != last_front {
+        last_front = front;
+        refresh_browsers();
+      }
+      let in_browser = front.is_some_and(is_browser);
+      // macOS asks for the Accessibility permission once a run, the first
+      // time a Donut browser comes to the front without it.
+      let allowed = super::accessibility::trusted(in_browser && !asked);
+      if in_browser && !allowed && !asked {
+        asked = true;
+        log::info!("Paste typing waits for the Accessibility permission");
+      }
+      let want = in_browser && allowed && !HOLD_OFF.load(Ordering::SeqCst);
+      hold_paste_keys(&app, want);
+    }
+  }
+
+  /// Takes (`true`) or gives back the paste keys.
+  pub fn hold_paste_keys(app: &AppHandle, want: bool) {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    let Ok(mut held) = HELD.lock() else { return };
+    if *held == want {
+      return;
+    }
+    let shortcuts = app.global_shortcut();
+    let result = if want {
+      shortcuts.register(super::paste_keys())
+    } else {
+      shortcuts.unregister(super::paste_keys())
+    };
+    match result {
+      Ok(()) => {
+        *held = want;
+        TAKE.succeeded();
+        log::debug!("Paste keys held={want}");
+      }
+      Err(e) => {
+        // Not taking them leaves normal paste; giving them back must not
+        // retry forever either.
+        if !want {
+          *held = false;
+        }
+        TAKE.failed(format!("held={want} err=\"{e}\""));
+      }
+    }
+  }
+
+  /// Whether the frontmost app is a browser Donut opened.
+  pub fn front_is_browser() -> bool {
+    front_pid().is_some_and(is_browser)
+  }
+
+  fn is_browser(pid: u32) -> bool {
+    let fresh = BROWSERS.lock().ok().and_then(|cached| {
+      cached
+        .as_ref()
+        .filter(|(at, _)| at.elapsed() < BROWSERS_FRESH)
+        .map(|(_, pids)| pids.contains(&pid))
+    });
+    fresh.unwrap_or_else(|| refresh_browsers().contains(&pid))
+  }
+
+  fn refresh_browsers() -> Vec<u32> {
+    let pids: Vec<u32> = crate::profile::ProfileManager::instance()
+      .list_profiles()
+      .unwrap_or_default()
+      .into_iter()
+      .filter_map(|profile| profile.process_id)
+      .collect();
+    if let Ok(mut cached) = BROWSERS.lock() {
+      *cached = Some((Instant::now(), pids.clone()));
+    }
+    pids
+  }
+
+  #[cfg(target_os = "macos")]
+  fn front_pid() -> Option<u32> {
+    objc2::rc::autoreleasepool(|_| {
+      let app = objc2_app_kit::NSWorkspace::sharedWorkspace().frontmostApplication()?;
+      u32::try_from(app.processIdentifier()).ok()
+    })
+  }
+
+  #[cfg(target_os = "windows")]
+  fn front_pid() -> Option<u32> {
+    use windows::Win32::UI::WindowsAndMessaging::{GetForegroundWindow, GetWindowThreadProcessId};
+    let window = unsafe { GetForegroundWindow() };
+    if window.is_invalid() {
+      return None;
+    }
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(window, Some(&mut pid)) };
+    (pid != 0).then_some(pid)
+  }
+
+  #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+  fn front_pid() -> Option<u32> {
+    None
+  }
+}
+
+/// Posting keys to other apps needs the Accessibility permission on macOS.
+/// Without it the paste keys stay with the browser, so paste keeps working.
+#[cfg(target_os = "macos")]
+mod accessibility {
+  use core_foundation::base::TCFType;
+  use core_foundation::boolean::CFBoolean;
+  use core_foundation::dictionary::{CFDictionary, CFDictionaryRef};
+  use core_foundation::string::{CFString, CFStringRef};
+
+  #[link(name = "ApplicationServices", kind = "framework")]
+  unsafe extern "C" {
+    fn AXIsProcessTrusted() -> bool;
+    fn AXIsProcessTrustedWithOptions(options: CFDictionaryRef) -> bool;
+    static kAXTrustedCheckOptionPrompt: CFStringRef;
+  }
+
+  /// Whether Donut may post keys; `prompt` shows the system's request.
+  pub fn trusted(prompt: bool) -> bool {
+    if !prompt {
+      return unsafe { AXIsProcessTrusted() };
+    }
+    let key = unsafe { CFString::wrap_under_get_rule(kAXTrustedCheckOptionPrompt) };
+    let options =
+      CFDictionary::from_CFType_pairs(&[(key.as_CFType(), CFBoolean::true_value().as_CFType())]);
+    unsafe { AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef()) }
+  }
+}
+
+#[cfg(not(target_os = "macos"))]
+mod accessibility {
+  pub fn trusted(_prompt: bool) -> bool {
+    true
   }
 }
 
@@ -621,6 +892,24 @@ mod tests {
     let refused: serde_json::Value = serde_json::from_str(&sanitize(&long).unwrap_err()).unwrap();
     assert_eq!(refused["code"], "PASTE_TYPING_TOO_LONG");
     assert_eq!(refused["params"]["max"], MAX_CHARS.to_string());
+  }
+
+  #[test]
+  fn the_paste_keys_type_one_short_line_and_paste_the_rest() {
+    assert_eq!(
+      types_on_paste(" 4111 1111 1111 1111\n").as_deref(),
+      Some("4111 1111 1111 1111")
+    );
+    assert_eq!(
+      types_on_paste("name+tag@example.com").as_deref(),
+      Some("name+tag@example.com")
+    );
+    assert_eq!(types_on_paste("123 Main St\nPortland"), None);
+    assert_eq!(types_on_paste("https://shop.example/cart"), None);
+    assert_eq!(types_on_paste("www.example.com"), None);
+    assert_eq!(types_on_paste("  "), None);
+    assert_eq!(types_on_paste(&"a".repeat(PASTE_KEYS_MAX_CHARS + 1)), None);
+    assert!(types_on_paste(&"a".repeat(PASTE_KEYS_MAX_CHARS)).is_some());
   }
 
   #[test]
