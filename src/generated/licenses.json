@@ -1200,6 +1200,10 @@
     "license": "MIT"
   },
   {
+    "name": "enigo",
+    "license": "MIT"
+  },
+  {
     "name": "enumflags2",
     "license": "Apache-2.0 OR MIT"
   },
@@ -1485,6 +1489,10 @@
   },
   {
     "name": "glob",
+    "license": "Apache-2.0 OR MIT"
+  },
+  {
+    "name": "global-hotkey",
     "license": "Apache-2.0 OR MIT"
   },
   {
@@ -3140,6 +3148,10 @@
     "license": "Apache-2.0 OR MIT"
   },
   {
+    "name": "tauri-plugin-global-shortcut",
+    "license": "Apache-2.0 OR MIT"
+  },
+  {
     "name": "tauri-plugin-log",
     "license": "Apache-2.0 OR MIT"
   },
@@ -3702,6 +3714,14 @@
   {
     "name": "xattr",
     "license": "Apache-2.0 OR MIT"
+  },
+  {
+    "name": "xkbcommon",
+    "license": "MIT"
+  },
+  {
+    "name": "xkeysym",
+    "license": "MIT OR Apache-2.0 OR Zlib"
   },
   {
     "name": "xmlwriter",
