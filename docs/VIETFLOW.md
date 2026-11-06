@@ -201,3 +201,15 @@ Khi dùng tài khoản tự host, ứng dụng chỉ gọi ra ngoài các địa
 `api.donutbrowser.com` và `sync.donutbrowser.com` chỉ còn được gọi khi cố ý dùng tài khoản Donut cloud. Khi dùng control plane tự host, hồ sơ mới sinh thiết bị cục bộ và engine là Apostate mã nguồn mở nên không cần token hay điều khoản của bên thứ ba nào.
 
 Khi chưa đăng nhập control plane, vẫn còn giới hạn cũ: đang mở **hơn 3 trình duyệt** cùng lúc thì Donut không tạo được hồ sơ mới (việc sinh thiết bị cần mở thêm một trình duyệt ngầm). Đăng nhập tài khoản tự host để bỏ giới hạn này.
+
+## Phát hành bản build (Windows và macOS)
+
+GitHub **tắt Actions trên fork** của repo lớn, nên `.github/workflows/vietflow-release.yml` không chạy được ở `leduyphuc1702/donutbrowser`. Đường đang dùng:
+
+1. Repo build riêng, không phải fork: `leduyphuc1702/donut-build`, chứa cùng mã nguồn và một workflow `Build installers` (`.github/workflows/build-artifacts.yml`). Workflow này chỉ tạo artifact, không tạo release.
+2. Chạy workflow đó với tag phiên bản, ví dụ `v0.36.1`; `only` để trống thì build cả ba gói, hoặc điền `x86_64-apple-darwin` để build lại đúng một gói.
+3. Tải artifact về máy rồi tạo release ở repo chính: `gh release create` + `gh release upload` bốn tệp `.dmg`/`-setup.exe`/`-portable.zip` và `SHA256SUMS.txt`.
+
+Tên tệp phải giữ đúng `Donut_<version>_aarch64.dmg`, `Donut_<version>_x64.dmg`, `Donut_<version>_x64-setup.exe`: `src-tauri/src/app_auto_updater.rs` chọn bản cập nhật theo đúng các mẫu đó, và từ chối release không có `SHA256SUMS.txt`.
+
+Bản macOS ký ad hoc (`APPLE_SIGNING_IDENTITY="-"`), người dùng mở lần đầu bằng chuột phải → Open. Trên macOS Intel, trình liên kết không tự ký nên workflow đặt `RUSTFLAGS=-C link-arg=-Wl,-adhoc_codesign`; thiếu nó thì `donut-proxy` trong `Contents/MacOS` không có chữ ký và bước đóng gói hỏng với `code object is not signed at all`.
