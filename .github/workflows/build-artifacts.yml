@@ -1,0 +1,168 @@
+name: Build installers
+
+# GitHub stops running workflows on forks of repositories that use a lot of
+# Actions minutes, and this repository is a fork. This copy of the release
+# build lives in the non-fork mirror leduyphuc1702/donut-build so the
+# installers can still be built; it only produces artifacts, and the release
+# itself is uploaded to the app's own repository from the build machine.
+#
+# Run it from the Actions tab with the tag the release will carry, e.g.
+# v0.36.0. The version is stamped from that tag, exactly as the release
+# workflow does it.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Version to stamp, e.g. v0.36.0"
+        required: true
+      only:
+        description: "Optional single target, e.g. x86_64-apple-darwin. Empty builds all three."
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ inputs.tag }}
+  STABLE_RELEASE: "true"
+
+jobs:
+  # Which targets to build. A job-level `if` cannot read `matrix`, so the
+  # matrix itself is built here.
+  targets:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        shell: bash
+        env:
+          ONLY: ${{ inputs.only }}
+        run: |
+          all='[{"platform":"macos-latest","target":"aarch64-apple-darwin"},{"platform":"macos-latest","target":"x86_64-apple-darwin"},{"platform":"windows-latest","target":"x86_64-pc-windows-msvc"}]'
+          if [ -z "$ONLY" ]; then
+            chosen="$all"
+          else
+            chosen=$(printf '%s' "$all" | jq -c --arg t "$ONLY" '[.[]|select(.target==$t)]')
+          fi
+          if [ "$chosen" = "[]" ]; then
+            echo "No target matches '$ONLY'" >&2
+            exit 1
+          fi
+          echo "matrix={\"include\":$chosen}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: [targets]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.targets.outputs.matrix) }}
+    runs-on: ${{ matrix.platform }}
+    env:
+      BUILD_TAG: ${{ inputs.tag }}
+      # Apple's linker signs Apple silicon output ad hoc and Intel output not
+      # at all, and the bundler signs only the app binary and xray. Without
+      # this the proxy sidecar inside Contents/MacOS stays unsigned and sealing
+      # the app fails with "code object is not signed at all".
+      RUSTFLAGS: ${{ matrix.platform == 'macos-latest' && '-C link-arg=-Wl,-adhoc_codesign' || '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: "pnpm"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workdir: ./src-tauri
+          key: ${{ matrix.target }}
+
+      - name: Stamp the version from the tag
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs");
+            const file = "src-tauri/tauri.conf.json";
+            const conf = JSON.parse(fs.readFileSync(file, "utf8"));
+            conf.version = process.env.TAG.replace(/^v/, "");
+            fs.writeFileSync(file, JSON.stringify(conf, null, 2) + "\n");
+            console.log("version", conf.version);
+          '
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Build the donut-proxy sidecar
+        shell: bash
+        working-directory: ./src-tauri
+        run: cargo build --bin donut-proxy --target ${{ matrix.target }} --release
+
+      - name: Copy sidecar binaries
+        shell: bash
+        run: |
+          mkdir -p src-tauri/binaries
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            cp src-tauri/target/${{ matrix.target }}/release/donut-proxy.exe src-tauri/binaries/donut-proxy-${{ matrix.target }}.exe
+          else
+            cp src-tauri/target/${{ matrix.target }}/release/donut-proxy src-tauri/binaries/donut-proxy-${{ matrix.target }}
+            chmod +x src-tauri/binaries/donut-proxy-${{ matrix.target }}
+          fi
+
+      - name: Download verified Xray-core sidecar
+        run: node src-tauri/download-xray.mjs --target ${{ matrix.target }}
+
+      - name: Sign the proxy sidecar (macOS)
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: codesign --force --sign - "src-tauri/target/${{ matrix.target }}/release/donut-proxy" && codesign --verify --verbose "src-tauri/target/${{ matrix.target }}/release/donut-proxy"
+
+      - name: Build the installer
+        shell: bash
+        env:
+          # No Apple Developer ID: "-" signs the app ad hoc, so macOS sees one
+          # consistent signature (open it once with right-click > Open).
+          APPLE_SIGNING_IDENTITY: ${{ matrix.platform == 'macos-latest' && '-' || '' }}
+        run: pnpm tauri build --target ${{ matrix.target }}
+
+      - name: Create the portable Windows ZIP
+        if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          VERSION="${TAG#v}"
+          PORTABLE_DIR="Donut-Portable"
+          mkdir -p "$PORTABLE_DIR/licenses"
+          cp "src-tauri/target/${{ matrix.target }}/release/donutbrowser.exe" "$PORTABLE_DIR/Donut.exe"
+          cp "src-tauri/target/${{ matrix.target }}/release/donut-proxy.exe" "$PORTABLE_DIR/"
+          cp "src-tauri/binaries/xray-${{ matrix.target }}.exe" "$PORTABLE_DIR/xray.exe"
+          cp "src-tauri/binaries/xray-LICENSE.txt" "$PORTABLE_DIR/licenses/Xray-core-LICENSE.txt"
+          if [ -f "src-tauri/target/${{ matrix.target }}/release/WebView2Loader.dll" ]; then
+            cp "src-tauri/target/${{ matrix.target }}/release/WebView2Loader.dll" "$PORTABLE_DIR/"
+          fi
+          touch "$PORTABLE_DIR/.portable"
+          7z a "Donut_${VERSION}_x64-portable.zip" "$PORTABLE_DIR"
+
+      - name: Upload the installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.target }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            Donut_*_x64-portable.zip
