@@ -1,12 +1,13 @@
-//! Whether a Wayfern profile's key file still opens its cookies, checked
+//! Whether the key Donut holds for a profile still opens its cookies, checked
 //! before each launch.
 //!
-//! The browser drops every cookie its key cannot open, so a key file that
-//! changed or went missing since the last launch logs a person out of every
-//! site. The line this writes says which: the key file's state, whether it
-//! changed since this device last launched the profile, and whether the
-//! oldest and the newest encrypted cookie open with it. It never logs the key,
-//! a hash of it, or a cookie.
+//! The browser drops every cookie its key cannot open, so a key that changed or
+//! went missing since the last launch logs a person out of every site. The key
+//! is the one Apostate seals with on this host (`os_crypt::engine_key_material`).
+//! The line this writes says which: the key's state, whether it changed since
+//! this device last launched the profile, and whether the oldest and the newest
+//! encrypted cookie open with it. It never logs the key, a hash of it, or a
+//! cookie.
 
 use crate::profile_import::os_crypt;
 use std::collections::BTreeMap;
@@ -44,7 +45,7 @@ impl KeyFile {
   }
 }
 
-/// Whether the key file changed since the last launch on this device.
+/// Whether the key changed since the last launch on this device.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyChange {
   /// No launch recorded yet.
@@ -67,7 +68,7 @@ impl KeyChange {
 pub struct CookieStore {
   pub cookies: u64,
   pub encrypted: u64,
-  /// Encrypted rows the key file does not open, by their 3-byte tag.
+  /// Encrypted rows the key does not open, by their 3-byte tag.
   pub undecryptable: BTreeMap<String, u64>,
   /// `None` when there is no encrypted row.
   pub oldest_ok: Option<bool>,
@@ -167,9 +168,9 @@ fn key_stamp(install_key: &[u8], contents: &[u8]) -> String {
     .collect()
 }
 
-/// Compare the key file with the stamp kept for `profile_id` in
-/// `stamps_file`, and keep the new stamp. A missing key file keeps the old
-/// stamp, so the key that comes back is compared with the one that was lost.
+/// Compare the key with the stamp kept for `profile_id` in `stamps_file`, and
+/// keep the new stamp. A missing key keeps the old stamp, so the key that comes
+/// back is compared with the one that was lost.
 pub fn key_change(
   stamps_file: &Path,
   install_key: &[u8],
@@ -247,7 +248,7 @@ fn tags(undecryptable: &BTreeMap<String, u64>) -> String {
     .join(",")
 }
 
-/// The line about a profile's key file and cookies, and its level.
+/// The line about a profile's key and cookies, and its level.
 pub fn report(
   profile_id: &str,
   key: KeyFile,
@@ -257,14 +258,15 @@ pub fn report(
   let default = CookieStore::default();
   let store = store.unwrap_or(&default);
   let undecryptable = store.undecryptable_total();
-  let level =
-    if store.encrypted > 0 && (store.newest_ok == Some(false) || key != KeyFile::Present(32)) {
-      log::Level::Error
-    } else if change == KeyChange::Changed || undecryptable > 0 {
-      log::Level::Warn
-    } else {
-      log::Level::Debug
-    };
+  let level = if store.encrypted > 0
+    && (store.newest_ok == Some(false) || !matches!(key, KeyFile::Present(_)))
+  {
+    log::Level::Error
+  } else if change == KeyChange::Changed || undecryptable > 0 {
+    log::Level::Warn
+  } else {
+    log::Level::Debug
+  };
   (
     level,
     format!(
@@ -281,10 +283,10 @@ pub fn report(
   )
 }
 
-/// Check a Wayfern profile's key file and cookies before a launch and log
-/// what was found. `profile_data_dir` is the browser's user-data dir.
+/// Check a profile's key and cookies before a launch and log what was found.
+/// `profile_data_dir` is the browser's user-data dir.
 pub fn log_before_launch(profile_id: &str, profile_data_dir: &Path) {
-  let contents = std::fs::read(profile_data_dir.join(os_crypt::KEY_FILE_NAME)).ok();
+  let contents = os_crypt::engine_key_material(profile_data_dir);
   let key = KeyFile::of(contents.as_deref());
   let change = match crate::vault::install_key() {
     Ok(install_key) => key_change(
@@ -413,6 +415,29 @@ mod tests {
     assert_eq!(
       key_change(&stamps, &install, "q", Some(&key)),
       KeyChange::First
+    );
+  }
+
+  #[test]
+  fn encrypted_cookies_with_no_key_to_open_them_are_an_error() {
+    let store = CookieStore {
+      cookies: 1,
+      encrypted: 1,
+      ..CookieStore::default()
+    };
+    let (level, line) = report("p", KeyFile::Missing, KeyChange::First, Some(&store));
+    assert_eq!(level, log::Level::Error);
+    assert!(line.contains("key=missing key_bytes=0"));
+
+    let plain = CookieStore {
+      cookies: 1,
+      ..CookieStore::default()
+    };
+    let (level, _) = report("p", KeyFile::Missing, KeyChange::First, Some(&plain));
+    assert_eq!(
+      level,
+      log::Level::Debug,
+      "a store with nothing sealed has nothing to lose"
     );
   }
 

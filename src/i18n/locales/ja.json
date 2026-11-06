@@ -95,9 +95,7 @@
       "arrowDown": "下矢印",
       "tab": "Tab"
     },
-    "errors": {
-      "unknown": "不明なエラーが発生しました"
-    },
+    "errors": {},
     "window": {
       "minimize": "最小化",
       "maximize": "最大化",
@@ -199,9 +197,6 @@
     },
     "advanced": {
       "title": "詳細設定",
-      "clearCache": "すべてのバージョンキャッシュをクリア",
-      "clearCacheDescription": "キャッシュされたすべてのブラウザバージョンデータをクリアし、すべてのブラウザバージョンをソースから更新します。これにより、すべてのブラウザのバージョン情報が強制的に再ダウンロードされます。",
-      "clearCacheFailed": "キャッシュのクリアに失敗しました",
       "copyLogs": "ログをコピー",
       "openLogDir": "ログフォルダを開く",
       "copyLogsSuccess": "ログをクリップボードにコピーしました",
@@ -478,20 +473,10 @@
       "removePassword": "パスワードを削除"
     },
     "synchronizer": {
-      "launchWithSync": "シンクロナイザーで起動",
       "stopLeader": "このプロフィールとすべてのフォロワーを停止",
       "stopFollower": "{{leaderName}}のアクションを追従中",
       "desyncedTooltip": "{{url}}で同期に失敗しました",
-      "paidFeature": "シンクロナイザーは有料機能です",
-      "wayfernOnly": "Wayfernプロフィールのみ同期可能です",
-      "selectFollowers": "フォロワープロフィールを選択",
-      "selectFollowersDesc": "リーダープロフィールのアクションを複製するプロフィールを選択してください。停止中のWayfernプロフィールのみ選択できます。",
       "leader": "リーダー",
-      "follower": "フォロワー",
-      "startSession": "同期セッションを開始",
-      "noFollowers": "少なくとも1つのフォロワープロフィールを選択してください",
-      "flakyBadge": "FLAKY",
-      "flakyTooltip": "このプロフィールはリーダーと画面解像度が異なります。ページレイアウトが異なる可能性があり、クリックや操作が正しく動作しない場合があります。",
       "pauseMirroring": "ミラーリングを一時停止",
       "resumeMirroring": "ミラーリングを再開",
       "pausedNote": "フォロワーはリーダーを写していません。いまリーダーで行った操作はそこに留まります。",
@@ -594,7 +579,6 @@
     "antiDetect": {
       "title": "アンチ検出ブラウザ",
       "description": "アンチ検出機能を持つブラウザを選択",
-      "chromium": "Wayfern",
       "badge": "アンチ検出ブラウザ"
     },
     "regular": {
@@ -617,26 +601,11 @@
       "label": "起動フックURL",
       "placeholder": "https://example.com/hooks/profile-launch"
     },
-    "version": {
-      "fetching": "利用可能なバージョンを取得中...",
-      "fetchError": "ブラウザバージョンの取得に失敗しました。インターネット接続を確認して再試行してください。",
-      "needsDownload": "{{browser}} バージョン ({{version}}) をダウンロードする必要があります",
-      "available": "{{browser}} バージョン ({{version}}) は利用可能です",
-      "downloading": "{{browser}} バージョン ({{version}}) をダウンロード中...",
-      "latestNeedsDownload": "最新バージョン ({{version}}) をダウンロードする必要があります",
-      "latestAvailable": "最新バージョン ({{version}}) は利用可能です",
-      "latestDownloading": "バージョン ({{version}}) をダウンロード中...",
-      "upgradeAvailable": "{{browser}} の新しいバージョン（{{version}}）が利用可能です。"
-    },
     "chromiumLabel": "Chromium",
-    "chromiumSubtitle": "Wayfern搭載",
-    "platformUnavailable": "{{browser}} はまだお使いのプラットフォームで利用できません。",
     "passwordProtect": {
       "label": "このプロファイルをパスワードで保護",
       "description": "ディスク上のプロファイルデータを暗号化します。起動に必要です。"
     },
-    "downloadingSubtitle": "ダウンロード中…",
-    "browsersDownloading": "ブラウザをダウンロード中です。ダウンロードが完了するとプロファイルを作成できます。",
     "advancedOptions": "詳細オプション",
     "moreOptions": "その他のオプション",
     "hourlyLimit": {
@@ -646,6 +615,9 @@
     },
     "group": {
       "notFound": "グループが見つかりません。"
+    },
+    "engine": {
+      "preparing": "ブラウザエンジンをダウンロード中です。プロファイルは今すぐ作成でき、エンジンの準備ができ次第、開けるようになります。"
     }
   },
   "deleteDialog": {
@@ -1079,7 +1051,6 @@
     "apiToggleFailed": "API サーバーの切り替えに失敗しました",
     "apiStartFailed": "API サーバーの起動に失敗しました",
     "tokenCopied": "トークンをコピーしました",
-    "mcpAcceptTermsFirst": "(設定で先に Wayfern の規約に同意してください)",
     "apiRunningOn": "実行中",
     "apiExampleRequest": "リクエスト例",
     "examples": {
@@ -1195,38 +1166,6 @@
     "error": "プロファイルのインポートに失敗しました"
   },
   "config": {
-    "wayfern": {
-      "title": "Wayfern設定",
-      "fingerprint": {
-        "title": "フィンガープリント",
-        "randomize": "起動時にランダム化",
-        "randomizeDescription": "ブラウザ起動時に新しいフィンガープリントを生成します。",
-        "platformPlaceholder": "例: Win32、MacIntel、Linux x86_64",
-        "timezoneOffsetPlaceholder": "例: EST (UTC-5) の場合は 300",
-        "webglRendererPlaceholder": "例: Intel(R) HD Graphics"
-      },
-      "os": {
-        "title": "オペレーティングシステム",
-        "description": "フィンガープリント生成用にエミュレートするOS。",
-        "windows": "Windows",
-        "macos": "macOS",
-        "linux": "Linux",
-        "android": "Android",
-        "ios": "iOS"
-      },
-      "screen": {
-        "title": "画面サイズ",
-        "minWidth": "最小幅",
-        "maxWidth": "最大幅",
-        "minHeight": "最小高さ",
-        "maxHeight": "最大高さ"
-      },
-      "blocking": {
-        "title": "ブロック",
-        "webrtc": "WebRTCをブロック",
-        "webgl": "WebGLをブロック"
-      }
-    },
     "shared": {
       "browserBehavior": "ブラウザの動作",
       "allowAddonsOpenTabs": "ブラウザアドオンが新しいタブを自動的に開くことを許可"
@@ -1249,7 +1188,7 @@
       "sourcePlaceholder": "Cookie をコピーするプロファイルを選択",
       "running": "(実行中)",
       "targetProfiles": "対象プロファイル ({{count}})",
-      "noOtherTargets": "他に Wayfern プロファイルが選択されていません",
+      "noOtherTargets": "他にプロファイルが選択されていません",
       "selectSourceFirst": "最初にソースプロファイルを選択してください",
       "selectionStatus": "({{selected}} / {{total}} 選択中)",
       "searchPlaceholder": "ドメインまたは Cookie を検索...",
@@ -1470,7 +1409,7 @@
     "renameProfileFailed": "プロファイルの名前変更に失敗しました: {{error}}",
     "killBrowserFailed": "ブラウザの停止に失敗しました: {{error}}",
     "deleteSelectedProfilesFailed": "選択したプロファイルの削除に失敗しました: {{error}}",
-    "cookieCopyUnsupportedBrowser": "Cookieのコピーは Wayfern プロファイルでのみ機能します",
+    "cookieCopyUnsupportedBrowser": "Cookieのコピーは Apostate プロファイルでのみ機能します",
     "updateSyncSettingsFailed": "同期設定の更新に失敗しました",
     "cloneProfileFailed": "プロファイルの複製に失敗しました: {{error}}",
     "loadSupportedBrowsersFailed": "サポートされているブラウザの読み込みに失敗しました",
@@ -1486,13 +1425,9 @@
     "themeNotFound": "Tokyo Night テーマが見つかりません",
     "setProfilePasswordFailed": "プロファイルのパスワード設定に失敗しました: {{error}}"
   },
-  "browser": {
-    "wayfern": "Wayfern"
-  },
+  "browser": {},
   "fingerprint": {
-    "crossOsWarning": "異なるオペレーティングシステムのフィンガープリント偽装は、すべての基盤コンポーネントを完璧に模倣することが不可能なため、信頼性が低くなります。注意してご使用ください。",
-    "crossOsApostateWarning": "このプロファイルはオープンソースの Apostate エンジンで開きます。エンジンは初めて必要になったときにダウンロードされます。接続がこのコンピューターから発信されてはいけないため、VPN またはプロキシが必要です。Apple シリコンでは Windows on ARM のノート PC として振る舞います。",
-    "crossOsLimitations": "クロスOSフィンガープリントには制限があります。システムレベルのAPIは実際のオペレーティングシステムを反映する場合があり、一部の機能のパフォーマンスが低下する可能性があります。",
+    "crossOsApostateWarning": "このプロファイルはオープンソースの Apostate エンジンで開きます。エンジンは Donut が自動でダウンロードします。プロキシや VPN がなくても開けますが、WireGuard VPN 経由（またはプロキシ経由）でない場合、ネットワーク層（TCP/IP）にはこのコンピューターの OS がそのまま表れ、サイトはフィンガープリントと照合できます。Apple シリコンでは Windows on ARM のノート PC として振る舞います。",
     "osLabel": "オペレーティングシステムのフィンガープリント",
     "selectOSPlaceholder": "オペレーティングシステムを選択",
     "generateRandomOnLaunch": "起動ごとにランダムなフィンガープリントを生成",
@@ -1764,7 +1699,7 @@
       "unlockedDescription": "ロックするまでデータは復号されたままです。"
     },
     "fingerprint": {
-      "notSupported": "フィンガープリント編集は Wayfern プロファイルでのみ利用できます。",
+      "notSupported": "フィンガープリント編集は Apostate プロファイルでのみ利用できます。",
       "lockedTitle": "フィンガープリントの表示と編集は Pro 機能です",
       "lockedDescription": "デバイス情報はすべてのプロファイルで保護されています。プロファイルのフィンガープリントを表示・編集するには、有効な有料プランが必要です。",
       "customValuesKept": "カスタムのフィンガープリント値は保存されています。アカウントに有効な Pro プランがあるときに適用されます。"
@@ -2320,16 +2255,6 @@
       "unavailable": "このプロファイルは現在リンクを開けません。"
     }
   },
-  "wayfernTerms": {
-    "title": "Wayfern 利用規約",
-    "description": "Donut Browser を使用する前に、Wayfern の利用規約を読み、同意する必要があります。",
-    "reviewLabel": "次の URL で利用規約をご確認ください:",
-    "agreeNotice": "「同意します」をクリックすると、これらの条項に拘束されることに同意します。",
-    "acceptButton": "同意します",
-    "acceptSuccess": "規約に同意しました",
-    "acceptFailed": "規約への同意に失敗しました",
-    "tryAgain": "もう一度お試しください"
-  },
   "commercialTrial": {
     "title": "商用試用期間が終了しました",
     "description": "2 週間の商用試用期間が終了しました。",
@@ -2521,43 +2446,13 @@
   },
   "browserDownload": {
     "toast": {
-      "fetchVersionsFailed": "{{browser}} のバージョン取得に失敗しました",
-      "foundNewVersions": "{{browser}} の新バージョン {{count}} 個が見つかりました!",
-      "totalAvailableVersions": "合計利用可能: {{count}} バージョン",
       "downloadFailed": "{{browser}} {{version}} のダウンロードに失敗しました",
       "calculating": "計算中...",
-      "extractionFailed": "{{browser}} {{version}}: 展開に失敗しました",
-      "extractionFailedDescription": "破損したファイルは削除されました。次回の試行時に再ダウンロードされます。",
       "extracting": "ブラウザファイルを展開中... アプリを閉じないでください。",
       "verifying": "ブラウザファイルを検証中...",
-      "downloadingRolling": "ローリングリリースビルドをダウンロード中...",
       "geoipDownloading": "GeoIP データベースをダウンロード中",
       "geoipDownloaded": "GeoIP データベースのダウンロードが完了しました！",
       "downloadFailedDescription": "ダウンロードを完了できませんでした。接続を確認して、もう一度お試しください。"
-    }
-  },
-  "versionUpdater": {
-    "toast": {
-      "alreadyAvailable": "{{browser}} {{version}} はすでに利用可能です",
-      "updatingProfiles": "プロファイル設定を更新中...",
-      "updateCompleted": "{{browser}} の更新が完了しました",
-      "singleProfileUpdated": "プロファイル「{{name}}」がバージョン {{version}} に更新されました。最新バージョンでブラウザを起動できます。",
-      "multipleProfilesUpdated": "{{count}} 個のプロファイルがバージョン {{version}} に更新されました。最新バージョンでブラウザを起動できます。",
-      "versionAvailable": "バージョン {{version}} が利用可能になりました。実行中のプロファイルは再起動時に新しいバージョンを使用します。",
-      "autoUpdateFailed": "{{browser}} の自動更新に失敗しました",
-      "updateWithErrors": "一部のエラーで更新が完了しました",
-      "updateWithErrorsDescription": "{{newVersions}} 個の新しいバージョンが見つかり、{{failedUpdates}} 個のブラウザの更新に失敗しました",
-      "updateSuccess": "ブラウザのバージョンを正常に更新しました",
-      "updateSuccessDescription": "{{successfulUpdates}} 個のブラウザに {{newVersions}} 個の新しいバージョンが見つかりました。自動ダウンロードがまもなく開始します。",
-      "upToDate": "新しいブラウザのバージョンは見つかりませんでした",
-      "upToDateDescription": "すべてのブラウザバージョンは最新です",
-      "updateAllFailed": "ブラウザバージョンの更新に失敗しました",
-      "updateStarted": "{{browser}} の更新を開始しました",
-      "updateStartedDescription": "バージョン {{version}} のダウンロードがまもなく開始されます。更新が完了するまでブラウザの起動は無効になります。",
-      "downloadStarting": "{{browser}} {{version}} のダウンロードを開始しています",
-      "downloadProgressBelow": "ダウンロードの進行状況は下に表示されます...",
-      "autoDownloadStarted": "{{browser}} {{version}} を自動的にダウンロードしています。進行状況は下に表示されます。",
-      "lookingForUpdates": "{{browser}} の更新を確認しています"
     }
   },
   "profilePassword": {
@@ -2664,17 +2559,12 @@
     "proxyNotWorking": "選択したプロキシが機能していないため、プロファイルは作成されませんでした。",
     "proxyPaymentRequired": "選択したプロキシは支払いが必要です（402）。サブスクリプションが期限切れの可能性があります。そのため、プロファイルは作成されませんでした。",
     "vpnNotWorking": "選択したVPNが機能していないため、プロファイルは作成されませんでした。",
-    "camoufoxImportDeprecated": "このタイプのプロファイルのインポートはサポートされなくなりました。代わりにWayfernを使用してください。",
     "updateChecksumsUnavailable": "アップデート {{version}} のチェックサムファイルを取得できなかったため、検証できませんでした。アップデートはインストールされませんでした。後で再試行されます。",
     "updateChecksumMismatch": "ダウンロードしたアップデートファイル {{file}} はチェックサム検証に失敗したため破棄されました。もう一度お試しください。",
-    "browserChecksumUnavailable": "{{browser}} {{version}} のチェックサムファイルを取得できなかったため、検証できませんでした。ダウンロードは中止されました。後で再試行されます。",
-    "browserChecksumMismatch": "ダウンロードした {{browser}} {{version}} のアーカイブはチェックサム検証に失敗したため破棄されました。もう一度お試しください。",
     "nameCannotBeEmpty": "名前を空にすることはできません",
-    "wayfernVersionNotAvailable": "Wayfernのバージョン{{requested}}はダウンロードできません。現在のバージョンは{{current}}です。",
     "profileNameExists": "「{{name}}」という名前のプロファイルは既に存在します",
     "importSourceNotFound": "ソースパスが存在しません",
     "importNoItems": "インポートする項目が選択されていません",
-    "browserNotDownloaded": "{{browser}}のダウンロード済みバージョンがありません。先にダウンロードしてから、再度インポートしてください。",
     "archiveExtractionFailed": "アーカイブの展開に失敗しました：{{detail}}",
     "unsupportedArchiveFormat": "サポートされていないアーカイブ形式です。ZIPアーカイブのみサポートされています。",
     "clearOnCloseUnavailable": "終了時消去は、一時プロファイルやパスワード保護されたプロファイルでは利用できません。",
@@ -2686,11 +2576,11 @@
     "fingerprintMatchFailed": "フィンガープリントをプロキシに合わせられませんでした。",
     "proxySidecarVersionMismatch": "Donut Browser のファイルに異なるバージョンが混在しています。最新のアップデートを再インストールしてください。プロファイルはそのまま保持されます。",
     "proxySidecarNotResponding": "Donut のプロキシ補助プログラム (donut-proxy) が {{seconds}} 秒以内に完了しませんでした。セキュリティソフトが止めている可能性があります。ウイルス対策ソフトで donut-proxy を許可してから、もう一度お試しください。",
-    "wayfernNotResponding": "Wayfern は起動しましたが、{{seconds}} 秒以内に応答しませんでした。セキュリティソフトが止めているか、ウィンドウを開けなかった可能性があります。ウイルス対策ソフトで Wayfern を許可してから、もう一度お試しください。",
+    "wayfernNotResponding": "ブラウザは起動しましたが、{{seconds}} 秒以内に応答しませんでした。セキュリティソフトが止めているか、ウィンドウを開けなかった可能性があります。ウイルス対策ソフトで Apostate を許可してから、もう一度お試しください。",
     "updateProfilesRunning": "アップデートをインストールする前に、実行中のプロファイルをすべて停止してください。",
     "updatePreparationFailed": "バックグラウンドのネットワークプロセスを安全に停止できませんでした。コンピューターを再起動してから、もう一度アップデートしてください。",
     "portableUpdateFailed": "ポータブルフォルダー内のファイルを置き換えられなかったため、現在のバージョンのままです。このフォルダーのファイルを使っているプログラムを閉じてから、もう一度再起動してください。",
-    "wayfernTermsRequired": "Wayfernを使用するには、Wayfernの利用規約に同意してください。",
+    "wayfernTermsRequired": "ブラウザエンジンは、利用条件に同意するまで起動できません。",
     "apiPortUnavailable": "APIサーバーで利用可能なポートが見つかりませんでした。",
     "mcpAgentUnknown": "このMCPクライアントはサポートされていません。",
     "mcpAgentInstallFailed": "MCPクライアントにDonut Browserを追加できませんでした：{{detail}}",
@@ -2740,7 +2630,8 @@
     "profileLockedElsewhere": "このプロファイルは別のデバイスで使用中です。",
     "profileLockUnavailable": "このプロファイルが他で使用中か確認できませんでした。接続を確認して再試行してください。",
     "fingerprintExitMismatch": "プロキシの出口ノードがこのプロファイルのフィンガープリントと一致しません。",
-    "fingerprintHostOsMismatch": "このプロファイルは {{claimed}} を名乗っていますが、Donut は {{host}} 上で実行されています。{{claimed}} の実機または仮想マシンで起動してください。",
+    "fingerprintHostOsMismatch": "このプロファイルは {{claimed}} を名乗っており、Donut は {{host}} 上で実行されていますが、プロキシまたは VPN が利用できません。このままでは接続がこのコンピューターから発信され、{{host}} が見えてしまいます。プロキシまたは VPN を修復するか外してから、もう一度起動してください。",
+    "fingerprintMobileUnsupported": "Donut は、スマートフォンやタブレット（Android、iOS）を名乗るプロファイルを開かなくなりました。Windows、macOS、Linux から選んでください。",
     "launchConsentExpired": "この確認は無効になりました。もう一度起動してください。",
     "vpnWorkerStartFailed": "VPN接続を開始できませんでした: {{detail}}",
     "exitProbeFailed": "プロキシの出口ノードに接続できず、所在地を確認できませんでした。",
@@ -2758,7 +2649,7 @@
       "parameter": "リンクにDonutが対応していないオプションが含まれています。",
       "malformed": "共有リンクが無効です。"
     },
-    "camoufoxRemoved": "Camoufoxはサポートされなくなりました。Wayfernでこのプロファイルを作り直してください。",
+    "camoufoxRemoved": "Camoufoxはサポートされなくなりました。このプロファイルを作り直してください。Apostate エンジンで動作します。",
     "noE2ePasswordSet": "エンドツーエンド暗号化のパスワードが設定されていません。暗号化データを同期する前に設定してください。",
     "importSourceNotChromium": "このフォルダーは Chromium ブラウザーのプロファイルではありません",
     "importSourceNotChromiumNamed": "{{family}} のプロファイルはインポートできません。Chromium 系ブラウザーのみ対応しています",
@@ -2788,7 +2679,7 @@
     "profileImportUnsafeArchive": "このアーカイブはプロファイルフォルダーの外に書き込もうとしたため、拒否しました。",
     "recordingAlreadyRunning": "すでに記録中です。別の記録を始める前に停止してください。",
     "profileNotRunning": "このプロファイルのブラウザーは起動していません。先に起動してください。",
-    "wayfern152Required": "記録には Wayfern 152 以降が必要です。このプロファイルのブラウザーを更新してください。",
+    "wayfern152Required": "Apostate エンジンでは記録を利用できません。",
     "recordingFailed": "記録を開始できませんでした。{{detail}}",
     "mcpRemoteRequiresSignIn": "リモート制御を有効にする前に Donut アカウントにサインインしてください。",
     "mcpRemoteUnauthorized": "Donut クラウドがこのデバイスの資格情報を拒否しました。サインアウトして、もう一度サインインしてください。",
@@ -2971,7 +2862,7 @@
     "agentNotEntitled": "このアカウントではエージェントを使用できません。",
     "noCredits": "エージェントのクレジットが残っていません。",
     "taskBudget": "タスクがクレジット上限に達しました。",
-    "agentUnsupported": "このブラウザのバージョンではエージェントを実行できません。Wayfern を更新してください。",
+    "agentUnsupported": "Apostate エンジンではエージェントを実行できません。",
     "agentBusy": "このプロファイルはすでにタスクを実行中です。",
     "agentTokenRequired": "エージェントがサインインできませんでした。もう一度お試しください。",
     "agentEngineFailed": "エージェントはその操作を実行できませんでした。",
@@ -3005,7 +2896,7 @@
     "pasteTypingFailed": "入力できませんでした: {{detail}}",
     "profileStillSyncing": "このプロファイルはまだ同期中です。しばらくしてからもう一度お試しください。",
     "cloudApiUrlInvalid": "http:// または https:// で始まる完全なアドレスを入力してください。",
-    "cookieBotRequiresWayfern": "ローカル Cookie Bot はブラウザの DevTools 接続を使うため、Wayfern プロファイルのみ操作できます。"
+    "cookieBotRequiresWayfern": "ローカル Cookie Bot はブラウザの DevTools 接続を使うため、Apostate プロファイルのみ操作できます。"
   },
   "rail": {
     "profiles": "プロファイル",
@@ -3265,7 +3156,7 @@
     "steps": {
       "createProfile": {
         "title": "最初のプロファイルを作成",
-        "content": "ここをクリックして最初のプロファイルを作成します。ブラウザには Wayfern を選んでください。フィンガープリント対策済みの推奨 Chromium です。"
+        "content": "ここをクリックして最初のプロファイルを作成します。Donut がブラウザエンジンを自動でダウンロードするので、すぐに使い始められます。"
       },
       "dnsBlocking": {
         "title": "DNS ブロック",
@@ -3296,25 +3187,6 @@
       "grant": "アクセスを許可",
       "requesting": "リクエスト中…"
     },
-    "ready": {
-      "title": "準備しています",
-      "descDownloading": "最初のブラウザ（Wayfern）をダウンロードしています。この初回セットアップはバックグラウンドで実行されます。少々お待ちください。",
-      "descReady": "ブラウザの準備ができました。最初のプロファイルを作成しましょう。",
-      "cta": "最初のプロファイルを作成",
-      "downloading": "ダウンロード中…",
-      "extracting": "展開中…",
-      "stats": "{{total}} 中 {{downloaded}}",
-      "speed": "{{speed}}/秒",
-      "timeLeft": "残り {{time}}",
-      "descExtracting": "ブラウザを展開しています。この初回セットアップはバックグラウンドで実行されます。少々お待ちください。",
-      "almostFinished": "まもなく完了します…",
-      "errorTitle": "セットアップに失敗しました",
-      "errorDownload": "{{browser}} をダウンロードできませんでした。接続を確認して、もう一度お試しください。",
-      "errorExtraction": "{{browser}} を展開できませんでした。もう一度お試しください。",
-      "errorGeneric": "{{browser}} のセットアップ中に問題が発生しました。もう一度お試しください。",
-      "retry": "再試行",
-      "proxyHint": "ネットワークが Donut のサーバーをブロックしている場合は、Donut 用のプロキシを入力してから再試行してください。"
-    },
     "features": {
       "title": "機能",
       "items": {
@@ -3340,10 +3212,6 @@
     },
     "progress": "セットアップの進行状況"
   },
-  "wayfernBlocked": {
-    "title": "プライマリデバイスではありません",
-    "description": "ブラウザの自動化と別のオペレーティングシステムのプロファイルは、プライマリデバイスでのみ実行できます。ほかのコンピューターで Donut Browser からサインアウトしてから、もう一度お試しください。"
-  },
   "profileGenerationLimit": {
     "title": "1時間あたりのプロファイル上限に達しました",
     "description": "ご利用プランの1時間あたりの新規プロファイル上限に達しました。時間が経過すると作成を再開できます。アカウントはブロックされていません。"
@@ -3355,9 +3223,7 @@
     "invalidFingerprintDescription": "フィンガープリント設定に無効な JSON が含まれています。詳細設定を確認してください。",
     "saveFailed": "設定の保存に失敗しました"
   },
-  "cookieCopy": {
-    "noOtherTargets": "他に Wayfern プロファイルが選択されていません"
-  },
+  "cookieCopy": {},
   "about": {
     "website": "ウェブサイト",
     "licenses": "ライセンス",
@@ -3645,7 +3511,14 @@
       "ownTimes": "プロファイルごとに別の時刻",
       "timeRandom": "プロファイルごとにランダム",
       "summaryOwnTimes_one": "各プロファイルが週 {{count}} 回、それぞれランダムな時刻に、1 回あたり最大 {{minutes}} 分実行します。",
-      "summaryOwnTimes_other": "各プロファイルが週 {{count}} 回、それぞれランダムな時刻に、1 回あたり最大 {{minutes}} 分実行します。"
+      "summaryOwnTimes_other": "各プロファイルが週 {{count}} 回、それぞれランダムな時刻に、1 回あたり最大 {{minutes}} 分実行します。",
+      "sourceTopic": "商品トピック",
+      "topicKeywordPlaceholder": "キーワード（例: iphone 15）",
+      "topicKeywordLabel": "商品キーワード",
+      "topicKeywordInvalid": "{{min}}〜{{max}} 文字で入力してください。",
+      "topicHint": "このキーワードを Google で検索し、{{site}} の結果を開いて商品を読み写真を見たあと、{{site}} が提案する関連語で検索を続けます。",
+      "topicLearned": "学習した関連語: {{count}}",
+      "enterKeywordFirst": "先にキーワードを入力してください"
     },
     "preset": {
       "light": "軽め",
@@ -3670,7 +3543,7 @@
       "fixFailed": "その修正を適用できませんでした。",
       "exitNodeHint": "プロキシも VPN もない場合、通信はマシン群自身のデータセンターのアドレスから出ていきます。ホスティングネットワークからの長時間のトラフィックは、ウォームアップしない場合よりもプロファイルの信頼性を損ないます。",
       "reasonSyncPassword": "同期暗号化のパスワードが設定済み",
-      "reasonLocalBrowser": "ローカル Cookie Bot には Wayfern プロファイルが必要です",
+      "reasonLocalBrowser": "ローカル Cookie Bot には Apostate プロファイルが必要です",
       "reasonEphemeral": "このプロファイルは一時的（エフェメラル）のため、閉じると Cookie は消えます"
     },
     "conflict": {
@@ -3744,7 +3617,8 @@
       "profileNotSynced": "クラウド上のコピーが不完全です。デスクトップから同期を完了してください",
       "profileOsMismatch": "プロファイルは実行したホストとは別のオペレーティングシステムのものです",
       "cancelledByUser": "手動で停止しました",
-      "unknown": "不明な理由 ({{code}})"
+      "unknown": "不明な理由 ({{code}})",
+      "siteChallenge": "サイトが人間の確認を求めたため、実行を停止しました"
     },
     "exitCheck": {
       "failed": "前回のチェック（{{time}}）でプロキシまたは VPN に接続できませんでした。設定を確認してください。",
@@ -3825,17 +3699,6 @@
     "handoffLocalLocation": "このコンピューター",
     "handoffSyncDetails": "同期の詳細を開く"
   },
-  "synchronizerPreview": {
-    "title": "クリックを試す",
-    "description": "リーダーの操作が選択したフォロワーにどう伝わるかを確認できます。この例ではブラウザーは起動しません。",
-    "send": "サンプルのクリックを送信",
-    "empty": "フォロワーを選択してプレビューを試してください。",
-    "ready": "選択したフォロワー: {{count}}",
-    "sent": "サンプルのクリックを表示しました。受信したフォロワー: {{count}}",
-    "received": "サンプルのクリックを受信しました",
-    "starting": "プロファイルを起動し、同期機能に接続中…",
-    "startError": "同期機能を開始できませんでした。選択内容は保持されています。プロファイルを確認して再試行してください。"
-  },
   "isolationDemo": {
     "title": "1つの変更。1つのプロファイル。",
     "description": "サンプルのプロファイルを試せます。実際のプロファイルは変更されません。",
@@ -3897,6 +3760,7 @@
     "launch": {
       "queued": "起動を要求しました",
       "preparing": "プロファイルを準備中",
+      "engine": "ブラウザエンジンを準備中",
       "network": "ネットワークを準備中",
       "extensions": "拡張機能を準備中",
       "starting": "ブラウザーを起動中",
@@ -4400,7 +4264,7 @@
       "confirmDelete": "もう一度クリックして削除",
       "emptyTitle": "エージェントに何をさせますか？",
       "emptyBody": "選んだプロファイルのブラウザで作業します。各ステップを確認でき、いつでも介入できます。",
-      "noProfiles": "まず Wayfern プロファイルを作成してください。エージェントはそのブラウザで作業します。",
+      "noProfiles": "まずプロファイルを作成してください。エージェントはそのブラウザで作業します。",
       "placeholderStart": "エージェントに依頼する",
       "placeholderFollowUp": "続けて質問する",
       "placeholderSteer": "作業中のエージェントに指示する",
@@ -4631,12 +4495,6 @@
         "title": "2FA コードをプロファイルと一緒に",
         "body": "プロファイル情報でアカウントの 2FA キーを追加すると、Donut が現在のコードを表示し、すぐにコピーできます。キーはこのデバイスに暗号化して保存されます。",
         "action": "2FA キーを試す"
-      },
-      "synchronizer": {
-        "label": "シンクロナイザー",
-        "title": "複数のプロファイルを同時に操作",
-        "body": "プロファイルのメニューで「シンクロナイザーで起動」を選び、フォロワーを選びます。リーダーでのクリックや入力が各フォロワーで繰り返されます。",
-        "action": "プロファイルを開く"
       }
     },
     "sections": {

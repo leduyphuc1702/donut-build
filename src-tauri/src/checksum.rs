@@ -44,29 +44,6 @@ pub fn find_checksum_for_file(checksums_text: &str, filename: &str) -> Option<St
   })
 }
 
-/// Digest from a single-asset `<file>.sha256` sidecar.
-///
-/// Prefers the entry named `filename`, because a name binds the digest to the
-/// asset it covers. Falls back to a lone digest only when the sidecar holds
-/// exactly one: `sha256sum < file` writes `-` as the name and some publishers
-/// emit the bare hash, and neither is ambiguous when it stands alone. A
-/// sidecar listing several assets always needs the name to match.
-pub fn parse_sidecar_digest(text: &str, filename: &str) -> Option<String> {
-  if let Some(named) = find_checksum_for_file(text, filename) {
-    return Some(named);
-  }
-
-  let mut digests = text
-    .lines()
-    .filter_map(|line| line.split_whitespace().next())
-    .filter(|token| is_sha256_hex(token));
-  let only = digests.next()?;
-  if digests.next().is_some() {
-    return None;
-  }
-  Some(only.to_ascii_lowercase())
-}
-
 fn is_sha256_hex(value: &str) -> bool {
   value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
@@ -108,71 +85,5 @@ not-a-hash  Donut_0.29.0_amd64.deb
     let path = temp_dir.path().join("data.bin");
     std::fs::write(&path, b"hello world").unwrap();
     assert_eq!(sha256_file(&path).unwrap(), HELLO_WORLD_SHA256);
-  }
-
-  #[test]
-  fn test_parse_sidecar_digest_prefers_the_named_entry() {
-    // The real Wayfern sidecar shape: `<hex>  <name>`, one asset per file.
-    let sidecar = format!("{HELLO_WORLD_SHA256}  wayfern-151.0.7922.71_windows_x64.zip\n");
-    assert_eq!(
-      parse_sidecar_digest(&sidecar, "wayfern-151.0.7922.71_windows_x64.zip").as_deref(),
-      Some(HELLO_WORLD_SHA256)
-    );
-  }
-
-  #[test]
-  fn test_parse_sidecar_digest_accepts_an_unnamed_lone_digest() {
-    // `sha256sum < file` writes `-` as the name, and some publishers emit the
-    // bare hash. Both cover the one asset the sidecar sits beside.
-    for sidecar in [
-      format!("{HELLO_WORLD_SHA256}  -\n"),
-      format!("{HELLO_WORLD_SHA256}\n"),
-      format!("  {HELLO_WORLD_SHA256}  \n"),
-    ] {
-      assert_eq!(
-        parse_sidecar_digest(&sidecar, "wayfern.zip").as_deref(),
-        Some(HELLO_WORLD_SHA256),
-        "should accept lone digest in {sidecar:?}"
-      );
-    }
-  }
-
-  #[test]
-  fn test_parse_sidecar_digest_normalizes_case() {
-    let sidecar = format!("{}  -\n", HELLO_WORLD_SHA256.to_ascii_uppercase());
-    assert_eq!(
-      parse_sidecar_digest(&sidecar, "wayfern.zip").as_deref(),
-      Some(HELLO_WORLD_SHA256)
-    );
-  }
-
-  #[test]
-  fn test_parse_sidecar_digest_rejects_an_ambiguous_multi_entry_sidecar() {
-    let sidecar = format!(
-      "{HELLO_WORLD_SHA256}  other.zip\n\
-       ABCDEF01745092B7D1C93C1E7E1C30D923BE3D1E916B661BD53D1C0C9C7F0A22  another.zip\n"
-    );
-    // Two candidates and neither is named `wayfern.zip`: guessing would defeat
-    // the point of the check.
-    assert_eq!(parse_sidecar_digest(&sidecar, "wayfern.zip"), None);
-  }
-
-  #[test]
-  fn test_parse_sidecar_digest_rejects_junk() {
-    assert_eq!(parse_sidecar_digest("", "wayfern.zip"), None);
-    assert_eq!(
-      parse_sidecar_digest("not-a-hash  wayfern.zip", "wayfern.zip"),
-      None
-    );
-    // An HTML error page served with HTTP 200 must not read as a digest.
-    assert_eq!(
-      parse_sidecar_digest("<!doctype html><title>404</title>", "wayfern.zip"),
-      None
-    );
-    // Right shape, wrong length.
-    assert_eq!(
-      parse_sidecar_digest("abc123  wayfern.zip", "wayfern.zip"),
-      None
-    );
   }
 }

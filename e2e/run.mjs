@@ -1021,7 +1021,7 @@ async function main() {
       process.platform === "linux" && !headed
         ? await startPrivateDisplay(runRoot, records)
         : null;
-    // The driver passes its environment to the app, and the app to Wayfern.
+    // The driver passes its environment to the app, and the app to the browser.
     const appEnv = { ...process.env };
     if (privateDisplay) {
       appEnv.DISPLAY = privateDisplay;
@@ -1041,7 +1041,7 @@ async function main() {
         "4",
         "--startup-timeout",
         "120",
-        // Sized to the longest command the suites issue (a Wayfern download),
+        // Sized to the longest command the suites issue (an engine download),
         // so the driver never cuts a command shorter than the session asked.
         "--command-timeout",
         String(DRIVER_COMMAND_TIMEOUT_SECONDS),
@@ -1081,15 +1081,13 @@ async function main() {
     }
 
     const localValues = await loadLocalValues([
-      "WAYFERN_TEST_TOKEN",
       "RESIDENTIAL_PROXY_URL_ONE_SOCKS",
       "RESIDENTIAL_PROXY_URL_ONE_HTTP",
     ]);
     sensitiveValues.push(...Object.values(localValues));
-    const token = localValues.WAYFERN_TEST_TOKEN ?? "";
-    if (needsBrowser && !token) {
-      throw new Error("WAYFERN_TEST_TOKEN is required by the browser suite");
-    }
+    // The e2e build reads this variable as the switch that turns the paid-plan
+    // checks on for the suites that drive a browser; any non-empty value does it.
+    const paidPlan = needsBrowser ? "1" : "";
     if (wireGuard) {
       sensitiveValues.push(
         wireGuard.config,
@@ -1130,11 +1128,11 @@ async function main() {
         // AppSession forwards this as the headless capability; only the
         // driver's TAURI_WEBDRIVER_HEADLESS reaches the app. On Linux the
         // window is shown on the private display instead (see
-        // startPrivateDisplay), and Wayfern opens there too.
+        // startPrivateDisplay), and the browser opens there too.
         // DONUT_E2E_HEADED=1 shows the window on the current display when a
         // failure needs watching.
         DONUT_E2E_HEADLESS: headed || privateDisplay ? "0" : "1",
-        WAYFERN_TEST_TOKEN: token,
+        DONUT_E2E_PAID_PLAN: paidPlan,
         RESIDENTIAL_PROXY_URL_ONE_SOCKS:
           localValues.RESIDENTIAL_PROXY_URL_ONE_SOCKS ?? "",
         RESIDENTIAL_PROXY_URL_ONE_HTTP:

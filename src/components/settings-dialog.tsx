@@ -325,7 +325,6 @@ export function SettingsDialog({
   );
   const animateNav = useMotionAllowed();
   const [isSettingDefault, setIsSettingDefault] = useState(false);
-  const [isClearingCache, setIsClearingCache] = useState(false);
   const [isClearingTraffic, setIsClearingTraffic] = useState(false);
   const [requestingPermission, setRequestingPermission] =
     useState<PermissionType | null>(null);
@@ -542,24 +541,6 @@ export function SettingsDialog({
       showErrorToast(translateBackendError(t, error));
     } finally {
       setIsClearingTraffic(false);
-    }
-  }, [t]);
-
-  const handleClearCache = useCallback(async () => {
-    setIsClearingCache(true);
-    try {
-      await invoke("clear_all_version_cache_and_refetch");
-      // Also clear traffic stats cache
-      await invoke("clear_all_traffic_stats");
-      // Don't show immediate success toast - let the version update progress events handle it
-    } catch (error) {
-      console.error("Failed to clear cache:", error);
-      showErrorToast(t("settings.advanced.clearCacheFailed"), {
-        description: translateBackendError(t, error),
-        duration: 4000,
-      });
-    } finally {
-      setIsClearingCache(false);
     }
   }, [t]);
 
@@ -1774,22 +1755,6 @@ export function SettingsDialog({
                       updateSetting("keep_decrypted_profiles_in_ram", v)
                     }
                   />
-                  <SettingRow
-                    label={t("settings.advanced.clearCache")}
-                    description={t("settings.advanced.clearCacheDescription")}
-                  >
-                    <LoadingButton
-                      size="sm"
-                      variant="soft"
-                      className="h-8"
-                      isLoading={isClearingCache}
-                      onClick={() => {
-                        void handleClearCache();
-                      }}
-                    >
-                      {t("settings.clear")}
-                    </LoadingButton>
-                  </SettingRow>
                   <SettingRow
                     label={t("settings.advanced.logs")}
                     description={t("settings.advanced.copyLogsDescription")}

@@ -60,7 +60,6 @@ import {
   StatusLight,
 } from "@/components/ui/settings-panel";
 import { useCloudAuth } from "@/hooks/use-cloud-auth";
-import { useWayfernTerms } from "@/hooks/use-wayfern-terms";
 import {
   curlSnippet,
   LOCAL_API_EXAMPLES,
@@ -173,7 +172,6 @@ export function IntegrationsDialog({
     setActiveTab(initialTab);
   }
 
-  const { termsAccepted } = useWayfernTerms();
   const { user, isLoggedIn, isLoading: authLoading } = useCloudAuth();
   // Asked of the SERVER, not inferred.
   //
@@ -1223,9 +1221,7 @@ export function IntegrationsDialog({
                       <AnimatedSwitch
                         id={remoteSwitchId}
                         checked={remote?.enabled ?? false}
-                        disabled={
-                          !termsAccepted || !isLoggedIn || isRemoteStarting
-                        }
+                        disabled={!isLoggedIn || isRemoteStarting}
                         onCheckedChange={(checked) =>
                           void handleRemoteToggle(checked)
                         }
@@ -1235,11 +1231,6 @@ export function IntegrationsDialog({
                     {!isLoggedIn && (
                       <p className="pt-3 text-xs text-warning-text @md:pl-12">
                         {t("integrations.remote.signInRequired")}
-                      </p>
-                    )}
-                    {isLoggedIn && !termsAccepted && (
-                      <p className="pt-3 text-xs text-warning-text @md:pl-12">
-                        {t("integrations.mcpAcceptTermsFirst")}
                       </p>
                     )}
 

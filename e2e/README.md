@@ -4,23 +4,25 @@ These tests exercise the actual Tauri application through the published
 [`tauri-wd`](https://crates.io/crates/tauri-wd) native test driver. They do
 not replace Rust or React unit tests; they
 cover the process boundaries those tests cannot: WKWebView/WebView2/WebKitGTK UI, Tauri invokes,
-the REST server, two-device sync, S3 payload encryption, Wayfern, CDP, and child-process
+the REST server, two-device sync, S3 payload encryption, the Apostate engine, CDP, and child-process
 cleanup.
 
 ## Local setup
 
 Install Donut dependencies with `pnpm install`. The runner installs the driver itself with
-`cargo install`, so a working Rust toolchain is the only extra requirement. The browser suite also
-needs
-`WAYFERN_TEST_TOKEN`. The runner reads it from the environment or Donut's ignored `.env` without
-printing it. The browser suites always run the newest published Wayfern build. The download is
-saved as an ignored cache fixture under `.cache/e2e-wayfern-fixture`, which the runner copies into
-the test data root (using an isolated APFS clone on macOS) on later runs; a cached fixture holding
-any other version is replaced before the suite uses it, so the cache can never keep an old browser
-under test.
+`cargo install`, so a working Rust toolchain is the only extra requirement. The browser suites need
+no credential. They run the pinned Apostate engine: the first run lets the app download and verify
+it (about 160 MB), saves the install as an ignored cache fixture under
+`.cache/e2e-apostate-fixture/<release>/<target>`, and copies it into the test data root (using an
+isolated APFS clone on macOS) on later runs. The cache is keyed by the pinned release, so a new pin
+never reuses an old build.
 
-Set `DONUT_E2E_WAYFERN_PATH` to pin an explicit local bundle instead, for example a browser built
-from source. A pinned bundle is used as given, without the published-version check.
+Set `DONUT_E2E_APOSTATE_PATH` to pin an explicit local install directory instead, for example an
+engine built from source. A pinned install is used as given.
+
+Every other suite starts with a stand-in engine executable and `DONUT_E2E_DISABLE_STARTUP_NETWORK`,
+so the app sees the engine as installed and never downloads it. Pass `engine: "none"` to
+`appFromEnvironment` for a session that tests the first-run download.
 
 The real-network suite additionally requires Docker plus
 `RESIDENTIAL_PROXY_URL_ONE_HTTP` and `RESIDENTIAL_PROXY_URL_ONE_SOCKS`. It creates its own
@@ -47,10 +49,10 @@ plugin and the CLI come from the same pinned crates.io release, so they cannot d
 the pin in `e2e/app/Cargo.toml` to move to a newer driver. Every suite keeps the Donut window off
 your screen, so a run never pops a window or steals focus: on macOS the window is transparent,
 click-through and never focused, and on Windows it is hidden. On Linux the runner starts a private
-Xvfb screen (install the `xvfb` package) and shows the window and every Wayfern window there,
+Xvfb screen (install the `xvfb` package) and shows the window and every browser window there,
 because GTK gives a hidden window no size and its page would have a 0x0 viewport. Set
-`DONUT_E2E_HEADED=1` to watch the window on your display while debugging a failure; Wayfern
-browsers launched by a test are separate processes and show their own windows unless the test
+`DONUT_E2E_HEADED=1` to watch the window on your display while debugging a failure; browsers
+launched by a test are separate processes and show their own windows unless the test
 asks for a headless launch.
 Add `--no-build` to
 `node e2e/run.mjs --suite=<name>` only when all four outputs are current.
@@ -62,11 +64,11 @@ binaries are pruned so repeated failures do not consume gigabytes.
 
 The suites deliberately distinguish visible behavior from command coverage. `e2e:entities`
 exercises isolated CRUD and persistence through Tauri commands. `e2e:network` visibly creates a
-profile group, HTTP proxy, WireGuard VPN, extension, extension group, and Wayfern profile; assigns
+profile group, HTTP proxy, WireGuard VPN, extension, extension group, and Apostate profile; assigns
 the proxy and VPN in the profile table; validates both residential HTTP and SOCKS5 proxies; then
-launches Wayfern through the residential proxy and through the local WireGuard tunnel. Normal test
+launches Apostate through the residential proxy and through the local WireGuard tunnel. Normal test
 sessions start with onboarding completed so the Welcome dialog cannot hide the feature under test.
-The onboarding and Wayfern-terms scenarios explicitly opt into fresh state and test those dialogs.
+The onboarding scenarios explicitly opt into fresh state and test those dialogs; the first-run engine scenario passes `engine: "none"`.
 `e2e:ui` selects predefined, preset, and manually customized themes through the native UI and
 asserts their persisted settings and rendered CSS variables across rail navigation and app restart.
 
@@ -82,20 +84,18 @@ runner redirects:
 - all REST, WebDriver, fixture, S3, and sync-server ports;
 - each sync test to a new S3 bucket (served by `rclone serve s3`) and random token.
 
-The E2E feature suppresses automatic updater/download traffic, but explicit browser tests still
-exercise published Wayfern downloads whenever the cache fixture is missing or holds a different
-version than the published build. Entitlement fallback from
-`WAYFERN_TEST_TOKEN` exists only in the feature-gated test binary. Production builds never include
-the WebDriver plugin or this fallback.
+The E2E feature suppresses automatic updater and engine-download traffic, but explicit browser
+tests still download the pinned Apostate release whenever the cache fixture is missing. The paid-plan
+fallback switched on by `DONUT_E2E_PAID_PLAN` exists only in the feature-gated test binary.
+Production builds never include the WebDriver plugin or this fallback.
 
 ## CI
 
 `.github/workflows/app-e2e.yml` runs smoke tests on macOS, Linux/Xvfb, and Windows for pull
 requests. Pushes to `main`, weekly schedules, and manual runs execute the full macOS suite,
-including S3-backed sync and real Wayfern automation, plus a Linux/Docker job for residential
+including S3-backed sync and real Apostate automation, plus a Linux/Docker job for residential
 proxy and local WireGuard browser traffic.
 
 Every job restores the compiled driver from an `actions/cache` entry keyed by `e2e/app/Cargo.lock`,
-the same file the runner reads the version from, so only a driver bump pays for a rebuild. The full job requires the
-`WAYFERN_TEST_TOKEN` secret. The network job requires that secret plus
+the same file the runner reads the version from, so only a driver bump pays for a rebuild. The network job requires
 `RESIDENTIAL_PROXY_URL_ONE_HTTP` and `RESIDENTIAL_PROXY_URL_ONE_SOCKS`.

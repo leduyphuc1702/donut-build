@@ -55,7 +55,7 @@ donutbrowser/
 │   │   ├── mcp_integrations.rs      # 20-client MCP installer: remote endpoint with bearer, format-preserving JSONC/TOML edits
 │   │   ├── automation_rate_limiter.rs # Shared REST/MCP automation quota
 │   │   ├── agent_console.rs         # The person's side of connected MCP agents: activity, questions, notes, take-over, pause
-│   │   ├── agent_tasks/             # Agent tasks and routines (hidden unless the `agent` entitlement): Wayfern engine over CDP, multi-profile batches, agent token, cloud runs
+│   │   ├── agent_tasks/             # Agent tasks and routines (hidden: they drive the closed `Wayfern.*` CDP domain, which Apostate lacks, and refuse with APOSTATE_FEATURE_UNSUPPORTED): multi-profile batches, agent token, cloud runs
 │   │   ├── recipes.rs               # Thin client for cloud recipes; storage and replay stay in the cloud
 │   │   ├── agent_schedules.rs       # Thin client for scheduled recipes (paid plans; the cloud checks the plan)
 │   │   ├── cloud_api.rs             # Signed-in JSON calls to Donut cloud, with token refresh and error codes
@@ -66,16 +66,19 @@ donutbrowser/
 │   │   ├── xray/                    # Xray share links (VLESS, VMess, Trojan, Hysteria2): parse, export, client config
 │   │   ├── xray_worker_runner.rs    # Xray-core sidecar lifecycle
 │   │   ├── xray_worker_storage.rs   # Private Xray worker state and runtime files
-│   │   ├── wayfern_manager.rs       # Wayfern (Chromium) browser management; wayfern_manager/apostate_launch.rs launches Apostate profiles
-│   │   ├── apostate.rs              # Open-source Apostate engine for profiles claiming another desktop OS: pinned download, sha256, persona switches
+│   │   ├── wayfern_manager.rs       # Launch facade: the internal browser string stays "wayfern" (IDs, storage keys, synced data) while every profile runs on Apostate; wayfern_manager/apostate_launch.rs builds the command line
+│   │   ├── apostate.rs              # The only engine, open-source Apostate: pinned download + sha256, background install at startup (`download-progress` events), startup migration of stored profiles, persona switches
 │   │   ├── fingerprint_generator.rs # Local device payloads, drawn from fingerprint_devices.json (weighted real-desktop marginals, Apache-2.0 Apify data)
-│   │   ├── downloader.rs           # Browser binary downloader
 │   │   ├── extraction.rs           # Archive extraction (zip, tar, dmg, msi)
 │   │   ├── portable_update.rs      # Portable Windows ZIP self-update: staged in .update/, files swapped at restart
 │   │   ├── settings_manager.rs     # App settings persistence (atomic writes), tips + paid-welcome state
 │   │   ├── system_proxy.rs         # The OS proxy Donut's own requests use; named in the error when it is unreachable
 │   │   ├── vault.rs                # Per-install key that seals local secrets; opens legacy build-password seals once
 │   │   ├── cookie_manager.rs       # Cookie import/export
+│   │   ├── cookie_bot_local.rs     # Self-hosted Cookie Bot: schedules, runs, calendar ticker; launches a windowed profile and hands it to warmup/
+│   │   ├── warmup/                 # Site warm-up that browses like a person over standard CDP only: pointer paths, wheel scrolling, link choice, consent clicks (pure planners, page reader, driver, visit); topic.rs + shop.rs + keys.rs: a topic run shops like a person (Google, then the shop's search, suggestions, listings, typed key presses), and a bot check ends the run (`site_challenge`);
+│   │   │                           # topic.rs is the product-topic shopper (Google, then eBay search, listings, photos, suggested variants), shop.rs + read_shop.js read search pages, keys.rs plans typing;
+│   │   │                           # fixture_tests.rs drives a real Chromium (`--ignored`)
 │   │   ├── local_storage.rs        # Local Storage LevelDB read/write, Playwright storageState import/export
 │   │   ├── site_storage.rs         # Oversized per-site storage: measure, notice after an early exit, move aside, delete backup
 │   │   ├── profile_importer.rs     # Bulk profile import (Chromium-family detection, ZIP, batch)
@@ -102,7 +105,7 @@ donutbrowser/
 │   └── src/                        # Controllers, services, auth, S3 sync
 ├── vietflow/sync-server/           # Vietflow fork: donut-sync deploy (VPS with Caddy HTTPS, or LAN) and its Vietnamese guide
 ├── vietflow/control-plane/         # Self-hosted account/control plane (Node, no deps): team members and /admin page, per-user sign-in, unlimited entitlements, profile locks, per-device activity log
-├── e2e/                            # Isolated native UI/sync/Wayfern E2E system
+├── e2e/                            # Isolated native UI/sync/browser E2E system
 │   ├── app/                        # Test-only Tauri harness that injects the private driver
 │   ├── lib/                        # WebDriver, CDP, fixtures, app-session helpers
 │   └── tests/                      # Smoke, UI/motion, entity, network, integration, sync, browser suites
@@ -118,11 +121,81 @@ donutbrowser/
 
 ## Testing and Quality
 
-- After making changes, run `pnpm format && pnpm lint && pnpm test` at the root of the project
-- Always run this command before finishing a task to ensure the application isn't broken
-- `pnpm lint` includes spellcheck via [typos](https://github.com/crate-ci/typos). False positives can be allowlisted in `_typos.toml`
-- The full `pnpm test` output dumps every test name (≈400+ lines) which burns context for no signal. Filter:
-  `pnpm test 2>&1 | grep -E "test result|panicked|FAILED"`. Four "test result: ok" lines means everything passed.
+Run the cheapest check that can catch a mistake in the diff, then the one native E2E suite that
+covers it. A full sweep is for diffs that can reach everything; running it for a one-line change
+costs minutes and catches nothing the scoped check does not already cover.
+
+### Match the check to the diff
+
+`git diff --name-only` picks the row below. Use the most specific row that matches; a diff that
+spans rows takes the most expensive one, and when unsure how far a change reaches, escalate.
+
+| Diff touches | Run | Do not run |
+| --- | --- | --- |
+| `*.md`, `docs/`, `assets/`, `packaging/`, `snap/`, `sdk/`, `flake.*`, `_typos.toml`, or only comments and whitespace in a code file | `pnpm lint:spell` (the commit hook fixes formatting) | format, type-check, unit tests, E2E |
+| `src/i18n/locales/*.json` | `pnpm exec biome check src/i18n/locales && pnpm test:i18n-parity && pnpm test:tips && pnpm lint:spell` | everything else |
+| `src/**` only | scoped JavaScript check, then the affected E2E suite(s) | `pnpm lint:rust`, `pnpm test` in full, unrelated E2E suites |
+| `src-tauri/src/**` only | scoped Rust check, then the affected E2E suite(s) | `pnpm lint:js`, `test:donut-sync`, full `pnpm test`, unrelated E2E suites |
+| `donut-sync/src/**` only | `cd donut-sync && cargo clippy --all-targets --locked -- -D warnings -D clippy::all` and `cargo test` against the compose S3 server (the `donut-sync` row below) | JS checks, Tauri E2E suites |
+| dependencies (`package.json`, `pnpm-lock.yaml`, any `Cargo.toml`/`Cargo.lock`), `tauri.conf.json`, `e2e/**`, `.github/workflows/**`, Tauri command registration in `lib.rs`, or a diff spanning tiers | full `pnpm format && pnpm lint && pnpm test` plus every affected E2E row | nothing; this is the full tier |
+
+Two expensive steps the scoped tiers skip because something else already covers them:
+
+- **`pnpm build`**: `pnpm lint:js` type-checks the frontend, `pnpm test:licenses` covers the
+  generated license inventory, and every E2E run that builds runs `pnpm build` itself
+  (`e2e/run.mjs`). Run it only to produce artifacts, or when changing the Next.js build or config
+  itself.
+- **The whole `pnpm lint`**: `lint:rust` and `lint:js` are independent. A JS-only diff never needs
+  clippy; a Rust-only diff never needs biome, `tsrs`, or the e2e biome pass.
+
+`pnpm lint` includes spellcheck via [typos](https://github.com/crate-ci/typos). False positives can
+be allowlisted in `_typos.toml`.
+
+#### Scoped JavaScript/TypeScript
+
+```bash
+pnpm exec biome check --write <changed files>   # format + lint, that area only
+pnpm exec tsrs --noEmit                          # project type check, seconds
+node --test <the *.test.mjs that covers the change>
+```
+
+Most suites are a `*.test.mjs` next to the code they cover; run only the ones whose subject
+changed. The `test:*` scripts in `package.json` name their area (`pnpm test:tips` for
+`src/lib/tips.ts` and the coach mark, `pnpm test:backend-errors` for `src/lib/backend-errors.ts`,
+`pnpm test:i18n-parity` for locales, `pnpm test:palette-search` for shortcuts, and so on). If no
+test file covers the touched code, run the owning `test:*` script when one exists; otherwise the
+E2E row below is the evidence, and the report says so.
+
+#### Scoped Rust
+
+```bash
+cd src-tauri
+cargo fmt --all
+cargo clippy --all-targets --all-features -- -D warnings -D clippy::all
+cargo test --lib <module>::        # the touched module's tests, not the whole crate
+```
+
+Run the clippy line once after the edits settle: it is incremental, so a rerun after a small tweak
+is cheap, and the commit hook runs it anyway. Add `cargo test --test donut_proxy_integration` or
+`--test vpn_integration` when the change touches the proxy worker or the VPN tunnel. A module with
+no unit tests is covered by its E2E suite.
+
+#### Reuse a finished run
+
+- Batch edits, then run the affected E2E suite once at the end. Do not start a suite after each
+  small edit.
+- `--no-build` skips `pnpm build`, the sidecar copy, and the e2e cargo build. Use it only when
+  nothing in the frontend, Rust app, sidecar, or driver changed since the last successful build;
+  otherwise the suite tests a stale binary.
+- When the full tier is required, filter its output: `pnpm test` prints every test name
+  (≈400+ lines), which burns context for no signal. Use
+  `pnpm test 2>&1 | grep -E "test result|panicked|FAILED"`; four "test result: ok" lines means
+  everything passed.
+
+CI does not replace the scoped check, because no E2E suite runs there (see below). It does run the
+full format + clippy + `pnpm test` sweep for a rust-affected PR (`.github/workflows/lint-rs.yml`),
+and the pre-commit hook re-runs `cargo clippy --all-targets --all-features` and `cargo test --lib`
+on any staged `src-tauri/**/*.rs` file, so do not run those twice by hand in the same commit.
 
 ### Native app E2E tests are mandatory for affected behavior
 
@@ -147,9 +220,8 @@ watching.
 from `src-tauri/Cargo.lock` whenever that file is newer, so the harness always links the exact
 dependency versions Donut ships and a version bump or a Dependabot upgrade needs no second edit.
 
-After a behavior change, run the smallest affected subset below in addition to the standard
-format/lint/unit-test command. A code change is not verified until its affected native
-suite passes:
+After a behavior change, run the smallest affected subset below in addition to the scoped check
+above. A code change is not verified until its affected native suite passes:
 
 | Changed area | Required command |
 | --- | --- |
@@ -159,19 +231,19 @@ suite passes:
 | Profile/group/proxy/VPN/extension UI, proxy routing, VPN routing, or their browser-launch integration | `pnpm e2e:network` |
 | REST API/OpenAPI, MCP, cloud/update contracts, team locks, real-time synchronizer | `pnpm e2e:integrations` |
 | Sync client/server, manifests, timestamps, deletion, encryption, password rollover | `pnpm e2e:sync` |
-| Wayfern download/terms/fingerprint, browser runner, CDP, automation endpoints, process cleanup | `pnpm e2e:browser` |
+| Apostate install/fingerprint, browser runner, CDP, automation endpoints, process cleanup | `pnpm e2e:browser` |
 | `donut-sync/` server code (routes, auth, S3 client, presigning, subscriptions) | `cd donut-sync && cargo test` against the compose S3 server |
 | E2E harness, WebDriver plugin/driver, app isolation hooks, or changes spanning multiple rows | Run every affected row; use `pnpm e2e` for cross-cutting changes |
 
-`e2e:browser` requires `WAYFERN_TEST_TOKEN` in the environment or local `.env`. `e2e:network`
+`e2e:browser` needs no credentials: it copies a cached Apostate install from `.cache/e2e-apostate-fixture` or, the first time, lets the app download and verify the pinned release (~160 MB); `DONUT_E2E_APOSTATE_PATH` pins a local install. Every other suite seeds a stand-in engine and sets `DONUT_E2E_DISABLE_STARTUP_NETWORK`, so it never downloads one (`engine: "none"` leaves the data root empty for a test of the first-run download). `e2e:network`
 and the full suite additionally require Docker plus `RESIDENTIAL_PROXY_URL_ONE_HTTP` and
 `RESIDENTIAL_PROXY_URL_ONE_SOCKS`. Other individual suites must run without credentials. Use
 `--no-build` only when the frontend, Rust app, sidecar, and WebDriver binaries are already current.
 Keep failed artifacts and inspect the per-session app/driver logs and screenshot before changing
 assertions.
 
-The root `pnpm test` runs only the unit tests of `donut-sync` (`test:donut-sync`); its
-end-to-end tests are the `donut-sync` row. They run the binary against the S3 server in
+In the full tier, the root `pnpm test` runs only the unit tests of `donut-sync` (`test:donut-sync`);
+its end-to-end tests are the `donut-sync` row. They run the binary against the S3 server in
 `donut-sync/docker-compose.yml` (`rclone serve s3` on port 8987; MinIO no longer publishes
 community images or binaries):
 
@@ -401,10 +473,11 @@ flow (what to show when) is `src/hooks/use-tips.ts`. State (`tips_auto_show`,
 ## Onboarding
 
 A new install sees `src/components/welcome-dialog.tsx`: intro, the
-profile-isolation example, licensing, macOS permissions, and the browser
-setup, with `StepDots` (`ui/step-dots.tsx`) for progress and one drawing per
-step (`src/components/onboarding/scenes.tsx`; the setup drawing follows the
-real download). Steps move, they never fade in: text and controls are opaque
+profile-isolation example, licensing and macOS permissions, with `StepDots`
+(`ui/step-dots.tsx`) for progress and one drawing per step
+(`src/components/onboarding/scenes.tsx`). There is no browser setup step: the
+engine downloads in the background from startup (`apostate.rs`
+`start_background_install`, progress toasts in `use-engine-install.ts`). Steps move, they never fade in: text and controls are opaque
 from the first frame. A user with no profile then gets the tour,
 `src/components/onboarding-tour.tsx`: the same coach mark with `spotlight`
 (the page dims around the anchor, and the anchor still takes clicks), first on

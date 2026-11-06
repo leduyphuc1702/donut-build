@@ -5,16 +5,18 @@
 //! to it. With no cloud there is no host, so this module does the work here:
 //!
 //! - schedules, runs and saved site lists live in `settings/cookie_bot_local.json`;
-//! - "run now" launches the profile on this machine (headless), opens each of
-//!   the enrolment's sites in a tab, leaves it there for a share of the budget,
-//!   closes it, and closes the browser when the budget is spent;
+//! - "run now" launches the profile on this machine in a window (never
+//!   headless) and hands the browser to `warmup`, which browses each of the
+//!   enrolment's sites like a person: it moves a real pointer, scrolls with the
+//!   wheel, follows a few of the site's own links, accepts a cookie banner with
+//!   a click, and spends the budget unevenly. The browser is closed when the
+//!   budget is spent;
 //! - a ticker checks the calendar once a minute while Donut is open and starts
 //!   a run that is due.
 //!
-//! The result is a local cookie-warming loop, not the cloud bot's behaviour:
-//! there is no consent-dialog handling, no persona, and no remote hours. The
-//! UI shows exactly what happened, because every run this starts is recorded
-//! with its visited and failed site counts.
+//! The UI shows what happened, because every run this starts is recorded with
+//! its visited and failed site counts and the banners it accepted. The log
+//! line of a finished run carries counts only, never a site.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -26,8 +28,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::cloud_errors::{self, BackendFailure, FailureCodes};
 use crate::cookie_bot::{
-  CookieBotConflictCheck, CookieBotLimits, CookieBotPreset, CookieBotPresetList, CookieBotRun,
-  CookieBotRunPage, CookieBotRunStarted, CookieBotSchedule, CookieBotScheduleDeleted,
+  CookieBotConflictCheck, CookieBotFocus, CookieBotLimits, CookieBotPreset, CookieBotPresetList,
+  CookieBotRun, CookieBotRunPage, CookieBotRunStarted, CookieBotSchedule, CookieBotScheduleDeleted,
   CookieBotScheduleInput, CookieBotScheduleList, CookieBotScheduleSaved, CookieBotSlot,
   CookieBotUsage, CookieBotUsageMember, CookieBotUsageProfile, CookieBotUserTemplate,
   RemoteHoursBreakdown, RemoteHoursMember, RemoteHoursQuota,
@@ -39,6 +41,11 @@ const MAX_MINUTES: u32 = 120;
 const MIN_SITES: usize = 1;
 const MAX_SITES: usize = 40;
 const MAX_TEMPLATE_NAME: usize = 80;
+const MIN_KEYWORD: usize = 2;
+const MAX_KEYWORD: usize = 60;
+/// Learned searches kept per topic: enough for weeks of variety, small enough
+/// that the oldest give way to what the site suggests now.
+const MAX_LEARNED: usize = 80;
 /// What the local quota meter reports. There is no billing here; the number
 /// only has to be large enough never to look like a limit that will bite.
 const GRANTED_HOURS: f64 = 100_000.0;
@@ -177,6 +184,35 @@ fn valid_site(site: &str) -> bool {
     .is_ok_and(|url| matches!(url.scheme(), "http" | "https") && url.host_str().is_some())
 }
 
+/// A topic the bot can run, trimmed. The searches learned in earlier runs stay
+/// while the keyword does; a new keyword starts from nothing.
+fn checked_focus(
+  focus: &CookieBotFocus,
+  previous: Option<&CookieBotFocus>,
+) -> Result<CookieBotFocus, crate::cookie_bot::CookieBotError> {
+  let site = focus.site.trim().to_ascii_lowercase();
+  let keyword = focus
+    .keyword
+    .split_whitespace()
+    .collect::<Vec<_>>()
+    .join(" ");
+  let length = keyword.chars().count();
+  if !crate::warmup::TOPIC_SITES.contains(&site.as_str())
+    || !(MIN_KEYWORD..=MAX_KEYWORD).contains(&length)
+  {
+    return Err(failure(400, "COOKIE_BOT_INVALID_SCHEDULE", SCHEDULE_CODES));
+  }
+  let learned = previous
+    .filter(|previous| previous.site == site && previous.keyword.eq_ignore_ascii_case(&keyword))
+    .map(|previous| previous.learned.clone())
+    .unwrap_or_default();
+  Ok(CookieBotFocus {
+    site,
+    keyword,
+    learned,
+  })
+}
+
 /// The slots a write describes, with the mirrored pair as the fallback.
 fn checked_slots(
   input: &CookieBotScheduleInput,
@@ -270,10 +306,19 @@ async fn build_schedule(
   }
   let max_minutes = valid_minutes(input.max_minutes)?;
 
+  let focus = input
+    .focus
+    .as_ref()
+    .map(|focus| checked_focus(focus, previous.and_then(|p| p.focus.as_ref())))
+    .transpose()?;
+
   // A saved list stands in for the site list exactly as it does in the cloud:
   // the form sends `sites: []` when a template is chosen.
   let mut sites = input.sites.clone();
-  if let Some(template_id) = input.template_id.as_deref() {
+  if let Some(focus) = &focus {
+    // The shop's front page stands for the topic wherever a site count shows.
+    sites = vec![crate::warmup::topic_home(&focus.site).to_string()];
+  } else if let Some(template_id) = input.template_id.as_deref() {
     if template_id.starts_with("user:") {
       let template = state()
         .templates
@@ -320,9 +365,14 @@ async fn build_schedule(
     } else {
       input.preset.trim().to_string()
     },
-    template_id: input.template_id.clone(),
+    template_id: if focus.is_some() {
+      None
+    } else {
+      input.template_id.clone()
+    },
     max_minutes,
     sites,
+    focus,
     jitter_seconds: input.jitter_seconds.unwrap_or(0),
     sync_enabled: input.sync_enabled,
     encrypted_sync: input.encrypted_sync,
@@ -595,6 +645,60 @@ fn start_scheduled(schedule: CookieBotSchedule, minutes: u32) -> CookieBotRun {
   run
 }
 
+/// A run that could not reach its browser over DevTools, or lost it midway.
+/// One streak per profile, so a schedule that fails every night writes a
+/// reminder an hour, not a line per attempt.
+static DEVTOOLS: crate::log_streak::KeyedStreak =
+  crate::log_streak::KeyedStreak::new(module_path!(), "Cookie bot DevTools connection");
+
+/// How long the browser has to open its DevTools port after it started.
+const DEVTOOLS_WAIT_SECS: u64 = 30;
+
+/// What a finished run is called, from its counts.
+fn run_status(stopped: bool, visited: u32, failed: u32, total: u32) -> &'static str {
+  if stopped {
+    "cancelled"
+  } else if visited == 0 && failed > 0 {
+    "failed"
+  } else if failed > 0 || visited < total {
+    "partial"
+  } else {
+    "succeeded"
+  }
+}
+
+/// Connect to the browser's DevTools once its port is registered; a socket
+/// opened before that has nothing to talk to.
+async fn connect_devtools(
+  run_id: &str,
+  launched: &crate::profile::types::BrowserProfile,
+) -> Option<crate::cdp_target::CdpConnection> {
+  for _ in 0..DEVTOOLS_WAIT_SECS {
+    if cancelled(run_id) {
+      return None;
+    }
+    if let Some(port) = crate::browser_tabs::local_port(launched).await {
+      if let Some(connection) = crate::cdp_target::connect_browser_at(port).await {
+        return Some(connection);
+      }
+    }
+    tokio::time::sleep(Duration::from_secs(1)).await;
+  }
+  None
+}
+
+async fn stop_browser(app: &tauri::AppHandle, launched: &crate::profile::types::BrowserProfile) {
+  let Some(fresh) = find_profile(&launched.id.to_string()) else {
+    return;
+  };
+  if let Err(e) = crate::browser_runner::kill_browser_profile(app.clone(), fresh).await {
+    log::warn!(
+      "Cookie bot local browser stop failed profile={} err=\"{e}\"",
+      launched.id
+    );
+  }
+}
+
 fn start_worker(
   app: tauri::AppHandle,
   run_id: String,
@@ -606,15 +710,18 @@ fn start_worker(
   tauri::async_runtime::spawn(async move {
     let started = std::time::Instant::now();
     let sites = schedule.sites.clone();
-    let total_secs = u64::from(minutes) * 60;
-    let per_site = (total_secs / sites.len().max(1) as u64).clamp(8, 120);
+    let total = sites.len() as u32;
+    let budget = Duration::from_secs(u64::from(minutes) * 60);
 
+    // A window, not a headless browser: a headless one answers differently to
+    // everything a site can ask. The warm-up moves the window out of the way
+    // itself once it is connected.
     let launch = crate::browser_runner::launch_browser_profile_impl(
       app.clone(),
       profile.clone(),
       None,
       crate::browser_runner::LaunchOptions {
-        headless: true,
+        headless: false,
         force_new: true,
         // A warm-up run has no dialog to answer and cannot regenerate its
         // fingerprint mid-run. A mismatch is worth logging, not worth turning
@@ -632,127 +739,189 @@ fn start_worker(
           &run_id,
           "failed",
           Some(error_code(&error)),
-          0,
-          0,
-          sites.len() as u32,
+          Outcome::none(total),
           started,
         );
         return;
       }
     };
+    let key = format!("profile={}", launched.id);
     log::info!(
-      "Cookie bot local run started profile={} sites={} minutes={minutes}",
-      launched.id,
-      sites.len()
-    );
-
-    // The DevTools port is registered once the process is up; a tab opened
-    // before that has nothing to talk to.
-    let mut ready = false;
-    for _ in 0..30 {
-      if crate::browser_tabs::local_port(&launched).await.is_some() {
-        ready = true;
-        break;
-      }
-      tokio::time::sleep(Duration::from_secs(1)).await;
-    }
-    if !ready {
-      finish_run(
-        &run_id,
-        "failed",
-        Some("BROWSER_TABS_UNAVAILABLE".to_string()),
-        0,
-        0,
-        sites.len() as u32,
-        started,
-      );
-      return;
-    }
-
-    let mut visited = 0u32;
-    let mut failed = 0u32;
-    for site in &sites {
-      if cancelled(&run_id) || started.elapsed().as_secs() >= total_secs {
-        break;
-      }
-      match crate::browser_tabs::open(&launched, site).await {
-        Ok(tab) => {
-          let remaining = total_secs.saturating_sub(started.elapsed().as_secs());
-          let wait = per_site.min(remaining.max(3));
-          sleep_cancellable(&run_id, wait).await;
-          let _ = crate::browser_tabs::close(&launched, &tab.id).await;
-          visited += 1;
-        }
-        Err(e) => {
-          log::debug!(
-            "Cookie bot local site failed profile={} err=\"{e}\"",
-            launched.id
-          );
-          failed += 1;
-        }
-      }
-      if !cancelled(&run_id) {
-        sleep_cancellable(&run_id, 2 + (crate::proxy_manager::now_secs() % 4)).await;
-      }
-    }
-
-    let stopped = cancelled(&run_id);
-    if let Some(fresh) = find_profile(&launched.id.to_string()) {
-      if let Err(e) = crate::browser_runner::kill_browser_profile(app.clone(), fresh).await {
-        log::warn!(
-          "Cookie bot local browser stop failed profile={} err=\"{e}\"",
-          launched.id
-        );
-      }
-    }
-    let status = if stopped {
-      "cancelled"
-    } else if visited == 0 && failed > 0 {
-      "failed"
-    } else if failed > 0 || visited < sites.len() as u32 {
-      "partial"
-    } else {
-      "succeeded"
-    };
-    finish_run(
-      &run_id,
-      status,
-      None,
-      visited,
-      failed,
-      sites.len() as u32,
-      started,
-    );
-    log::info!(
-      "Cookie bot local run finished profile={} status={status} visited={visited} failed={failed}",
+      "Cookie bot local run started profile={} sites={total} minutes={minutes}",
       launched.id
     );
+
+    let Some(connection) = connect_devtools(&run_id, &launched).await else {
+      let stopped = cancelled(&run_id);
+      if !stopped {
+        DEVTOOLS.failed(&key, "the browser's DevTools port did not answer");
+      }
+      stop_browser(&app, &launched).await;
+      let (status, code) = if stopped {
+        ("cancelled", None)
+      } else {
+        ("failed", Some("BROWSER_TABS_UNAVAILABLE".to_string()))
+      };
+      finish_run(&run_id, status, code, Outcome::none(total), started);
+      return;
+    };
+
+    let stop_id = run_id.clone();
+    let os = crate::launch_gate::claimed_fingerprint_os(&launched);
+    let topic = schedule
+      .focus
+      .as_ref()
+      .map(|focus| crate::warmup::TopicSpec {
+        site: focus.site.clone(),
+        keyword: focus.keyword.clone(),
+        learned: focus.learned.clone(),
+        mac: crate::warmup::is_mac_os(&os),
+      });
+    let spec = crate::warmup::RunSpec {
+      sites,
+      budget: budget.saturating_sub(started.elapsed()),
+      style: crate::warmup::ScrollStyle::for_os(&os),
+      topic,
+    };
+    let report = crate::warmup::run(
+      connection,
+      spec,
+      std::sync::Arc::new(move || cancelled(&stop_id)),
+    )
+    .await;
+    stop_browser(&app, &launched).await;
+
+    let stopped = cancelled(&run_id);
+    if let Ok(report) = &report {
+      if !report.learned.is_empty() {
+        remember_learned(&schedule.profile_id, &report.learned);
+      }
+    }
+    let (status, code, outcome) = match &report {
+      Ok(report) => {
+        DEVTOOLS.succeeded(&key);
+        let status = run_status(stopped, report.visited, report.failed, total);
+        // The shop asked the browser to prove it is a person. The run stopped
+        // there rather than press on, and the person should know.
+        let challenged = report.challenged && !stopped;
+        (
+          if challenged && status == "succeeded" {
+            "partial"
+          } else {
+            status
+          },
+          challenged.then(|| "site_challenge".to_string()),
+          Outcome {
+            visited: report.visited,
+            failed: report.failed,
+            total,
+            consents: report.tally.consents,
+          },
+        )
+      }
+      Err(fault) => {
+        if !stopped {
+          DEVTOOLS.failed(&key, fault);
+        }
+        let status = if stopped { "cancelled" } else { "failed" };
+        let code = (!stopped).then(|| "BROWSER_TABS_UNAVAILABLE".to_string());
+        (status, code, Outcome::none(total))
+      }
+    };
+    finish_run(&run_id, status, code, outcome, started);
+    if let Ok(report) = &report {
+      let tally = report.tally;
+      log::info!(
+        "Cookie bot local run finished profile={} status={status} visited={} failed={} skipped={} pages={} clicks={} scrolls={} moves={} consents={} backs={} link_misses={} searches={} items={} pictures={} learned={} challenged={} elapsed_ms={}",
+        launched.id,
+        report.visited,
+        report.failed,
+        report.skipped,
+        tally.pages,
+        tally.clicks,
+        tally.scrolls,
+        tally.moves,
+        tally.consents,
+        tally.backs,
+        tally.link_misses,
+        tally.searches,
+        tally.items,
+        tally.pictures,
+        report.learned.len(),
+        report.challenged,
+        started.elapsed().as_millis()
+      );
+    } else {
+      log::info!(
+        "Cookie bot local run finished profile={} status={status} elapsed_ms={}",
+        launched.id,
+        started.elapsed().as_millis()
+      );
+    }
   });
 }
 
-async fn sleep_cancellable(run_id: &str, seconds: u64) {
-  for _ in 0..seconds {
-    if cancelled(run_id) {
-      return;
-    }
-    tokio::time::sleep(Duration::from_secs(1)).await;
+/// Add the searches a run learned to the topic, newest last, so the next run
+/// carries on from them.
+fn remember_learned(profile_id: &str, found: &[String]) {
+  let mut state = state();
+  let Some(focus) = state
+    .schedules
+    .get_mut(profile_id)
+    .and_then(|schedule| schedule.focus.as_mut())
+  else {
+    return;
+  };
+  for search in found {
+    focus
+      .learned
+      .retain(|known| !known.eq_ignore_ascii_case(search));
+    focus.learned.push(search.clone());
   }
+  let excess = focus.learned.len().saturating_sub(MAX_LEARNED);
+  focus.learned.drain(..excess);
+  persist(&state);
 }
 
 fn error_code(message: &str) -> String {
   cloud_errors::classify_message(message, RUN_CODES).code
 }
 
-#[allow(clippy::too_many_arguments)]
+/// What a run got done, as the record shows it.
+#[derive(Clone, Copy)]
+struct Outcome {
+  visited: u32,
+  failed: u32,
+  total: u32,
+  /// Cookie banners the visitor accepted.
+  consents: u32,
+}
+
+impl Outcome {
+  /// A run that never got as far as a site.
+  fn none(total: u32) -> Self {
+    Outcome {
+      visited: 0,
+      failed: 0,
+      total,
+      consents: 0,
+    }
+  }
+}
+
 fn finish_run(
   run_id: &str,
   status: &str,
   outcome_code: Option<String>,
-  visited: u32,
-  failed: u32,
-  total: u32,
+  outcome: Outcome,
   started: std::time::Instant,
 ) {
+  let Outcome {
+    visited,
+    failed,
+    total,
+    consents,
+  } = outcome;
   let mut state = state();
   let Some(run) = state.runs.iter_mut().find(|run| run.id == run_id) else {
     return;
@@ -767,6 +936,7 @@ fn finish_run(
   run.sites_visited = visited;
   run.sites_failed = failed;
   run.sites_total = total;
+  run.consent_dismissed = consents;
   run.billed_seconds = started.elapsed().as_secs();
   run.ended_at = Some(now_iso());
   if let Some(code) = outcome_code {
@@ -1188,6 +1358,38 @@ async fn tick() {
 mod tests {
   use super::*;
 
+  fn topic(site: &str, keyword: &str, learned: &[&str]) -> CookieBotFocus {
+    CookieBotFocus {
+      site: site.to_string(),
+      keyword: keyword.to_string(),
+      learned: learned.iter().map(|term| term.to_string()).collect(),
+    }
+  }
+
+  #[test]
+  fn a_topic_keeps_what_it_learned_only_while_the_keyword_stays() {
+    let saved = topic("ebay", "iphone 15", &["iphone 15 pro", "iphone 15 case"]);
+
+    let same = checked_focus(&topic(" eBay ", "  iPhone   15 ", &[]), Some(&saved)).unwrap();
+    assert_eq!(same.site, "ebay");
+    assert_eq!(same.keyword, "iPhone 15");
+    assert_eq!(same.learned, saved.learned);
+
+    let other = checked_focus(&topic("ebay", "ipad", &["sent by the app"]), Some(&saved)).unwrap();
+    assert!(
+      other.learned.is_empty(),
+      "a new keyword starts from nothing"
+    );
+  }
+
+  #[test]
+  fn a_topic_needs_a_known_shop_and_a_real_keyword() {
+    assert!(checked_focus(&topic("amazon", "iphone", &[]), None).is_err());
+    assert!(checked_focus(&topic("ebay", " i ", &[]), None).is_err());
+    assert!(checked_focus(&topic("ebay", &"x".repeat(61), &[]), None).is_err());
+    assert!(checked_focus(&topic("ebay", "ip", &[]), None).is_ok());
+  }
+
   #[allow(unused_imports)]
   use crate::cookie_bot::CookieBotConflict;
 
@@ -1228,6 +1430,7 @@ mod tests {
       template_id: None,
       max_minutes: 40,
       sites: vec!["https://example.test".into()],
+      focus: None,
       jitter_seconds: None,
       sync_enabled: false,
       has_proxy: false,

@@ -19,12 +19,6 @@ const CRX_MAGIC: &[u8; 4] = b"Cr24";
 const ZIP_MAGIC: &[u8; 4] = b"PK\x03\x04";
 const MAX_REDIRECTS: usize = 5;
 
-/// The last-resort `prodversion` for the Web Store endpoint, used only when no
-/// Wayfern build is downloaded and no version cache exists yet — a fresh
-/// install that has never fetched a browser. Every other path reads the real
-/// installed version, so this is a floor, not the normal answer.
-const FALLBACK_PRODUCT_VERSION: &str = "120.0.0.0";
-
 fn err(code: &str) -> String {
   crate::backend_error(code)
 }
@@ -157,41 +151,12 @@ pub fn nacl_arch() -> &'static str {
   }
 }
 
-/// Newest Chromium version this machine actually has, because the Web Store
-/// serves a package built for the requesting browser and a version it does not
+/// The Chromium version the Web Store is asked for: the engine's own. The store
+/// serves a package built for the requesting browser, and a version it does not
 /// recognise is answered with an error rather than a CRX.
 pub fn chromium_product_version() -> String {
-  let downloaded = crate::downloaded_browsers_registry::DownloadedBrowsersRegistry::instance()
-    .get_downloaded_versions("wayfern");
-  if let Some(version) = newest_version(&downloaded) {
-    return version;
-  }
-
-  let cached = crate::browser_version_manager::BrowserVersionManager::instance()
-    .get_cached_browser_versions("wayfern")
-    .unwrap_or_default();
-  newest_version(&cached).unwrap_or_else(|| FALLBACK_PRODUCT_VERSION.to_string())
+  crate::apostate::CHROMIUM.to_string()
 }
-
-/// Highest dotted-numeric version in `versions`. Neither the registry nor the
-/// version cache promises an order, and a lexical max reads `9.x` as newer
-/// than `151.x`.
-fn newest_version(versions: &[String]) -> Option<String> {
-  versions
-    .iter()
-    .filter(|version| !version.trim().is_empty())
-    .max_by_key(|version| version_key(version))
-    .cloned()
-}
-
-fn version_key(version: &str) -> [u64; 4] {
-  let mut parts = [0u64; 4];
-  for (slot, piece) in parts.iter_mut().zip(version.split('.')) {
-    *slot = piece.trim().parse().unwrap_or(0);
-  }
-  parts
-}
-
 /// The Chrome Web Store update service, the endpoint Chromium itself uses to
 /// fetch a package on demand. It needs the product id, the ABI, and a Chromium
 /// version, and answers with a redirect to the CRX.
@@ -575,17 +540,6 @@ mod tests {
     assert!(url.contains("nacl_arch=arm64"));
     assert!(url.contains("id%3Dabcdefghijklmnopabcdefghijklmnop"));
     assert!(url.contains("acceptformat=crx3"));
-  }
-
-  #[test]
-  fn the_newest_installed_version_wins_over_a_lexically_larger_one() {
-    let versions = vec![
-      "9.0.1.0".to_string(),
-      "151.0.7922.76".to_string(),
-      "147.0.7727.138".to_string(),
-    ];
-    assert_eq!(newest_version(&versions).unwrap(), "151.0.7922.76");
-    assert_eq!(newest_version(&[]), None);
   }
 
   #[test]

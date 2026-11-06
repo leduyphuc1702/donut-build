@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -41,21 +41,6 @@ async function jsonRequest(
     }
   }
   return { response, value };
-}
-
-async function seedTerms(app) {
-  const home = path.join(app.root, "home");
-  const directory =
-    process.platform === "darwin"
-      ? path.join(home, "Library", "Application Support", "Wayfern")
-      : process.platform === "win32"
-        ? path.join(app.root, "windows", "roaming", "Wayfern")
-        : path.join(app.root, "xdg", "config", "Wayfern");
-  await mkdir(directory, { recursive: true });
-  await writeFile(
-    path.join(directory, "license-accepted"),
-    String(Math.floor(Date.now() / 1000)),
-  );
 }
 
 async function invokeContract(app, command, args = {}) {
@@ -108,7 +93,6 @@ async function assertCommandErrorCode(app, command, code, args = {}) {
 
 test("authenticated REST API serves its complete OpenAPI contract and CRUD lifecycle", async () => {
   await withApp("integrations-rest", async (app) => {
-    await seedTerms(app);
     const settings = await app.invoke("get_app_settings");
     const saved = await app.invoke("save_app_settings", {
       settings: {
@@ -876,7 +860,6 @@ test("MCP clients are installed only against the remote endpoint", async () => {
 
 test("the agent console keeps notes, take-overs and the pause for connected agents", async () => {
   await withApp("integrations-agent-console", async (app) => {
-    await seedTerms(app);
     const empty = await app.invoke("get_agent_console");
     assert.deepEqual(empty.sessions, []);
     assert.deepEqual(empty.activity, []);
@@ -1100,7 +1083,6 @@ test("agent tasks and routines follow the engine contract", async () => {
   await withApp(
     "integrations-agent-tasks",
     async (app) => {
-      await seedTerms(app);
       assert.deepEqual(await app.invoke("get_agent_engine_status"), {
         supported: true,
         checked: true,
@@ -1410,8 +1392,6 @@ test("agent tasks and routines follow the engine contract", async () => {
 
 test("the remote-control bridge refuses a signed-out desktop and stays off", async () => {
   await withApp("integrations-mcp-remote", async (app) => {
-    await seedTerms(app);
-
     // Off by default, and it must stay that way without an explicit opt-in: the
     // bridge hands Donut cloud the ability to drive this browser, which is not
     // something to switch on for somebody because their plan allows it.
@@ -1576,52 +1556,10 @@ test("the remote-control bridge refuses a signed-out desktop and stays off", asy
   });
 });
 
-test("the remote-control bridge refuses before the terms are accepted", async () => {
-  // `start_mcp_remote_bridge` has TWO gates (the Wayfern terms, then the
-  // signed-in check), and every other test seeds the terms first, so only the
-  // second one was ever reached. The first could have been deleted with the
-  // whole suite green, which would let a desktop that never accepted the terms
-  // open an internet-facing hook into itself.
-  //
-  // `wayfernTermsAccepted: false` is what makes this session different: the
-  // harness seeds the acceptance file by DEFAULT, so merely omitting the
-  // explicit `seedTerms` call leaves the terms accepted and this test proves
-  // nothing (it first ran that way and hit the sign-in gate instead).
-  await withApp(
-    "integrations-mcp-remote-terms",
-    async (app) => {
-      assert.match(
-        await app.invokeError("start_mcp_remote_bridge"),
-        /"code":"WAYFERN_TERMS_REQUIRED"/,
-      );
-
-      const status = await app.invoke("get_mcp_remote_status");
-      // `enabled` first, for the same reason as the sign-in gate: it is
-      // `is_running()` and flips inside `mcp_remote::start`, so it is what
-      // catches a gate that stopped sitting above the start. `connected` alone
-      // would stay false on a bridge that was started and merely never got a
-      // socket up.
-      assert.equal(
-        status.enabled,
-        false,
-        "the bridge may not have been started",
-      );
-      assert.equal(status.connected, false, "no socket may have been opened");
-      assert.equal(
-        (await app.invoke("get_app_settings")).mcp_remote_enabled,
-        false,
-        "a terms refusal must not leave the setting on either",
-      );
-    },
-    { wayfernTermsAccepted: false },
-  );
-});
-
 test("REST browser automation requests hit the shared automation rate limit", async () => {
   await withApp(
     "integrations-rate-limit",
     async (app) => {
-      await seedTerms(app);
       const settings = await app.invoke("get_app_settings");
       const saved = await app.invoke("save_app_settings", {
         settings: {
@@ -1667,7 +1605,7 @@ test("REST browser automation requests hit the shared automation rate limit", as
     {
       extraEnv: {
         DONUT_E2E_REQUESTS_PER_HOUR: "2",
-        WAYFERN_TEST_TOKEN: "donut-e2e-rate-limit",
+        DONUT_E2E_PAID_PLAN: "donut-e2e-rate-limit",
       },
     },
   );
@@ -1679,7 +1617,6 @@ test("offline cloud, update, team-lock, trial, and synchronizer contracts are de
     async (app) => {
       assert.equal(await app.invoke("cloud_get_user"), null);
       assert.equal(await app.invoke("cloud_get_proxy_usage"), null);
-      assert.ok(await app.invoke("cloud_get_wayfern_token"));
       const originalCloudApi = await app.invoke("get_cloud_api_url");
       assert.match(originalCloudApi, /^https?:\/\//);
       assert.equal(
@@ -1791,62 +1728,6 @@ test("offline cloud, update, team-lock, trial, and synchronizer contracts are de
           isp: null,
         },
       );
-      await assertContract(app, "cloud_refresh_wayfern_token", {
-        // Compared against the value the harness injected, NOT matched against
-        // a hex shape. Under the `e2e` feature this command returns
-        // WAYFERN_TEST_TOKEN, so a /^[0-9a-f]{32,}$/ assertion only proved the
-        // harness's own env var looks like a token: it validated the fixture
-        // and would have passed with the command's body deleted. Equality
-        // proves the command actually reached the token and returned it.
-        answers: (token) =>
-          assert.equal(
-            String(token),
-            process.env.WAYFERN_TEST_TOKEN,
-            "the command must return the token it was given, not a different value",
-          ),
-      });
-
-      await assertContract(app, "trigger_manual_version_update", {
-        answers: (report) => {
-          assert.ok(
-            Array.isArray(report),
-            "the update run must report per browser",
-          );
-          // Non-empty, or the per-entry loop below asserts nothing at all: an
-          // `[]` satisfied every check while the command did no work.
-          assert.ok(
-            report.length > 0,
-            `the update run must report at least one browser, got ${JSON.stringify(report)}`,
-          );
-          for (const entry of report) {
-            assert.ok(
-              typeof entry.browser === "string" && entry.browser.length > 0,
-              `every entry names its browser: ${JSON.stringify(entry)}`,
-            );
-            assert.equal(typeof entry.updated_successfully, "boolean");
-          }
-        },
-      });
-      await assertContract(app, "clear_all_version_cache_and_refetch", {
-        answers: (value) => assert.equal(value, null),
-      });
-      await assertContract(app, "check_for_browser_updates", {
-        answers: (updates) =>
-          assert.ok(
-            Array.isArray(updates),
-            `the update check must answer with a list, got ${JSON.stringify(updates)}`,
-          ),
-      });
-      await app.invoke("dismiss_update_notification", {
-        notificationId: "missing-e2e-notification",
-      });
-      assert.deepEqual(
-        await app.invoke("complete_browser_update_with_auto_update", {
-          browser: "wayfern",
-          newVersion: "150.0.7871.100",
-        }),
-        [],
-      );
       const prepareError = await app.invokeError(
         "download_and_prepare_app_update",
         {
@@ -1866,8 +1747,6 @@ test("offline cloud, update, team-lock, trial, and synchronizer contracts are de
         },
       );
       assert.match(prepareError, /checksum|verif|Failed to download/i);
-      const versionStatus = await app.invoke("get_version_update_status");
-      assert.ok(versionStatus && typeof versionStatus === "object");
       assert.equal(typeof (await app.invoke("is_default_browser")), "boolean");
 
       // Remote sessions and the cookie bot are brokered by the cloud backend.
@@ -2184,7 +2063,7 @@ test("offline cloud, update, team-lock, trial, and synchronizer contracts are de
       await app.invoke("cloud_logout");
       assert.equal(await app.invoke("cloud_get_user"), null);
     },
-    { wayfernTermsAccepted: false },
+    { extraEnv: { DONUT_E2E_PAID_PLAN: "" } },
   );
 });
 
@@ -2206,138 +2085,126 @@ test("a self-hosted control plane signs in and answers the account contracts", a
   });
   const base = `http://127.0.0.1:${control.address().port}`;
   try {
-    await withApp(
-      "integrations-control-plane",
-      async (app) => {
-        assert.equal(
-          await app.invoke("set_cloud_api_url", { url: base }),
-          base,
-        );
+    await withApp("integrations-control-plane", async (app) => {
+      assert.equal(await app.invoke("set_cloud_api_url", { url: base }), base);
 
-        const link = await fetch(`${base}/auth/link`, {
-          method: "POST",
-          headers: { "content-type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ token: controlToken }),
-        });
-        assert.equal(link.status, 200);
-        const code = (await link.text()).match(
-          /<code>([0-9A-F]+)<\/code>/,
-        )?.[1];
-        assert.ok(code, "the control plane prints a one-time code");
+      const link = await fetch(`${base}/auth/link`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ token: controlToken }),
+      });
+      assert.equal(link.status, 200);
+      const code = (await link.text()).match(/<code>([0-9A-F]+)<\/code>/)?.[1];
+      assert.ok(code, "the control plane prints a one-time code");
 
-        const state = await app.invoke("cloud_exchange_device_code", { code });
-        assert.equal(state.user.id, "e2e-owner");
-        assert.equal(state.user.entitlements.active, true);
-        assert.equal(state.user.entitlements.browserAutomation, true);
-        assert.equal(state.user.entitlements.crossOsFingerprints, true);
-        // The services with a local equivalent: the Cookie Bot drives this
-        // machine, a "remote" session is a local session, the agent's routines
-        // and credits are the control plane's, and the one-seat team's log is
-        // its own file. Remote MCP and cloud backup have no local equivalent.
-        assert.equal(state.user.entitlements.cookieBot, true);
-        assert.equal(state.user.entitlements.remoteInteractive, true);
-        assert.equal(state.user.entitlements.agent, true);
-        assert.equal(state.user.entitlements.remoteControl, false);
-        assert.equal(state.user.entitlements.cloudBackup, false);
-        assert.equal(state.user.entitlements.requestsPerHour, 0);
-        assert.ok(state.user.entitlements.profileLimit > 1000);
-        assert.equal(state.user.teamId, "local-team");
-        assert.equal(state.user.teamRole, "owner");
+      const state = await app.invoke("cloud_exchange_device_code", { code });
+      assert.equal(state.user.id, "e2e-owner");
+      assert.equal(state.user.entitlements.active, true);
+      assert.equal(state.user.entitlements.browserAutomation, true);
+      assert.equal(state.user.entitlements.crossOsFingerprints, true);
+      // The services with a local equivalent: the Cookie Bot drives this
+      // machine, a "remote" session is a local session, the agent's routines
+      // and credits are the control plane's, and the one-seat team's log is
+      // its own file. Remote MCP and cloud backup have no local equivalent.
+      assert.equal(state.user.entitlements.cookieBot, true);
+      assert.equal(state.user.entitlements.remoteInteractive, true);
+      assert.equal(state.user.entitlements.agent, true);
+      assert.equal(state.user.entitlements.remoteControl, false);
+      assert.equal(state.user.entitlements.cloudBackup, false);
+      assert.equal(state.user.entitlements.requestsPerHour, 0);
+      assert.ok(state.user.entitlements.profileLimit > 1000);
+      assert.equal(state.user.teamId, "local-team");
+      assert.equal(state.user.teamRole, "owner");
 
-        const user = await app.invoke("cloud_get_user");
-        assert.equal(user.user.id, "e2e-owner");
-        assert.deepEqual(await app.invoke("get_team_locks"), []);
-        const source = await app.invoke("get_sync_source");
-        assert.equal(
-          source.active,
-          null,
-          "a self-hosted account must not fall back to Donut cloud sync",
-        );
+      const user = await app.invoke("cloud_get_user");
+      assert.equal(user.user.id, "e2e-owner");
+      assert.deepEqual(await app.invoke("get_team_locks"), []);
+      const source = await app.invoke("get_sync_source");
+      assert.equal(
+        source.active,
+        null,
+        "a self-hosted account must not fall back to Donut cloud sync",
+      );
 
-        const allowance = await app.invoke("get_profile_creation_allowance");
-        assert.equal(allowance.unlimited, true);
+      const allowance = await app.invoke("get_profile_creation_allowance");
+      assert.equal(allowance.unlimited, true);
 
-        // No Wayfern token exists on a self-hosted account. Fingerprint
-        // generation must therefore come from the local generator and return a
-        // full device, not an identity the closed engine would have to mint.
-        const sample = await app.invoke("generate_sample_fingerprint", {
-          browser: "wayfern",
-          version: "155.0.8059.79",
-          configJson: JSON.stringify({ geoip: false }),
-        });
-        assert.equal(sample.identity_id, null);
-        const sampleDevice = JSON.parse(sample.fingerprint);
-        assert.equal(sampleDevice.webdriver, false);
-        assert.ok(
-          Object.keys(sampleDevice).length >= 20,
-          "the local generator returns a complete device",
-        );
+      // Fingerprint generation comes from the local generator and returns a
+      // full device, never an identity id.
+      const sample = await app.invoke("generate_sample_fingerprint", {
+        browser: "wayfern",
+        version: "155.0.8059.79",
+        configJson: JSON.stringify({ geoip: false }),
+      });
+      assert.equal(sample.identity_id, null);
+      const sampleDevice = JSON.parse(sample.fingerprint);
+      assert.equal(sampleDevice.webdriver, false);
+      assert.ok(
+        Object.keys(sampleDevice).length >= 20,
+        "the local generator returns a complete device",
+      );
 
-        const created = await app.invoke("create_browser_profile_new", {
-          name: "Local device",
-          browserStr: "wayfern",
-          version: "155.0.8059.79",
-          releaseType: "stable",
-          proxyId: null,
-          vpnId: null,
-          wayfernConfig: { geoip: false },
-          groupId: null,
-        });
-        const config = created.wayfern_config ?? {};
-        assert.equal(config.identity_id ?? null, null);
-        assert.ok(config.fingerprint, "the profile stores a full device");
-        const stored = JSON.parse(config.fingerprint);
-        assert.equal(
-          stored.timezone,
-          undefined,
-          "geolocation off writes no location",
-        );
-        assert.equal(stored.platform, sampleDevice.platform);
+      const created = await app.invoke("create_browser_profile_new", {
+        name: "Local device",
+        browserStr: "wayfern",
+        version: "155.0.8059.79",
+        releaseType: "stable",
+        proxyId: null,
+        vpnId: null,
+        wayfernConfig: { geoip: false },
+        groupId: null,
+      });
+      const config = created.wayfern_config ?? {};
+      assert.equal(config.identity_id ?? null, null);
+      assert.ok(config.fingerprint, "the profile stores a full device");
+      const stored = JSON.parse(config.fingerprint);
+      assert.equal(
+        stored.timezone,
+        undefined,
+        "geolocation off writes no location",
+      );
+      assert.equal(stored.platform, sampleDevice.platform);
 
-        // An empty payload from an old form or an import is not a device: the
-        // profile must be generated rather than launched on the host device.
-        const empty = await app.invoke("create_browser_profile_new", {
-          name: "Empty payload",
-          browserStr: "wayfern",
-          version: "155.0.8059.79",
-          releaseType: "stable",
-          proxyId: null,
-          vpnId: null,
-          wayfernConfig: { fingerprint: "{}", geoip: false },
-          groupId: null,
-        });
-        assert.equal(empty.wayfern_config.identity_id ?? null, null);
-        assert.ok(
-          Object.keys(JSON.parse(empty.wayfern_config.fingerprint)).length >=
-            20,
-          "an empty payload is replaced by a generated device",
-        );
+      // An empty payload from an old form or an import is not a device: the
+      // profile must be generated rather than launched on the host device.
+      const empty = await app.invoke("create_browser_profile_new", {
+        name: "Empty payload",
+        browserStr: "wayfern",
+        version: "155.0.8059.79",
+        releaseType: "stable",
+        proxyId: null,
+        vpnId: null,
+        wayfernConfig: { fingerprint: "{}", geoip: false },
+        groupId: null,
+      });
+      assert.equal(empty.wayfern_config.identity_id ?? null, null);
+      assert.ok(
+        Object.keys(JSON.parse(empty.wayfern_config.fingerprint)).length >= 20,
+        "an empty payload is replaced by a generated device",
+      );
 
-        // An edit to a local profile stays a payload edit. It must not turn
-        // into `identity_overrides`, which the closed engine refuses without a
-        // Donut token.
-        const edited = {
-          ...stored,
-          hardwareConcurrency: stored.hardwareConcurrency === 12 ? 8 : 12,
-        };
-        await app.invoke("update_wayfern_config", {
-          profileId: created.id,
-          config: { ...config, fingerprint: JSON.stringify(edited) },
-        });
-        const after = (await app.invoke("list_browser_profiles")).find(
-          (profile) => profile.id === created.id,
-        );
-        assert.equal(after.wayfern_config.identity_overrides ?? null, null);
-        assert.equal(
-          JSON.parse(after.wayfern_config.fingerprint).hardwareConcurrency,
-          edited.hardwareConcurrency,
-        );
+      // An edit to a local profile stays a payload edit. It must not turn
+      // into `identity_overrides`, which Apostate never reads.
+      const edited = {
+        ...stored,
+        hardwareConcurrency: stored.hardwareConcurrency === 12 ? 8 : 12,
+      };
+      await app.invoke("update_wayfern_config", {
+        profileId: created.id,
+        config: { ...config, fingerprint: JSON.stringify(edited) },
+      });
+      const after = (await app.invoke("list_browser_profiles")).find(
+        (profile) => profile.id === created.id,
+      );
+      assert.equal(after.wayfern_config.identity_overrides ?? null, null);
+      assert.equal(
+        JSON.parse(after.wayfern_config.fingerprint).hardwareConcurrency,
+        edited.hardwareConcurrency,
+      );
 
-        await app.invoke("cloud_logout");
-        assert.equal(await app.invoke("cloud_get_user"), null);
-      },
-      { wayfernTermsAccepted: false },
-    );
+      await app.invoke("cloud_logout");
+      assert.equal(await app.invoke("cloud_get_user"), null);
+    });
   } finally {
     control.closeAllConnections?.();
     await new Promise((resolve) => control.close(resolve));

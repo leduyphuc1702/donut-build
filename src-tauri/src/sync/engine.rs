@@ -3317,16 +3317,13 @@ impl SyncEngine {
     }
 
     // Verify critical files after download
-    let os_crypt_key_path = profile_dir.join("profile").join("os_crypt_key");
+    // The engine keeps its key outside the profile (or in Local State), so only
+    // a profile Wayfern sealed carries an `os_crypt_key` to expect.
     let cookies_path =
       crate::cookie_manager::CookieManager::wayfern_cookie_path(&profile_dir.join("profile"));
-    let has_os_crypt_key = os_crypt_key_path.exists();
     let cookies_bytes = fs::metadata(&cookies_path).ok().map(|meta| meta.len());
-    if !has_os_crypt_key || cookies_bytes.is_none() {
-      log::warn!(
-        "Downloaded profile lacks critical files profile={profile_id} os_crypt_key={has_os_crypt_key} cookies={}",
-        cookies_bytes.is_some()
-      );
+    if cookies_bytes.is_none() {
+      log::warn!("Downloaded profile lacks its cookie store profile={profile_id}");
     }
 
     // Set sync mode and save profile

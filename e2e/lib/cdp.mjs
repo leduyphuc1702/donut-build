@@ -83,7 +83,7 @@ export class CdpClient {
       }
     }
     throw new Error(
-      `Timed out connecting to Wayfern CDP on ${port}: ${lastError}`,
+      `Timed out connecting to browser CDP on ${port}: ${lastError}`,
     );
   }
 

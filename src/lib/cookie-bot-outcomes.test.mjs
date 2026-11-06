@@ -60,6 +60,12 @@ const SERVER_OUTCOME_CODES = [
   "touch_fingerprint",
 ];
 
+/**
+ * Codes only the self-hosted Cookie Bot (`cookie_bot_local.rs`) writes; the
+ * cloud union never has them, so the live half leaves them out.
+ */
+const LOCAL_OUTCOME_CODES = ["site_challenge"];
+
 /** The declaration the live half looks for, and reads the union out of. */
 const UNION_DECLARATION = "export type CookieBotOutcomeCode";
 
@@ -216,7 +222,7 @@ test("the snapshot covers exactly the outcome codes the map handles", () => {
   const map = outcomeKeys();
   assert.deepEqual(
     [...map.keys()].sort(),
-    [...SERVER_OUTCOME_CODES].sort(),
+    [...SERVER_OUTCOME_CODES, ...LOCAL_OUTCOME_CODES].sort(),
     "OUTCOME_KEYS and the snapshotted server union disagree; a code the " +
       "server can send would render as its raw token in the run history",
   );

@@ -98,6 +98,8 @@ export interface CookieBotSchedule {
   template_id?: string | null;
   max_minutes: number;
   sites: string[];
+  /** A shopping topic instead of a site list. */
+  focus?: CookieBotFocus | null;
   jitter_seconds: number;
 
   // The profile facts the desktop declared, echoed back on every read, so the
@@ -164,7 +166,21 @@ export interface CookieBotScheduleInput {
   template_id?: string;
   max_minutes: number;
   sites: string[];
+  /** Shop for a keyword instead of visiting `sites`; send `sites: []`. */
+  focus?: CookieBotFocus;
   jitter_seconds?: number;
+}
+
+/** The shops a topic warm-up knows. Mirror of `warmup::TOPIC_SITES`. */
+export const COOKIE_BOT_TOPIC_SITES = ["ebay"] as const;
+export type CookieBotTopicSite = (typeof COOKIE_BOT_TOPIC_SITES)[number];
+
+/** Mirror of `cookie_bot::CookieBotFocus`. */
+export interface CookieBotFocus {
+  site: string;
+  keyword: string;
+  /** The searches the shop suggested in earlier runs; ignored on a write. */
+  learned?: string[];
 }
 
 export interface CookieBotScheduleList {

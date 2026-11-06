@@ -15,6 +15,7 @@ import { withApp } from "../lib/app.mjs";
 import {
   CRX_EXTENSION_NAME,
   CRX_EXTENSION_VERSION,
+  ENGINE_CHROMIUM,
   extensionIconPngBase64,
   extensionZipBase64,
   wireGuardFixture,
@@ -45,841 +46,847 @@ test("profile, group, proxy, tag, metadata, clone, and bulk-delete lifecycle", a
   // Profile import derives its browser version from the downloaded-browsers
   // registry, so without an entry every import fails with
   // BROWSER_NOT_DOWNLOADED before it touches a single file.
-  await withApp(
-    "entities-core",
-    async (app) => {
-      const group = await app.invoke("create_profile_group", {
-        name: "Research",
-      });
-      assert.equal(group.name, "Research");
-      const renamedGroup = await app.invoke("update_profile_group", {
-        groupId: group.id,
-        name: "Research Team",
-      });
-      assert.equal(renamedGroup.name, "Research Team");
+  await withApp("entities-core", async (app) => {
+    const group = await app.invoke("create_profile_group", {
+      name: "Research",
+    });
+    assert.equal(group.name, "Research");
+    const renamedGroup = await app.invoke("update_profile_group", {
+      groupId: group.id,
+      name: "Research Team",
+    });
+    assert.equal(renamedGroup.name, "Research Team");
 
-      const duplicateError = await app.invokeError("create_profile_group", {
-        name: "Research Team",
-      });
-      assert.match(duplicateError, /GROUP_ALREADY_EXISTS|already exists/i);
+    const duplicateError = await app.invokeError("create_profile_group", {
+      name: "Research Team",
+    });
+    assert.match(duplicateError, /GROUP_ALREADY_EXISTS|already exists/i);
 
-      const proxy = await app.invoke("create_stored_proxy", {
-        name: "Local Dead Proxy",
-        proxySettings: {
-          proxy_type: "http",
-          host: "127.0.0.1",
-          port: 9,
-          username: "e2e-user",
-          password: "e2e-pass",
-        },
-      });
-      assert.equal(proxy.proxy_settings.password, "e2e-pass");
-      const updatedProxy = await app.invoke("update_stored_proxy", {
+    const proxy = await app.invoke("create_stored_proxy", {
+      name: "Local Dead Proxy",
+      proxySettings: {
+        proxy_type: "http",
+        host: "127.0.0.1",
+        port: 9,
+        username: "e2e-user",
+        password: "e2e-pass",
+      },
+    });
+    assert.equal(proxy.proxy_settings.password, "e2e-pass");
+    const updatedProxy = await app.invoke("update_stored_proxy", {
+      proxyId: proxy.id,
+      name: "Updated Proxy",
+      proxySettings: {
+        proxy_type: "socks5",
+        host: "127.0.0.1",
+        port: 9,
+        username: null,
+        password: null,
+      },
+    });
+    assert.equal(updatedProxy.name, "Updated Proxy");
+    assert.equal(updatedProxy.updated_at >= proxy.updated_at, true);
+
+    // The provider's change-IP link: checked when set, called on request.
+    assert.match(
+      await app.invokeError("rotate_proxy_ip", { proxyId: proxy.id }),
+      /PROXY_ROTATION_URL_MISSING/,
+    );
+    assert.match(
+      await app.invokeError("set_proxy_rotation_url", {
         proxyId: proxy.id,
-        name: "Updated Proxy",
-        proxySettings: {
-          proxy_type: "socks5",
-          host: "127.0.0.1",
-          port: 9,
-          username: null,
-          password: null,
-        },
-      });
-      assert.equal(updatedProxy.name, "Updated Proxy");
-      assert.equal(updatedProxy.updated_at >= proxy.updated_at, true);
+        rotationUrl: "ftp://provider.example/change-ip",
+      }),
+      /PROXY_ROTATION_URL_INVALID/,
+    );
+    const rotationUrl = `${process.env.DONUT_E2E_FIXTURE_URL}/change-ip?key=e2e`;
+    const linked = await app.invoke("set_proxy_rotation_url", {
+      proxyId: proxy.id,
+      rotationUrl: ` ${rotationUrl} `,
+    });
+    assert.equal(linked.rotation_url, rotationUrl);
+    const rotated = await app.invoke("rotate_proxy_ip", {
+      proxyId: proxy.id,
+    });
+    assert.equal(rotated.status, 200);
+    assert.equal(rotated.error, null);
+    const rotations = await app.invoke("rotate_proxy_ips", {
+      proxyIds: [proxy.id, proxy.id, "missing-proxy"],
+    });
+    assert.deepEqual(
+      rotations.map((result) => [result.proxy_id, result.status]),
+      [
+        [proxy.id, 200],
+        ["missing-proxy", null],
+      ],
+      "duplicates are called once and each proxy gets its own result",
+    );
+    assert.match(rotations[1].error, /PROXY_NOT_FOUND/);
+    const unlinked = await app.invoke("set_proxy_rotation_url", {
+      proxyId: proxy.id,
+      rotationUrl: "",
+    });
+    assert.equal(unlinked.rotation_url, null);
 
-      // The provider's change-IP link: checked when set, called on request.
+    const parsed = await app.invoke("parse_txt_proxies", {
+      content: [
+        "http://one.example:8080",
+        "two.example:1080:user:pass",
+        "not a proxy",
+      ].join("\n"),
+    });
+    assert.equal(parsed.length, 3);
+    assert.ok(parsed.some((result) => result.status === "parsed"));
+    assert.ok(parsed.some((result) => result.status === "invalid"));
+    const parsedProxy = parsed.find((result) => result.status === "parsed");
+    const { status: _status, ...parsedProxyFields } = parsedProxy;
+    const parsedImport = await app.invoke("import_proxies_from_parsed", {
+      parsedProxies: [parsedProxyFields],
+      namePrefix: "Parsed",
+    });
+    assert.equal(parsedImport.imported_count, 1);
+
+    assert.deepEqual(
+      await app.invoke("get_proxy_check_history", { proxyId: proxy.id }),
+      [],
+      "a proxy nobody has checked has no trail",
+    );
+    const validityError = await app.invokeError("check_proxy_validity", {
+      proxyId: proxy.id,
+      proxySettings: null,
+    });
+    assert.match(validityError, /Proxy check failed|Could not connect/i);
+    const cachedValidity = await app.invoke("get_cached_proxy_check", {
+      proxyId: proxy.id,
+    });
+    assert.ok(cachedValidity === null || cachedValidity.is_valid === false);
+
+    // A check that failed is still a check, and it is recorded as one. The
+    // proxy above was edited to SOCKS5 on a closed port, so the UDP probe
+    // could not reach it: the honest verdict is "unknown", never "no".
+    const trail = await app.invoke("get_proxy_check_history", {
+      proxyId: proxy.id,
+    });
+    assert.equal(trail.length, 1);
+    assert.equal(trail[0].ok, false);
+    assert.equal(trail[0].ip, null);
+    assert.equal(trail[0].udp, "unknown");
+    assert.ok(
+      typeof trail[0].latency_ms === "number" && trail[0].latency_ms >= 0,
+    );
+    assert.ok(trail[0].timestamp > 0);
+
+    // Deleting the proxy takes the trail with it; it names exit addresses.
+    const doomed = await app.invoke("create_stored_proxy", {
+      name: "Trail Owner",
+      proxySettings: {
+        proxy_type: "http",
+        host: "127.0.0.1",
+        port: 9,
+        username: null,
+        password: null,
+      },
+    });
+    await app.invokeError("check_proxy_validity", {
+      proxyId: doomed.id,
+      proxySettings: null,
+    });
+    const doomedTrail = await app.invoke("get_proxy_check_history", {
+      proxyId: doomed.id,
+    });
+    assert.equal(doomedTrail.length, 1);
+    // An HTTP proxy cannot carry a datagram at all, which is answered from
+    // the protocol without dialling anything.
+    assert.equal(doomedTrail[0].udp, "no");
+    await app.invoke("delete_stored_proxy", { proxyId: doomed.id });
+    assert.deepEqual(
+      await app.invoke("get_proxy_check_history", { proxyId: doomed.id }),
+      [],
+    );
+
+    // The form uses this to tell the user WHICH part of their setup is
+    // unsupported instead of implying they mistyped, so the reason must
+    // survive the IPC hop. A link Donut can use comes back as the type and
+    // endpoint the form shows, VMess included, which hides them in base64.
+    const goodVless =
+      "vless://6d6e21a1-4829-4d2b-bc7f-1b25707b61e4@example.com:443" +
+      "?security=reality&flow=xtls-rprx-vision&encryption=none&type=tcp" +
+      "&sni=a.com&pbk=mQB9jxUDHO7g49VaNXLEdcNQ_jLhTbLolUsMUNwb6W4&sid=00&fp=chrome";
+    assert.deepEqual(
+      await app.invoke("validate_vless_uri", { uri: goodVless }),
+      { proxy_type: "vless", host: "example.com", port: 443 },
+    );
+    const vmess = `vmess://${Buffer.from(
+      JSON.stringify({
+        add: "vm.example.com",
+        port: "8443",
+        id: "6d6e21a1-4829-4d2b-bc7f-1b25707b61e4",
+        net: "ws",
+        path: "/vm",
+        tls: "tls",
+      }),
+    ).toString("base64")}`;
+    assert.deepEqual(await app.invoke("validate_vless_uri", { uri: vmess }), {
+      proxy_type: "vmess",
+      host: "vm.example.com",
+      port: 8443,
+    });
+
+    for (const [uri, reason] of [
+      [goodVless.replace("security=reality", "security=xtls"), "security"],
+      [goodVless.replace("type=tcp", "type=kcp"), "transport"],
+      [
+        goodVless.replace("flow=xtls-rprx-vision", "flow=xtls-rprx-direct"),
+        "flow",
+      ],
+      ["hysteria2://pw@hy.example.com:443/?obfs=gost", "obfs"],
+    ]) {
+      // invokeError returns the command's error wrapped in a message, so match
+      // rather than JSON.parse the whole string.
+      const error = await app.invokeError("validate_vless_uri", { uri });
+      assert.match(error, /VLESS_CONFIG_INVALID/);
       assert.match(
-        await app.invokeError("rotate_proxy_ip", { proxyId: proxy.id }),
-        /PROXY_ROTATION_URL_MISSING/,
+        error,
+        new RegExp(`"reason":"${reason}"`),
+        `expected reason ${reason} for ${uri}, got: ${error}`,
       );
-      assert.match(
-        await app.invokeError("set_proxy_rotation_url", {
+    }
+
+    const exported = JSON.parse(
+      await app.invoke("export_proxies", { format: "json" }),
+    );
+    assert.equal(exported.proxies.length, 2);
+    assert.ok(exported.proxies.some((item) => item.name === "Updated Proxy"));
+    assert.ok(exported.proxies.some((item) => item.name === "Parsed Proxy 1"));
+    const importResult = await app.invoke("import_proxies_json", {
+      content: JSON.stringify({
+        version: "1",
+        source: "Donut Browser",
+        exported_at: new Date().toISOString(),
+        proxies: [
+          {
+            name: "Imported Proxy",
+            type: "http",
+            host: "127.0.0.1",
+            port: 8081,
+          },
+        ],
+      }),
+    });
+    assert.equal(importResult.imported_count, 1);
+
+    // A second batch under the same prefix continues the numbering. It used
+    // to restart at 1, collide with every name of the first batch, and be
+    // skipped whole as duplicates.
+    const secondBatch = await app.invoke("import_proxies_from_parsed", {
+      parsedProxies: [
+        { ...parsedProxyFields, port: parsedProxyFields.port + 1 },
+      ],
+      namePrefix: "Parsed",
+    });
+    assert.equal(secondBatch.imported_count, 1);
+    assert.equal(secondBatch.skipped_count, 0);
+    assert.equal(secondBatch.proxies[0].name, "Parsed Proxy 2");
+
+    const profile = await createProfile(app);
+    assert.equal(profile.name, "Entity Profile");
+    assert.equal(
+      (
+        await app.invoke("update_profile_proxy", {
+          profileId: profile.id,
           proxyId: proxy.id,
-          rotationUrl: "ftp://provider.example/change-ip",
-        }),
-        /PROXY_ROTATION_URL_INVALID/,
-      );
-      const rotationUrl = `${process.env.DONUT_E2E_FIXTURE_URL}/change-ip?key=e2e`;
-      const linked = await app.invoke("set_proxy_rotation_url", {
-        proxyId: proxy.id,
-        rotationUrl: ` ${rotationUrl} `,
-      });
-      assert.equal(linked.rotation_url, rotationUrl);
-      const rotated = await app.invoke("rotate_proxy_ip", {
-        proxyId: proxy.id,
-      });
-      assert.equal(rotated.status, 200);
-      assert.equal(rotated.error, null);
-      const rotations = await app.invoke("rotate_proxy_ips", {
-        proxyIds: [proxy.id, proxy.id, "missing-proxy"],
-      });
-      assert.deepEqual(
-        rotations.map((result) => [result.proxy_id, result.status]),
-        [
-          [proxy.id, 200],
-          ["missing-proxy", null],
-        ],
-        "duplicates are called once and each proxy gets its own result",
-      );
-      assert.match(rotations[1].error, /PROXY_NOT_FOUND/);
-      const unlinked = await app.invoke("set_proxy_rotation_url", {
-        proxyId: proxy.id,
-        rotationUrl: "",
-      });
-      assert.equal(unlinked.rotation_url, null);
-
-      const parsed = await app.invoke("parse_txt_proxies", {
-        content: [
-          "http://one.example:8080",
-          "two.example:1080:user:pass",
-          "not a proxy",
-        ].join("\n"),
-      });
-      assert.equal(parsed.length, 3);
-      assert.ok(parsed.some((result) => result.status === "parsed"));
-      assert.ok(parsed.some((result) => result.status === "invalid"));
-      const parsedProxy = parsed.find((result) => result.status === "parsed");
-      const { status: _status, ...parsedProxyFields } = parsedProxy;
-      const parsedImport = await app.invoke("import_proxies_from_parsed", {
-        parsedProxies: [parsedProxyFields],
-        namePrefix: "Parsed",
-      });
-      assert.equal(parsedImport.imported_count, 1);
-
-      assert.deepEqual(
-        await app.invoke("get_proxy_check_history", { proxyId: proxy.id }),
-        [],
-        "a proxy nobody has checked has no trail",
-      );
-      const validityError = await app.invokeError("check_proxy_validity", {
-        proxyId: proxy.id,
-        proxySettings: null,
-      });
-      assert.match(validityError, /Proxy check failed|Could not connect/i);
-      const cachedValidity = await app.invoke("get_cached_proxy_check", {
-        proxyId: proxy.id,
-      });
-      assert.ok(cachedValidity === null || cachedValidity.is_valid === false);
-
-      // A check that failed is still a check, and it is recorded as one. The
-      // proxy above was edited to SOCKS5 on a closed port, so the UDP probe
-      // could not reach it: the honest verdict is "unknown", never "no".
-      const trail = await app.invoke("get_proxy_check_history", {
-        proxyId: proxy.id,
-      });
-      assert.equal(trail.length, 1);
-      assert.equal(trail[0].ok, false);
-      assert.equal(trail[0].ip, null);
-      assert.equal(trail[0].udp, "unknown");
-      assert.ok(
-        typeof trail[0].latency_ms === "number" && trail[0].latency_ms >= 0,
-      );
-      assert.ok(trail[0].timestamp > 0);
-
-      // Deleting the proxy takes the trail with it; it names exit addresses.
-      const doomed = await app.invoke("create_stored_proxy", {
-        name: "Trail Owner",
-        proxySettings: {
-          proxy_type: "http",
-          host: "127.0.0.1",
-          port: 9,
-          username: null,
-          password: null,
-        },
-      });
-      await app.invokeError("check_proxy_validity", {
-        proxyId: doomed.id,
-        proxySettings: null,
-      });
-      const doomedTrail = await app.invoke("get_proxy_check_history", {
-        proxyId: doomed.id,
-      });
-      assert.equal(doomedTrail.length, 1);
-      // An HTTP proxy cannot carry a datagram at all, which is answered from
-      // the protocol without dialling anything.
-      assert.equal(doomedTrail[0].udp, "no");
-      await app.invoke("delete_stored_proxy", { proxyId: doomed.id });
-      assert.deepEqual(
-        await app.invoke("get_proxy_check_history", { proxyId: doomed.id }),
-        [],
-      );
-
-      // The form uses this to tell the user WHICH part of their setup is
-      // unsupported instead of implying they mistyped, so the reason must
-      // survive the IPC hop. A link Donut can use comes back as the type and
-      // endpoint the form shows, VMess included, which hides them in base64.
-      const goodVless =
-        "vless://6d6e21a1-4829-4d2b-bc7f-1b25707b61e4@example.com:443" +
-        "?security=reality&flow=xtls-rprx-vision&encryption=none&type=tcp" +
-        "&sni=a.com&pbk=mQB9jxUDHO7g49VaNXLEdcNQ_jLhTbLolUsMUNwb6W4&sid=00&fp=chrome";
-      assert.deepEqual(
-        await app.invoke("validate_vless_uri", { uri: goodVless }),
-        { proxy_type: "vless", host: "example.com", port: 443 },
-      );
-      const vmess = `vmess://${Buffer.from(
-        JSON.stringify({
-          add: "vm.example.com",
-          port: "8443",
-          id: "6d6e21a1-4829-4d2b-bc7f-1b25707b61e4",
-          net: "ws",
-          path: "/vm",
-          tls: "tls",
-        }),
-      ).toString("base64")}`;
-      assert.deepEqual(await app.invoke("validate_vless_uri", { uri: vmess }), {
-        proxy_type: "vmess",
-        host: "vm.example.com",
-        port: 8443,
-      });
-
-      for (const [uri, reason] of [
-        [goodVless.replace("security=reality", "security=xtls"), "security"],
-        [goodVless.replace("type=tcp", "type=kcp"), "transport"],
-        [
-          goodVless.replace("flow=xtls-rprx-vision", "flow=xtls-rprx-direct"),
-          "flow",
-        ],
-        ["hysteria2://pw@hy.example.com:443/?obfs=gost", "obfs"],
-      ]) {
-        // invokeError returns the command's error wrapped in a message, so match
-        // rather than JSON.parse the whole string.
-        const error = await app.invokeError("validate_vless_uri", { uri });
-        assert.match(error, /VLESS_CONFIG_INVALID/);
-        assert.match(
-          error,
-          new RegExp(`"reason":"${reason}"`),
-          `expected reason ${reason} for ${uri}, got: ${error}`,
-        );
-      }
-
-      const exported = JSON.parse(
-        await app.invoke("export_proxies", { format: "json" }),
-      );
-      assert.equal(exported.proxies.length, 2);
-      assert.ok(exported.proxies.some((item) => item.name === "Updated Proxy"));
-      assert.ok(
-        exported.proxies.some((item) => item.name === "Parsed Proxy 1"),
-      );
-      const importResult = await app.invoke("import_proxies_json", {
-        content: JSON.stringify({
-          version: "1",
-          source: "Donut Browser",
-          exported_at: new Date().toISOString(),
-          proxies: [
-            {
-              name: "Imported Proxy",
-              type: "http",
-              host: "127.0.0.1",
-              port: 8081,
-            },
-          ],
-        }),
-      });
-      assert.equal(importResult.imported_count, 1);
-
-      // A second batch under the same prefix continues the numbering. It used
-      // to restart at 1, collide with every name of the first batch, and be
-      // skipped whole as duplicates.
-      const secondBatch = await app.invoke("import_proxies_from_parsed", {
-        parsedProxies: [
-          { ...parsedProxyFields, port: parsedProxyFields.port + 1 },
-        ],
-        namePrefix: "Parsed",
-      });
-      assert.equal(secondBatch.imported_count, 1);
-      assert.equal(secondBatch.skipped_count, 0);
-      assert.equal(secondBatch.proxies[0].name, "Parsed Proxy 2");
-
-      const profile = await createProfile(app);
-      assert.equal(profile.name, "Entity Profile");
+        })
+      ).proxy_id,
+      proxy.id,
+    );
+    await app.invoke("assign_profiles_to_group", {
+      profileIds: [profile.id],
+      groupId: group.id,
+    });
+    await app.invoke("rename_profile", {
+      profileId: profile.id,
+      newName: "Renamed Profile",
+    });
+    // Its own name, another case, or extra spaces are not a conflict.
+    for (const [newName, stored] of [
+      ["Renamed Profile", "Renamed Profile"],
+      ["  renamed profile  ", "renamed profile"],
+      ["Renamed Profile ", "Renamed Profile"],
+    ]) {
       assert.equal(
         (
-          await app.invoke("update_profile_proxy", {
+          await app.invoke("rename_profile", {
             profileId: profile.id,
-            proxyId: proxy.id,
+            newName,
           })
-        ).proxy_id,
-        proxy.id,
+        ).name,
+        stored,
       );
-      await app.invoke("assign_profiles_to_group", {
-        profileIds: [profile.id],
-        groupId: group.id,
-      });
-      await app.invoke("rename_profile", {
+    }
+    await app.invoke("update_profile_tags", {
+      profileId: profile.id,
+      tags: ["alpha", "automation"],
+    });
+    await app.invoke("update_profile_note", {
+      profileId: profile.id,
+      note: "Extensive E2E metadata",
+    });
+    await app.invoke("update_profile_window_color", {
+      profileId: profile.id,
+      windowColor: "#123456",
+    });
+    await app.invoke("update_profile_launch_hook", {
+      profileId: profile.id,
+      launchHook: `${process.env.DONUT_E2E_FIXTURE_URL}/launch-hook`,
+    });
+    const invalidHook = await app.invokeError("update_profile_launch_hook", {
+      profileId: profile.id,
+      launchHook: "file:///etc/passwd",
+    });
+    assert.match(invalidHook, /INVALID_LAUNCH_HOOK_URL/);
+    await app.invoke("update_profile_proxy_bypass_rules", {
+      profileId: profile.id,
+      rules: ["localhost", "*.internal.example"],
+    });
+    await app.invoke("update_profile_dns_blocklist", {
+      profileId: profile.id,
+      dnsBlocklist: "light",
+    });
+    // A plain address of a known resolver is described as its encrypted
+    // endpoint, blank means the proxy resolves, and junk is refused.
+    assert.deepEqual(
+      await app.invoke("describe_dns_server", { value: "1.1.1.1" }),
+      {
+        transport: "https",
+        server: "cloudflare-dns.com",
+        encrypted: true,
+        upgraded: true,
+      },
+    );
+    assert.deepEqual(
+      await app.invoke("describe_dns_server", { value: "tcp://10.0.0.53" }),
+      {
+        transport: "tcp",
+        server: "10.0.0.53",
+        encrypted: false,
+        upgraded: false,
+      },
+    );
+    assert.equal(
+      await app.invoke("describe_dns_server", { value: "  " }),
+      null,
+    );
+    assert.match(
+      await app.invokeError("describe_dns_server", {
+        value: "udp://1.1.1.1",
+      }),
+      /DNS_SERVER_INVALID/,
+    );
+    assert.match(
+      await app.invokeError("update_profile_dns_server", {
         profileId: profile.id,
-        newName: "Renamed Profile",
-      });
-      // Its own name, another case, or extra spaces are not a conflict.
-      for (const [newName, stored] of [
-        ["Renamed Profile", "Renamed Profile"],
-        ["  renamed profile  ", "renamed profile"],
-        ["Renamed Profile ", "Renamed Profile"],
-      ]) {
-        assert.equal(
-          (
-            await app.invoke("rename_profile", {
-              profileId: profile.id,
-              newName,
-            })
-          ).name,
-          stored,
-        );
-      }
-      await app.invoke("update_profile_tags", {
-        profileId: profile.id,
-        tags: ["alpha", "automation"],
-      });
-      await app.invoke("update_profile_note", {
-        profileId: profile.id,
-        note: "Extensive E2E metadata",
-      });
-      await app.invoke("update_profile_window_color", {
-        profileId: profile.id,
-        windowColor: "#123456",
-      });
-      await app.invoke("update_profile_launch_hook", {
-        profileId: profile.id,
-        launchHook: `${process.env.DONUT_E2E_FIXTURE_URL}/launch-hook`,
-      });
-      const invalidHook = await app.invokeError("update_profile_launch_hook", {
-        profileId: profile.id,
-        launchHook: "file:///etc/passwd",
-      });
-      assert.match(invalidHook, /INVALID_LAUNCH_HOOK_URL/);
-      await app.invoke("update_profile_proxy_bypass_rules", {
-        profileId: profile.id,
-        rules: ["localhost", "*.internal.example"],
-      });
-      await app.invoke("update_profile_dns_blocklist", {
-        profileId: profile.id,
-        dnsBlocklist: "light",
-      });
-      // A plain address of a known resolver is described as its encrypted
-      // endpoint, blank means the proxy resolves, and junk is refused.
-      assert.deepEqual(
-        await app.invoke("describe_dns_server", { value: "1.1.1.1" }),
-        {
-          transport: "https",
-          server: "cloudflare-dns.com",
-          encrypted: true,
-          upgraded: true,
-        },
-      );
-      assert.deepEqual(
-        await app.invoke("describe_dns_server", { value: "tcp://10.0.0.53" }),
-        {
-          transport: "tcp",
-          server: "10.0.0.53",
-          encrypted: false,
-          upgraded: false,
-        },
-      );
-      assert.equal(
-        await app.invoke("describe_dns_server", { value: "  " }),
-        null,
-      );
-      assert.match(
-        await app.invokeError("describe_dns_server", {
-          value: "udp://1.1.1.1",
-        }),
-        /DNS_SERVER_INVALID/,
-      );
-      assert.match(
-        await app.invokeError("update_profile_dns_server", {
-          profileId: profile.id,
-          dnsServer: "udp://9.9.9.9",
-        }),
-        /DNS_SERVER_INVALID/,
-      );
-      const withDns = await app.invoke("update_profile_dns_server", {
-        profileId: profile.id,
-        dnsServer: " https://dns.quad9.net/dns-query ",
-      });
-      assert.equal(withDns.dns_server, "https://dns.quad9.net/dns-query");
+        dnsServer: "udp://9.9.9.9",
+      }),
+      /DNS_SERVER_INVALID/,
+    );
+    const withDns = await app.invoke("update_profile_dns_server", {
+      profileId: profile.id,
+      dnsServer: " https://dns.quad9.net/dns-query ",
+    });
+    assert.equal(withDns.dns_server, "https://dns.quad9.net/dns-query");
 
-      // A required exit country is two letters, stored upper case; anything
-      // else is refused, and null clears it.
-      assert.match(
-        await app.invokeError("update_profile_required_exit_country", {
-          profileId: profile.id,
-          country: "USA",
-        }),
-        /EXIT_COUNTRY_INVALID/,
-      );
-      const locked = await app.invoke("update_profile_required_exit_country", {
+    // A required exit country is two letters, stored upper case; anything
+    // else is refused, and null clears it.
+    assert.match(
+      await app.invokeError("update_profile_required_exit_country", {
         profileId: profile.id,
-        country: " us ",
-      });
-      assert.equal(locked.required_exit_country, "US");
-      const listed = (await app.invoke("list_browser_profiles")).find(
+        country: "USA",
+      }),
+      /EXIT_COUNTRY_INVALID/,
+    );
+    const locked = await app.invoke("update_profile_required_exit_country", {
+      profileId: profile.id,
+      country: " us ",
+    });
+    assert.equal(locked.required_exit_country, "US");
+    const listed = (await app.invoke("list_browser_profiles")).find(
+      (item) => item.id === profile.id,
+    );
+    assert.equal(listed.required_exit_country, "US");
+    const unlocked = await app.invoke("update_profile_required_exit_country", {
+      profileId: profile.id,
+      country: null,
+    });
+    assert.equal(unlocked.required_exit_country ?? null, null);
+
+    // Statuses: a set the person defines, one per profile, removed from
+    // every profile when deleted.
+    const warming = await app.invoke("create_profile_status", {
+      name: " Warming up ",
+      color: "#EAB308",
+    });
+    assert.equal(warming.name, "Warming up");
+    assert.equal(warming.color, "#eab308");
+    const banned = await app.invoke("create_profile_status", {
+      name: "Banned",
+      color: "#ef4444",
+    });
+    assert.match(
+      await app.invokeError("create_profile_status", {
+        name: "banned",
+        color: "#000000",
+      }),
+      /PROFILE_STATUS_EXISTS/,
+    );
+    assert.match(
+      await app.invokeError("create_profile_status", {
+        name: "Paused",
+        color: "red",
+      }),
+      /PROFILE_STATUS_COLOR_INVALID/,
+    );
+    const renamed = await app.invoke("update_profile_status", {
+      statusId: banned.id,
+      name: "Suspended",
+      color: "#ef4444",
+    });
+    assert.equal(renamed.name, "Suspended");
+    assert.deepEqual(
+      (await app.invoke("list_profile_statuses")).map((item) => item.name),
+      ["Warming up", "Suspended"],
+    );
+    assert.match(
+      await app.invokeError("set_profiles_status", {
+        profileIds: [profile.id],
+        statusId: "missing",
+      }),
+      /PROFILE_STATUS_NOT_FOUND/,
+    );
+    await app.invoke("set_profiles_status", {
+      profileIds: [profile.id],
+      statusId: banned.id,
+    });
+    assert.equal(
+      (await app.invoke("list_browser_profiles")).find(
         (item) => item.id === profile.id,
-      );
-      assert.equal(listed.required_exit_country, "US");
-      const unlocked = await app.invoke(
-        "update_profile_required_exit_country",
-        {
-          profileId: profile.id,
-          country: null,
-        },
-      );
-      assert.equal(unlocked.required_exit_country ?? null, null);
+      ).status_id,
+      banned.id,
+    );
+    await app.invoke("delete_profile_status", { statusId: banned.id });
+    assert.equal(
+      (await app.invoke("list_browser_profiles")).find(
+        (item) => item.id === profile.id,
+      ).status_id,
+      null,
+      "deleting a status takes it off its profiles",
+    );
+    await app.invoke("set_profiles_status", {
+      profileIds: [profile.id],
+      statusId: warming.id,
+    });
 
-      // Statuses: a set the person defines, one per profile, removed from
-      // every profile when deleted.
-      const warming = await app.invoke("create_profile_status", {
-        name: " Warming up ",
-        color: "#EAB308",
-      });
-      assert.equal(warming.name, "Warming up");
-      assert.equal(warming.color, "#eab308");
-      const banned = await app.invoke("create_profile_status", {
-        name: "Banned",
-        color: "#ef4444",
-      });
-      assert.match(
-        await app.invokeError("create_profile_status", {
-          name: "banned",
-          color: "#000000",
-        }),
-        /PROFILE_STATUS_EXISTS/,
-      );
-      assert.match(
-        await app.invokeError("create_profile_status", {
-          name: "Paused",
-          color: "red",
-        }),
-        /PROFILE_STATUS_COLOR_INVALID/,
-      );
-      const renamed = await app.invoke("update_profile_status", {
-        statusId: banned.id,
-        name: "Suspended",
-        color: "#ef4444",
-      });
-      assert.equal(renamed.name, "Suspended");
-      assert.deepEqual(
-        (await app.invoke("list_profile_statuses")).map((item) => item.name),
-        ["Warming up", "Suspended"],
-      );
-      assert.match(
-        await app.invokeError("set_profiles_status", {
-          profileIds: [profile.id],
-          statusId: "missing",
-        }),
-        /PROFILE_STATUS_NOT_FOUND/,
-      );
-      await app.invoke("set_profiles_status", {
-        profileIds: [profile.id],
-        statusId: banned.id,
-      });
-      assert.equal(
-        (await app.invoke("list_browser_profiles")).find(
-          (item) => item.id === profile.id,
-        ).status_id,
-        banned.id,
-      );
-      await app.invoke("delete_profile_status", { statusId: banned.id });
-      assert.equal(
-        (await app.invoke("list_browser_profiles")).find(
-          (item) => item.id === profile.id,
-        ).status_id,
-        null,
-        "deleting a status takes it off its profiles",
-      );
-      await app.invoke("set_profiles_status", {
-        profileIds: [profile.id],
-        statusId: warming.id,
-      });
-
-      // Start pages: tidied, web pages only, at most twenty.
-      assert.match(
-        await app.invokeError("update_profile_start_urls", {
-          profileId: profile.id,
-          startUrls: ["file:///etc/passwd"],
-        }),
-        /START_URL_INVALID/,
-      );
-      assert.match(
-        await app.invokeError("update_profile_start_urls", {
-          profileId: profile.id,
-          startUrls: Array.from(
-            { length: 21 },
-            (_, i) => `https://${i}.example/`,
-          ),
-        }),
-        /START_URLS_TOO_MANY/,
-      );
-      const withStartPages = await app.invoke("update_profile_start_urls", {
+    // Start pages: tidied, web pages only, at most twenty.
+    assert.match(
+      await app.invokeError("update_profile_start_urls", {
         profileId: profile.id,
-        startUrls: [" https://mail.example/inbox ", "", "shop.example"],
-      });
-      assert.deepEqual(withStartPages.start_urls, [
-        "https://mail.example/inbox",
-        "https://shop.example/",
-      ]);
-      await app.invoke("update_profile_clear_on_close", {
+        startUrls: ["file:///etc/passwd"],
+      }),
+      /START_URL_INVALID/,
+    );
+    assert.match(
+      await app.invokeError("update_profile_start_urls", {
         profileId: profile.id,
-        clearOnClose: true,
-      });
+        startUrls: Array.from(
+          { length: 21 },
+          (_, i) => `https://${i}.example/`,
+        ),
+      }),
+      /START_URLS_TOO_MANY/,
+    );
+    const withStartPages = await app.invoke("update_profile_start_urls", {
+      profileId: profile.id,
+      startUrls: [" https://mail.example/inbox ", "", "shop.example"],
+    });
+    assert.deepEqual(withStartPages.start_urls, [
+      "https://mail.example/inbox",
+      "https://shop.example/",
+    ]);
+    await app.invoke("update_profile_clear_on_close", {
+      profileId: profile.id,
+      clearOnClose: true,
+    });
 
-      const profiles = await app.invoke("list_browser_profiles");
-      const changed = profiles.find((item) => item.id === profile.id);
-      assert.deepEqual(changed.tags, ["alpha", "automation"]);
-      assert.equal(changed.note, "Extensive E2E metadata");
-      assert.equal(changed.window_color, "#123456");
-      assert.equal(changed.group_id, group.id);
-      assert.deepEqual(changed.proxy_bypass_rules, [
-        "localhost",
-        "*.internal.example",
-      ]);
-      assert.equal(changed.dns_blocklist, "light");
-      assert.equal(changed.dns_server, "https://dns.quad9.net/dns-query");
-      assert.equal(changed.status_id, warming.id);
-      assert.deepEqual(changed.start_urls, [
-        "https://mail.example/inbox",
-        "https://shop.example/",
-      ]);
-      assert.equal(changed.clear_on_close, true);
-      assert.deepEqual((await app.invoke("get_all_tags")).sort(), [
-        "alpha",
-        "automation",
-      ]);
+    const profiles = await app.invoke("list_browser_profiles");
+    const changed = profiles.find((item) => item.id === profile.id);
+    assert.deepEqual(changed.tags, ["alpha", "automation"]);
+    assert.equal(changed.note, "Extensive E2E metadata");
+    assert.equal(changed.window_color, "#123456");
+    assert.equal(changed.group_id, group.id);
+    assert.deepEqual(changed.proxy_bypass_rules, [
+      "localhost",
+      "*.internal.example",
+    ]);
+    assert.equal(changed.dns_blocklist, "light");
+    assert.equal(changed.dns_server, "https://dns.quad9.net/dns-query");
+    assert.equal(changed.status_id, warming.id);
+    assert.deepEqual(changed.start_urls, [
+      "https://mail.example/inbox",
+      "https://shop.example/",
+    ]);
+    assert.equal(changed.clear_on_close, true);
+    assert.deepEqual((await app.invoke("get_all_tags")).sort(), [
+      "alpha",
+      "automation",
+    ]);
 
-      assert.ok(Array.isArray(await app.invoke("detect_existing_profiles")));
-      const importRoot = path.join(app.root, "profile-import-fixture");
-      const importProfile = path.join(importRoot, "Default");
-      await mkdir(importProfile, { recursive: true });
-      await writeFile(
-        path.join(importProfile, "Preferences"),
-        JSON.stringify({
-          profile: { name: "Imported fixture", exit_type: "Crashed" },
-          download: { default_directory: "/Users/someone-else/Downloads" },
-        }),
-      );
-      // A Secure Preferences with MACs that can never validate under Wayfern,
-      // one real (relative-path) extension and one component extension that
-      // belongs to the source browser's bundle.
-      await writeFile(
-        path.join(importProfile, "Secure Preferences"),
-        JSON.stringify({
-          protection: { super_mac: "deadbeef", macs: { extensions: {} } },
-          extensions: {
-            settings: {
-              aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: {
-                path: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/1.0_0",
-              },
-              bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: {
-                path: "/Applications/Chromium.app/Contents/Resources/component",
-              },
+    assert.ok(Array.isArray(await app.invoke("detect_existing_profiles")));
+    const importRoot = path.join(app.root, "profile-import-fixture");
+    const importProfile = path.join(importRoot, "Default");
+    await mkdir(importProfile, { recursive: true });
+    await writeFile(
+      path.join(importProfile, "Preferences"),
+      JSON.stringify({
+        profile: { name: "Imported fixture", exit_type: "Crashed" },
+        download: { default_directory: "/Users/someone-else/Downloads" },
+      }),
+    );
+    // A Secure Preferences with MACs that can never validate under Wayfern,
+    // one real (relative-path) extension and one component extension that
+    // belongs to the source browser's bundle.
+    await writeFile(
+      path.join(importProfile, "Secure Preferences"),
+      JSON.stringify({
+        protection: { super_mac: "deadbeef", macs: { extensions: {} } },
+        extensions: {
+          settings: {
+            aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa: {
+              path: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/1.0_0",
+            },
+            bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb: {
+              path: "/Applications/Chromium.app/Contents/Resources/component",
             },
           },
-        }),
-      );
-      // Caches must not be copied, and site data must be.
-      await mkdir(path.join(importProfile, "Cache"), { recursive: true });
-      await writeFile(path.join(importProfile, "Cache", "data_0"), "junk");
-      await mkdir(path.join(importProfile, "Local Storage", "leveldb"), {
-        recursive: true,
-      });
-      await writeFile(
-        path.join(importProfile, "Local Storage", "leveldb", "000003.log"),
-        "site-data",
-      );
-      writeChromiumHistory(path.join(importProfile, "History"), [
-        "https://example.com/",
-        "https://example.org/",
-      ]);
-      writeChromiumCookies(path.join(importProfile, "Cookies"), [
-        { host: "example.com", name: "sid", value: "session-token" },
-        { host: "example.org", name: "pref", value: "dark" },
-        // Sealed with a key this machine does not have, and stored the way
-        // Chromium's own v23->v24 migration stores it (TEXT in a BLOB column).
-        // It must be reported as unrecoverable, never silently blanked and
-        // counted as migrated.
-        {
-          host: "sealed.example",
-          name: "sid",
-          encryptedValueText: "v10\u0001\u0002\u0003unopenable-ciphertext",
         },
-      ]);
+      }),
+    );
+    // Caches must not be copied, and site data must be.
+    await mkdir(path.join(importProfile, "Cache"), { recursive: true });
+    await writeFile(path.join(importProfile, "Cache", "data_0"), "junk");
+    await mkdir(path.join(importProfile, "Local Storage", "leveldb"), {
+      recursive: true,
+    });
+    await writeFile(
+      path.join(importProfile, "Local Storage", "leveldb", "000003.log"),
+      "site-data",
+    );
+    writeChromiumHistory(path.join(importProfile, "History"), [
+      "https://example.com/",
+      "https://example.org/",
+    ]);
+    writeChromiumCookies(path.join(importProfile, "Cookies"), [
+      { host: "example.com", name: "sid", value: "session-token" },
+      { host: "example.org", name: "pref", value: "dark" },
+      // Sealed with a key this machine does not have, and stored the way
+      // Chromium's own v23->v24 migration stores it (TEXT in a BLOB column).
+      // It must be reported as unrecoverable, never silently blanked and
+      // counted as migrated.
+      {
+        host: "sealed.example",
+        name: "sid",
+        encryptedValueText: "v10\u0001\u0002\u0003unopenable-ciphertext",
+      },
+    ]);
 
-      const scanned = await app.invoke("scan_folder_for_profiles", {
-        folderPath: importRoot,
-      });
-      assert.equal(scanned.length, 1);
-      assert.equal(scanned[0].mapped_browser, "wayfern");
-      const importBatch = await app.invoke("import_browser_profiles", {
-        items: [
-          {
-            source_path: scanned[0].path,
-            browser_type: scanned[0].browser,
-            new_profile_name: "Imported Profile",
-            proxy_id: null,
-            vpn_id: null,
-          },
-        ],
-        groupId: null,
-        duplicateStrategy: "rename",
-        // A stored fingerprint, as elsewhere in this suite: generating a real
-        // one shells out to the Wayfern binary, which no CRUD suite installs.
-        wayfernConfig: { fingerprint: "{}" },
-      });
-      assert.equal(
-        importBatch.imported_count,
-        1,
-        `import must succeed: ${JSON.stringify(importBatch.results)}`,
-      );
+    const scanned = await app.invoke("scan_folder_for_profiles", {
+      folderPath: importRoot,
+    });
+    assert.equal(scanned.length, 1);
+    assert.equal(scanned[0].mapped_browser, "wayfern");
+    const importBatch = await app.invoke("import_browser_profiles", {
+      items: [
+        {
+          source_path: scanned[0].path,
+          browser_type: scanned[0].browser,
+          new_profile_name: "Imported Profile",
+          proxy_id: null,
+          vpn_id: null,
+        },
+      ],
+      groupId: null,
+      duplicateStrategy: "rename",
+      // A stored fingerprint, as elsewhere in this suite: generating a real
+      // one shells out to the Wayfern binary, which no CRUD suite installs.
+      wayfernConfig: { fingerprint: "{}" },
+    });
+    assert.equal(
+      importBatch.imported_count,
+      1,
+      `import must succeed: ${JSON.stringify(importBatch.results)}`,
+    );
 
-      const imported = importBatch.results[0];
-      // The assertion whose absence let the layout bug ship: an import that
-      // carries nothing used to be indistinguishable from a successful one.
-      assert.ok(
-        imported.report,
-        "an imported profile must report what it carried",
-      );
-      assert.equal(imported.report.cookies_migrated, 2);
-      assert.equal(
-        imported.report.cookies_unrecoverable,
-        1,
-        "a cookie no key can open must be counted, not silently emptied",
-      );
-      assert.equal(imported.report.history_entries, 2);
-      assert.equal(imported.report.extensions_migrated, 1);
-      assert.ok(imported.report.local_storage_origins > 0);
+    const imported = importBatch.results[0];
+    // The assertion whose absence let the layout bug ship: an import that
+    // carries nothing used to be indistinguishable from a successful one.
+    assert.ok(
+      imported.report,
+      "an imported profile must report what it carried",
+    );
+    assert.equal(imported.report.cookies_migrated, 2);
+    assert.equal(
+      imported.report.cookies_unrecoverable,
+      1,
+      "a cookie no key can open must be counted, not silently emptied",
+    );
+    assert.equal(imported.report.history_entries, 2);
+    assert.equal(imported.report.extensions_migrated, 1);
+    assert.ok(imported.report.local_storage_origins > 0);
 
-      const importedDir = path.join(
-        app.dataRoot,
-        "data",
-        "profiles",
-        imported.profile_id,
-        "profile",
-      );
-      // Chromium reads <user-data-dir>/Default/, so anything at the root is
-      // invisible to the browser no matter how faithfully it was copied.
-      assert.ok(
-        existsSync(path.join(importedDir, "Default", "Preferences")),
-        "profile content must land under Default/",
-      );
-      assert.ok(
-        !existsSync(path.join(importedDir, "Preferences")),
-        "nothing profile-scoped may sit at the user-data-dir root",
-      );
-      assert.ok(
-        existsSync(path.join(importedDir, "os_crypt_key")),
-        "Wayfern reads its key from the user-data-dir root",
-      );
-      assert.ok(
-        !existsSync(path.join(importedDir, "Default", "Cache")),
-        "caches are pure waste and must not be copied",
+    const importedDir = path.join(
+      app.dataRoot,
+      "data",
+      "profiles",
+      imported.profile_id,
+      "profile",
+    );
+    // Chromium reads <user-data-dir>/Default/, so anything at the root is
+    // invisible to the browser no matter how faithfully it was copied.
+    assert.ok(
+      existsSync(path.join(importedDir, "Default", "Preferences")),
+      "profile content must land under Default/",
+    );
+    assert.ok(
+      !existsSync(path.join(importedDir, "Preferences")),
+      "nothing profile-scoped may sit at the user-data-dir root",
+    );
+    if (process.platform === "win32") {
+      const localState = JSON.parse(
+        await readFile(path.join(importedDir, "Local State"), "utf8"),
       );
       assert.ok(
-        existsSync(
-          path.join(
-            importedDir,
-            "Default",
-            "Local Storage",
-            "leveldb",
-            "000003.log",
-          ),
+        localState.os_crypt?.encrypted_key,
+        "the engine reads its key from Local State on Windows",
+      );
+    } else {
+      assert.ok(
+        !existsSync(path.join(importedDir, "os_crypt_key")),
+        "the engine keeps a fixed key per host and never reads a key file",
+      );
+    }
+    assert.ok(
+      !existsSync(path.join(importedDir, "Default", "Cache")),
+      "caches are pure waste and must not be copied",
+    );
+    assert.ok(
+      existsSync(
+        path.join(
+          importedDir,
+          "Default",
+          "Local Storage",
+          "leveldb",
+          "000003.log",
         ),
-        "site data must survive",
-      );
+      ),
+      "site data must survive",
+    );
 
-      const importedCookies = path.join(
-        importedDir,
-        "Default",
-        process.platform === "win32"
-          ? path.join("Network", "Cookies")
-          : "Cookies",
-      );
-      assert.ok(
-        existsSync(importedCookies),
-        "cookies must sit where this platform's Chromium reads them",
-      );
-      // Chromium drops any row where both value and encrypted_value are set, so
-      // a "migrated" cookie that kept its plaintext would never load.
-      const cookieDb = new DatabaseSync(importedCookies, { readOnly: true });
-      const rows = cookieDb
-        .prepare(
-          "SELECT host_key, value, length(encrypted_value) AS enc FROM cookies ORDER BY host_key",
-        )
-        .all();
-      cookieDb.close();
-      assert.equal(
-        rows.length,
-        2,
-        "the unrecoverable row is dropped, not kept empty",
-      );
-      for (const row of rows) {
-        assert.equal(row.value, "", `${row.host_key} kept a plaintext value`);
-        assert.ok(row.enc > 0, `${row.host_key} was not re-encrypted`);
-      }
+    const importedCookies = path.join(
+      importedDir,
+      "Default",
+      process.platform === "win32"
+        ? path.join("Network", "Cookies")
+        : "Cookies",
+    );
+    assert.ok(
+      existsSync(importedCookies),
+      "cookies must sit where this platform's Chromium reads them",
+    );
+    // Chromium drops any row where both value and encrypted_value are set, so
+    // a "migrated" cookie that kept its plaintext would never load.
+    const cookieDb = new DatabaseSync(importedCookies, { readOnly: true });
+    const rows = cookieDb
+      .prepare(
+        "SELECT host_key, value, length(encrypted_value) AS enc FROM cookies ORDER BY host_key",
+      )
+      .all();
+    cookieDb.close();
+    assert.equal(
+      rows.length,
+      2,
+      "the unrecoverable row is dropped, not kept empty",
+    );
+    for (const row of rows) {
+      assert.equal(row.value, "", `${row.host_key} kept a plaintext value`);
+      assert.ok(row.enc > 0, `${row.host_key} was not re-encrypted`);
+    }
+    // What the engine will open on its first launch is what Donut reads back.
+    const carried = await app.invoke("read_profile_cookies", {
+      profileId: imported.profile_id,
+    });
+    assert.deepEqual(
+      carried.domains
+        .flatMap((domain) => domain.cookies.map((cookie) => cookie.value))
+        .sort(),
+      ["dark", "session-token"],
+      "imported cookies must open under the engine's key",
+    );
 
-      const securePrefs = JSON.parse(
-        await readFile(
-          path.join(importedDir, "Default", "Secure Preferences"),
-          "utf8",
-        ),
-      );
-      assert.equal(
-        securePrefs.protection,
-        undefined,
-        "MACs from another machine can never validate and must be stripped",
-      );
-      assert.ok(
-        securePrefs.extensions.settings.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
-        "the user's own extension must survive",
-      );
-      assert.equal(
-        securePrefs.extensions.settings.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
-        undefined,
-        "a component extension pointing into the source browser must be dropped",
-      );
+    const securePrefs = JSON.parse(
+      await readFile(
+        path.join(importedDir, "Default", "Secure Preferences"),
+        "utf8",
+      ),
+    );
+    assert.equal(
+      securePrefs.protection,
+      undefined,
+      "MACs from another machine can never validate and must be stripped",
+    );
+    assert.ok(
+      securePrefs.extensions.settings.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa,
+      "the user's own extension must survive",
+    );
+    assert.equal(
+      securePrefs.extensions.settings.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb,
+      undefined,
+      "a component extension pointing into the source browser must be dropped",
+    );
 
-      const prefs = JSON.parse(
-        await readFile(
-          path.join(importedDir, "Default", "Preferences"),
-          "utf8",
-        ),
-      );
-      assert.equal(prefs.profile.exit_type, "Normal");
-      assert.equal(prefs.download.default_directory, undefined);
-      assert.equal(prefs.profile.name, "Imported fixture");
+    const prefs = JSON.parse(
+      await readFile(path.join(importedDir, "Default", "Preferences"), "utf8"),
+    );
+    assert.equal(prefs.profile.exit_type, "Normal");
+    assert.equal(prefs.download.default_directory, undefined);
+    assert.equal(prefs.profile.name, "Imported fixture");
 
-      // A Gecko profile must say why it cannot be imported instead of silently
-      // producing an empty one.
-      const firefoxRoot = path.join(app.root, "firefox-profile-fixture");
-      await mkdir(firefoxRoot, { recursive: true });
-      await writeFile(path.join(firefoxRoot, "prefs.js"), "// prefs");
-      await writeFile(path.join(firefoxRoot, "places.sqlite"), "");
-      const geckoBatch = await app.invoke("import_browser_profiles", {
-        items: [
-          {
-            source_path: firefoxRoot,
-            browser_type: "firefox",
-            new_profile_name: "Gecko Profile",
-            proxy_id: null,
-            vpn_id: null,
-          },
-        ],
-        groupId: null,
-        duplicateStrategy: "rename",
-        wayfernConfig: { fingerprint: "{}" },
-      });
-      assert.equal(geckoBatch.failed_count, 1);
-      assert.match(
-        geckoBatch.results[0].error,
-        /IMPORT_SOURCE_NOT_CHROMIUM/,
-        "a Firefox folder must be rejected by name, not imported empty",
-      );
-      // A cancel stops the import before its next profile; one asked before
-      // the import starts leaves every item not started.
-      await app.invoke("cancel_profile_import", { importId: "e2e-cancelled" });
-      const cancelledBatch = await app.invoke("import_browser_profiles", {
-        items: [
-          {
-            source_path: scanned[0].path,
-            browser_type: scanned[0].browser,
-            new_profile_name: "Cancelled Import",
-            proxy_id: null,
-            vpn_id: null,
-          },
-        ],
-        groupId: null,
-        duplicateStrategy: "rename",
-        wayfernConfig: { fingerprint: "{}" },
-        importId: "e2e-cancelled",
-      });
-      assert.equal(cancelledBatch.cancelled, true);
-      assert.equal(cancelledBatch.imported_count, 0);
-      assert.equal(cancelledBatch.cancelled_count, 1);
-      assert.equal(cancelledBatch.results[0].status, "cancelled");
-      const archivePath = path.join(app.root, "profile-import-fixture.zip");
-      await writeFile(archivePath, Buffer.from(extensionZipBase64(), "base64"));
-      const archiveScan = await app.invoke("scan_profile_archive", {
-        archivePath,
-      });
-      assert.ok(Array.isArray(archiveScan.profiles));
-      await app.invoke("cleanup_profile_import_scratch", {
-        extractedDir: archiveScan.extracted_dir,
-      });
+    // A Gecko profile must say why it cannot be imported instead of silently
+    // producing an empty one.
+    const firefoxRoot = path.join(app.root, "firefox-profile-fixture");
+    await mkdir(firefoxRoot, { recursive: true });
+    await writeFile(path.join(firefoxRoot, "prefs.js"), "// prefs");
+    await writeFile(path.join(firefoxRoot, "places.sqlite"), "");
+    const geckoBatch = await app.invoke("import_browser_profiles", {
+      items: [
+        {
+          source_path: firefoxRoot,
+          browser_type: "firefox",
+          new_profile_name: "Gecko Profile",
+          proxy_id: null,
+          vpn_id: null,
+        },
+      ],
+      groupId: null,
+      duplicateStrategy: "rename",
+      wayfernConfig: { fingerprint: "{}" },
+    });
+    assert.equal(geckoBatch.failed_count, 1);
+    assert.match(
+      geckoBatch.results[0].error,
+      /IMPORT_SOURCE_NOT_CHROMIUM/,
+      "a Firefox folder must be rejected by name, not imported empty",
+    );
+    // A cancel stops the import before its next profile; one asked before
+    // the import starts leaves every item not started.
+    await app.invoke("cancel_profile_import", { importId: "e2e-cancelled" });
+    const cancelledBatch = await app.invoke("import_browser_profiles", {
+      items: [
+        {
+          source_path: scanned[0].path,
+          browser_type: scanned[0].browser,
+          new_profile_name: "Cancelled Import",
+          proxy_id: null,
+          vpn_id: null,
+        },
+      ],
+      groupId: null,
+      duplicateStrategy: "rename",
+      wayfernConfig: { fingerprint: "{}" },
+      importId: "e2e-cancelled",
+    });
+    assert.equal(cancelledBatch.cancelled, true);
+    assert.equal(cancelledBatch.imported_count, 0);
+    assert.equal(cancelledBatch.cancelled_count, 1);
+    assert.equal(cancelledBatch.results[0].status, "cancelled");
+    const archivePath = path.join(app.root, "profile-import-fixture.zip");
+    await writeFile(archivePath, Buffer.from(extensionZipBase64(), "base64"));
+    const archiveScan = await app.invoke("scan_profile_archive", {
+      archivePath,
+    });
+    assert.ok(Array.isArray(archiveScan.profiles));
+    await app.invoke("cleanup_profile_import_scratch", {
+      extractedDir: archiveScan.extracted_dir,
+    });
 
-      const clone = await app.invoke("clone_profile", {
-        profileId: profile.id,
-        name: "Cloned Profile",
-      });
-      assert.notEqual(clone.id, profile.id);
-      assert.equal(clone.name, "Cloned Profile");
-      assert.equal(clone.dns_server, "https://dns.quad9.net/dns-query");
-      assert.equal(clone.status_id, warming.id, "a clone keeps the status");
-      const counts = await app.invoke("get_groups_with_profile_counts");
-      assert.equal(counts.find((item) => item.id === group.id).count, 2);
-      assert.equal((await app.invoke("get_profile_groups")).length, 1);
+    const clone = await app.invoke("clone_profile", {
+      profileId: profile.id,
+      name: "Cloned Profile",
+    });
+    assert.notEqual(clone.id, profile.id);
+    assert.equal(clone.name, "Cloned Profile");
+    assert.equal(clone.dns_server, "https://dns.quad9.net/dns-query");
+    assert.equal(clone.status_id, warming.id, "a clone keeps the status");
+    const counts = await app.invoke("get_groups_with_profile_counts");
+    assert.equal(counts.find((item) => item.id === group.id).count, 2);
+    assert.equal((await app.invoke("get_profile_groups")).length, 1);
 
-      const createDnsArgs = {
-        name: "DNS Profile",
-        browserStr: "wayfern",
-        version: "150.0.7871.100",
-        releaseType: "stable",
-        proxyId: null,
-        vpnId: null,
-        wayfernConfig: { fingerprint: "{}" },
-        groupId: null,
-        ephemeral: false,
-        dnsBlocklist: null,
-        launchHook: null,
-      };
-      assert.match(
-        await app.invokeError("create_browser_profile_new", {
-          ...createDnsArgs,
-          dnsServer: "quic://dns.example",
-        }),
-        /DNS_SERVER_INVALID/,
-      );
-      assert.match(
-        await app.invokeError("create_browser_profile_new", {
-          ...createDnsArgs,
-          startUrls: ["chrome://settings"],
-        }),
-        /START_URL_INVALID/,
-      );
-      assert.ok(
-        !(await app.invoke("list_browser_profiles")).some(
-          (item) => item.name === "DNS Profile",
-        ),
-        "a refused DNS server must not leave a profile behind",
-      );
-      const dnsProfile = await app.invoke("create_browser_profile_new", {
+    const createDnsArgs = {
+      name: "DNS Profile",
+      browserStr: "wayfern",
+      version: "150.0.7871.100",
+      releaseType: "stable",
+      proxyId: null,
+      vpnId: null,
+      wayfernConfig: { fingerprint: "{}" },
+      groupId: null,
+      ephemeral: false,
+      dnsBlocklist: null,
+      launchHook: null,
+    };
+    assert.match(
+      await app.invokeError("create_browser_profile_new", {
         ...createDnsArgs,
-        dnsServer: "9.9.9.9",
-        startUrls: ["https://start.example/"],
-      });
-      assert.equal(dnsProfile.dns_server, "9.9.9.9");
-      assert.deepEqual(dnsProfile.start_urls, ["https://start.example/"]);
-      const cleared = await app.invoke("update_profile_dns_server", {
-        profileId: dnsProfile.id,
-        dnsServer: "",
-      });
-      assert.equal(cleared.dns_server, null);
+        dnsServer: "quic://dns.example",
+      }),
+      /DNS_SERVER_INVALID/,
+    );
+    assert.match(
+      await app.invokeError("create_browser_profile_new", {
+        ...createDnsArgs,
+        startUrls: ["chrome://settings"],
+      }),
+      /START_URL_INVALID/,
+    );
+    assert.ok(
+      !(await app.invoke("list_browser_profiles")).some(
+        (item) => item.name === "DNS Profile",
+      ),
+      "a refused DNS server must not leave a profile behind",
+    );
+    const dnsProfile = await app.invoke("create_browser_profile_new", {
+      ...createDnsArgs,
+      dnsServer: "9.9.9.9",
+      startUrls: ["https://start.example/"],
+    });
+    assert.equal(dnsProfile.dns_server, "9.9.9.9");
+    assert.deepEqual(dnsProfile.start_urls, ["https://start.example/"]);
+    const cleared = await app.invoke("update_profile_dns_server", {
+      profileId: dnsProfile.id,
+      dnsServer: "",
+    });
+    assert.equal(cleared.dns_server, null);
 
-      await app.invoke("delete_selected_profiles", {
-        profileIds: [profile.id, clone.id, imported.profile_id, dnsProfile.id],
-      });
-      assert.deepEqual(await app.invoke("list_browser_profiles"), []);
-      await app.invoke("delete_profile_group", { groupId: group.id });
-      await app.invoke("delete_stored_proxy", { proxyId: proxy.id });
-      for (const importedProxy of (
-        await app.invoke("get_stored_proxies")
-      ).filter(
-        (item) =>
-          item.name === "Imported Proxy" ||
-          item.name.startsWith("Parsed Proxy"),
-      )) {
-        await app.invoke("delete_stored_proxy", { proxyId: importedProxy.id });
-      }
-    },
-    { seedDownloadedBrowser: true },
-  );
+    await app.invoke("delete_selected_profiles", {
+      profileIds: [profile.id, clone.id, imported.profile_id, dnsProfile.id],
+    });
+    assert.deepEqual(await app.invoke("list_browser_profiles"), []);
+    await app.invoke("delete_profile_group", { groupId: group.id });
+    await app.invoke("delete_stored_proxy", { proxyId: proxy.id });
+    for (const importedProxy of (await app.invoke("get_stored_proxies")).filter(
+      (item) =>
+        item.name === "Imported Proxy" || item.name.startsWith("Parsed Proxy"),
+    )) {
+      await app.invoke("delete_stored_proxy", { proxyId: importedProxy.id });
+    }
+  });
 });
 
 test("extensions, extension groups, VPN storage, DNS rules, and event-backed assignments", async () => {
@@ -1753,6 +1760,7 @@ test("bulk edit changes only the ticked settings, checks every value first, and 
     const first = await createProfile(app, "Bulk One");
     const second = await createProfile(app, "Bulk Two");
     const untouched = await createProfile(app, "Bulk Untouched");
+    const created = new Map([first, second].map((p) => [p.id, p]));
     const group = await app.invoke("create_profile_group", {
       name: "Bulk Group",
     });
@@ -1822,7 +1830,7 @@ test("bulk edit changes only the ticked settings, checks every value first, and 
       assert.equal(profile.wayfern_config.webrtc_mode, "block");
       assert.equal(
         profile.wayfern_config.fingerprint,
-        "{}",
+        created.get(id).wayfern_config.fingerprint,
         "the device stays unless asked",
       );
     }
@@ -1867,165 +1875,162 @@ test("bulk edit changes only the ticked settings, checks every value first, and 
 });
 
 test("templates keep settings but never a device, and a batch stops at the hourly allowance", async () => {
-  await withApp(
-    "entities-templates",
-    async (app) => {
-      const status = await app.invoke("create_profile_status", {
-        name: "Fresh",
-        color: "#22c55e",
-      });
-      const profile = await createProfile(app, "Template Source");
-      await app.invoke("update_profile_note", {
-        profileId: profile.id,
-        note: "login for one shop",
-      });
-      await app.invoke("bulk_update_profiles", {
-        profileIds: [profile.id],
-        patch: {
-          status_id: status.id,
-          tags_add: ["shop"],
-          start_urls: ["shop.example"],
-          block_images: true,
-        },
-      });
+  await withApp("entities-templates", async (app) => {
+    const status = await app.invoke("create_profile_status", {
+      name: "Fresh",
+      color: "#22c55e",
+    });
+    const profile = await createProfile(app, "Template Source");
+    await app.invoke("update_profile_note", {
+      profileId: profile.id,
+      note: "login for one shop",
+    });
+    await app.invoke("bulk_update_profiles", {
+      profileIds: [profile.id],
+      patch: {
+        status_id: status.id,
+        tags_add: ["shop"],
+        start_urls: ["shop.example"],
+        block_images: true,
+      },
+    });
 
-      const saved = await app.invoke("save_profile_template_from_profile", {
-        profileId: profile.id,
-        name: " Shop ",
-      });
-      assert.equal(saved.name, "Shop");
-      assert.equal(saved.settings.status_id, status.id);
-      assert.deepEqual(saved.settings.tags, ["shop"]);
-      assert.deepEqual(saved.settings.start_urls, ["https://shop.example/"]);
-      assert.equal(saved.settings.note, null, "a note belongs to its profile");
-      assert.equal(saved.settings.wayfern_config.block_images, true);
-      assert.equal(
-        saved.settings.wayfern_config.fingerprint ?? null,
-        null,
-        "a template never carries the source profile's device",
-      );
-      assert.equal(saved.settings.wayfern_config.identity_id ?? null, null);
+    const saved = await app.invoke("save_profile_template_from_profile", {
+      profileId: profile.id,
+      name: " Shop ",
+    });
+    assert.equal(saved.name, "Shop");
+    assert.equal(saved.settings.status_id, status.id);
+    assert.deepEqual(saved.settings.tags, ["shop"]);
+    assert.deepEqual(saved.settings.start_urls, ["https://shop.example/"]);
+    assert.equal(saved.settings.note, null, "a note belongs to its profile");
+    assert.equal(saved.settings.wayfern_config.block_images, true);
+    assert.equal(
+      saved.settings.wayfern_config.fingerprint ?? null,
+      null,
+      "a template never carries the source profile's device",
+    );
+    assert.equal(saved.settings.wayfern_config.identity_id ?? null, null);
 
-      assert.match(
-        await app.invokeError("save_profile_template_from_profile", {
-          profileId: profile.id,
-          name: "shop",
-        }),
-        /TEMPLATE_EXISTS/,
-      );
-      for (const [settings, code] of [
-        [{ proxy_id: "p", vpn_id: "v" }, /PROXY_AND_VPN_MUTUALLY_EXCLUSIVE/],
-        [{ status_id: "missing" }, /PROFILE_STATUS_NOT_FOUND/],
-        [{ start_urls: ["file:///etc/passwd"] }, /START_URL_INVALID/],
-      ]) {
-        assert.match(
-          await app.invokeError("create_profile_template", {
-            name: "Broken",
-            settings,
-          }),
-          code,
-        );
-      }
+    assert.match(
+      await app.invokeError("save_profile_template_from_profile", {
+        profileId: profile.id,
+        name: "shop",
+      }),
+      /TEMPLATE_EXISTS/,
+    );
+    for (const [settings, code] of [
+      [{ proxy_id: "p", vpn_id: "v" }, /PROXY_AND_VPN_MUTUALLY_EXCLUSIVE/],
+      [{ status_id: "missing" }, /PROFILE_STATUS_NOT_FOUND/],
+      [{ start_urls: ["file:///etc/passwd"] }, /START_URL_INVALID/],
+    ]) {
       assert.match(
         await app.invokeError("create_profile_template", {
-          name: "x".repeat(61),
-          settings: {},
+          name: "Broken",
+          settings,
         }),
-        /TEMPLATE_NAME_TOO_LONG/,
+        code,
       );
+    }
+    assert.match(
+      await app.invokeError("create_profile_template", {
+        name: "x".repeat(61),
+        settings: {},
+      }),
+      /TEMPLATE_NAME_TOO_LONG/,
+    );
 
-      const mail = await app.invoke("create_profile_template", {
-        name: "Mail",
-        settings: {
-          name_prefix: " Mail ",
-          tags: ["mail", " mail "],
-          ephemeral: true,
-          clear_on_close: true,
-          wayfern_config: { fingerprint: "{}", os: "linux" },
-        },
-      });
-      assert.equal(mail.settings.name_prefix, "Mail");
-      assert.deepEqual(mail.settings.tags, ["mail"]);
-      assert.equal(mail.settings.clear_on_close, false);
-      assert.equal(mail.settings.wayfern_config.fingerprint ?? null, null);
-      assert.deepEqual(
-        (await app.invoke("list_profile_templates")).map((t) => t.name),
-        ["Shop", "Mail"],
-      );
+    const mail = await app.invoke("create_profile_template", {
+      name: "Mail",
+      settings: {
+        name_prefix: " Mail ",
+        tags: ["mail", " mail "],
+        ephemeral: true,
+        clear_on_close: true,
+        wayfern_config: { fingerprint: "{}", os: "linux" },
+      },
+    });
+    assert.equal(mail.settings.name_prefix, "Mail");
+    assert.deepEqual(mail.settings.tags, ["mail"]);
+    assert.equal(mail.settings.clear_on_close, false);
+    assert.equal(mail.settings.wayfern_config.fingerprint ?? null, null);
+    assert.deepEqual(
+      (await app.invoke("list_profile_templates")).map((t) => t.name),
+      ["Shop", "Mail"],
+    );
 
-      const renamed = await app.invoke("update_profile_template", {
+    const renamed = await app.invoke("update_profile_template", {
+      templateId: mail.id,
+      name: "Webmail",
+      settings: { ...mail.settings, tags: ["webmail"] },
+    });
+    assert.equal(renamed.name, "Webmail");
+    assert.deepEqual(renamed.settings.tags, ["webmail"]);
+    assert.ok(renamed.updated_at >= mail.updated_at);
+    assert.match(
+      await app.invokeError("update_profile_template", {
         templateId: mail.id,
-        name: "Webmail",
-        settings: { ...mail.settings, tags: ["webmail"] },
-      });
-      assert.equal(renamed.name, "Webmail");
-      assert.deepEqual(renamed.settings.tags, ["webmail"]);
-      assert.ok(renamed.updated_at >= mail.updated_at);
-      assert.match(
-        await app.invokeError("update_profile_template", {
-          templateId: mail.id,
-          name: "SHOP",
-          settings: {},
-        }),
-        /TEMPLATE_EXISTS/,
-      );
+        name: "SHOP",
+        settings: {},
+      }),
+      /TEMPLATE_EXISTS/,
+    );
 
-      for (const count of [0, 101]) {
-        assert.match(
-          await app.invokeError("bulk_create_profiles", {
-            settings: saved.settings,
-            name: "Batch",
-            count,
-          }),
-          /BULK_CREATE_COUNT_INVALID/,
-        );
-      }
-      // Nothing to stop: cancelling with no batch running is harmless.
-      await app.invoke("cancel_bulk_create_profiles");
-
-      // The signed-out allowance is eight an hour. With eight used, one more
-      // manual profile would only warn, but a batch never goes past it. The
-      // window is read on its first use, and nothing above used it, so the
-      // file is read without a restart (a restart would also drop the seeded
-      // browser, which has no binary).
-      const now = Math.floor(Date.now() / 1000);
-      await writeFile(
-        path.join(app.dataRoot, "data", "settings", "profile_generations.json"),
-        JSON.stringify({
-          generations: {
-            local: Array.from({ length: 8 }, (_, i) => now - 600 + i),
-          },
-        }),
-      );
-      const before = (await app.invoke("list_browser_profiles")).length;
+    for (const count of [0, 101]) {
       assert.match(
         await app.invokeError("bulk_create_profiles", {
           settings: saved.settings,
           name: "Batch",
-          count: 3,
+          count,
         }),
-        /PROFILE_GENERATION_LIMIT_REACHED/,
+        /BULK_CREATE_COUNT_INVALID/,
       );
-      assert.equal(
-        (await app.invoke("list_browser_profiles")).length,
-        before,
-        "a refused batch makes nothing",
-      );
+    }
+    // Nothing to stop: cancelling with no batch running is harmless.
+    await app.invoke("cancel_bulk_create_profiles");
 
-      await app.invoke("delete_profile_template", { templateId: mail.id });
-      assert.match(
-        await app.invokeError("delete_profile_template", {
-          templateId: mail.id,
-        }),
-        /TEMPLATE_NOT_FOUND/,
-      );
-      assert.deepEqual(
-        (await app.invoke("list_profile_templates")).map((t) => t.id),
-        [saved.id],
-      );
-    },
-    { seedDownloadedBrowser: true },
-  );
+    // The signed-out allowance is eight an hour. With eight used, one more
+    // manual profile would only warn, but a batch never goes past it. The
+    // window is read on its first use and the profiles above used it, so a
+    // restart makes the app read the file written here.
+    const now = Math.floor(Date.now() / 1000);
+    await app.close();
+    await writeFile(
+      path.join(app.dataRoot, "data", "settings", "profile_generations.json"),
+      JSON.stringify({
+        generations: {
+          local: Array.from({ length: 8 }, (_, i) => now - 600 + i),
+        },
+      }),
+    );
+    await app.start();
+    const before = (await app.invoke("list_browser_profiles")).length;
+    assert.match(
+      await app.invokeError("bulk_create_profiles", {
+        settings: saved.settings,
+        name: "Batch",
+        count: 3,
+      }),
+      /PROFILE_GENERATION_LIMIT_REACHED/,
+    );
+    assert.equal(
+      (await app.invoke("list_browser_profiles")).length,
+      before,
+      "a refused batch makes nothing",
+    );
+
+    await app.invoke("delete_profile_template", { templateId: mail.id });
+    assert.match(
+      await app.invokeError("delete_profile_template", {
+        templateId: mail.id,
+      }),
+      /TEMPLATE_NOT_FOUND/,
+    );
+    assert.deepEqual(
+      (await app.invoke("list_profile_templates")).map((t) => t.id),
+      [saved.id],
+    );
+  });
 });
 
 test("deleted profiles land in the trash and come back intact on restore", async () => {
@@ -2087,7 +2092,7 @@ test("deleted profiles land in the trash and come back intact on restore", async
     assert.equal(trashed[0].id, created.id);
     assert.equal(trashed[0].name, "Recoverable");
     assert.equal(trashed[0].browser, "wayfern");
-    assert.equal(trashed[0].version, "150.0.7871.100");
+    assert.equal(trashed[0].version, ENGINE_CHROMIUM);
     assert.equal(trashed[0].group_id, group.id);
     assert.equal(trashed[0].password_protected, false);
     assert.equal(trashed[0].sync_enabled, false);
@@ -2816,8 +2821,84 @@ test("custom launch arguments require Pro and can be cleared after access ends",
         /"code":"FINGERPRINT_REQUIRES_PRO"/,
       );
     },
-    { extraEnv: { WAYFERN_TEST_TOKEN: "" } },
+    { extraEnv: { DONUT_E2E_PAID_PLAN: "" } },
   );
+});
+
+test("profiles stored for the closed engine move to Apostate at startup without counting as an edit", async () => {
+  await withApp("entities-engine-migration", async (app) => {
+    const identityBacked = await createProfile(app, "Identity Backed");
+    const payloadBacked = await createProfile(app, "Payload Backed");
+    assert.equal(identityBacked.wayfern_config.engine, "apostate");
+    assert.equal(identityBacked.version, ENGINE_CHROMIUM);
+
+    const profilesDir = path.join(app.dataRoot, "data", "profiles");
+    const marker = path.join(profilesDir, identityBacked.id, "profile", "kept");
+    await mkdir(path.dirname(marker), { recursive: true });
+    await writeFile(marker, "cookies stay");
+
+    const editedAt = 1_700_000_000;
+    const rewrite = async (profile, change) => {
+      const file = path.join(profilesDir, profile.id, "metadata.json");
+      const stored = JSON.parse(await readFile(file, "utf8"));
+      stored.version = "150.0.7871.100";
+      stored.updated_at = editedAt;
+      delete stored.wayfern_config.engine;
+      change(stored.wayfern_config);
+      await writeFile(file, JSON.stringify(stored, null, 2));
+    };
+    // The closed engine kept the device behind an id and stored no payload.
+    await rewrite(identityBacked, (config) => {
+      delete config.fingerprint;
+      config.identity_id = "6f9619ff-8b86-4d01-b42d-00c04fc964ff";
+      config.identity_overrides = JSON.stringify({ hardwareConcurrency: 6 });
+    });
+    // Older builds stored the whole payload.
+    const payload = JSON.stringify({
+      platform: "Win32",
+      hardwareConcurrency: 4,
+    });
+    await rewrite(payloadBacked, (config) => {
+      config.fingerprint = payload;
+    });
+
+    await app.restart();
+    const profiles = await app.invoke("list_browser_profiles");
+    const migrated = profiles.find((p) => p.id === identityBacked.id);
+    const kept = profiles.find((p) => p.id === payloadBacked.id);
+
+    for (const profile of [migrated, kept]) {
+      assert.equal(profile.wayfern_config.engine, "apostate");
+      assert.equal(profile.version, ENGINE_CHROMIUM);
+      assert.equal(
+        profile.updated_at,
+        editedAt,
+        "a migration is not an edit: no machine uploads a change its peers will not make",
+      );
+    }
+    assert.ok(!migrated.wayfern_config.identity_id);
+    assert.ok(!migrated.wayfern_config.identity_overrides);
+    const device = JSON.parse(migrated.wayfern_config.fingerprint);
+    assert.ok(Object.keys(device).length >= 10, "a device was drawn locally");
+    assert.equal(
+      device.hardwareConcurrency,
+      6,
+      "the person's edit to the device is applied on top",
+    );
+    assert.equal(kept.wayfern_config.fingerprint, payload);
+    assert.equal(await readFile(marker, "utf8"), "cookies stay");
+
+    // Another start finds nothing left to move.
+    await app.restart();
+    const again = (await app.invoke("list_browser_profiles")).find(
+      (p) => p.id === migrated.id,
+    );
+    assert.equal(
+      again.wayfern_config.fingerprint,
+      migrated.wayfern_config.fingerprint,
+    );
+    assert.equal(again.updated_at, editedAt);
+  });
 });
 
 test("Pro launch arguments persist, clone, validate, and update the edit time", async () => {
@@ -2896,7 +2977,7 @@ test("Pro launch arguments persist, clone, validate, and update the edit time", 
         custom,
       );
     },
-    { extraEnv: { WAYFERN_TEST_TOKEN: "e2e-local-launch-args" } },
+    { extraEnv: { DONUT_E2E_PAID_PLAN: "e2e-local-launch-args" } },
   );
 });
 
@@ -2914,12 +2995,11 @@ test("the hourly profile allowance counts from a window that survives a restart"
       unlimited: false,
     });
 
-    // A generation that makes no fingerprint gives its slot back: this suite
-    // has no Wayfern binary, so the generation itself fails.
-    await app.invokeError("create_browser_profile_new", {
-      name: "Not generated",
+    // A profile that draws its own device is one generation in the window.
+    await app.invoke("create_browser_profile_new", {
+      name: "Generated",
       browserStr: "wayfern",
-      version: "150.0.7871.100",
+      version: ENGINE_CHROMIUM,
       releaseType: "stable",
       proxyId: null,
       vpnId: null,
@@ -2931,8 +3011,8 @@ test("the hourly profile allowance counts from a window that survives a restart"
     });
     assert.equal(
       (await app.invoke("get_profile_creation_allowance")).used,
-      0,
-      "a failed generation is not counted",
+      1,
+      "a generated device is counted",
     );
 
     const now = Math.floor(Date.now() / 1000);

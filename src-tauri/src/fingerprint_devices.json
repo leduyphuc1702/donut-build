@@ -556,7 +556,8 @@
       [1512, 982, 948, 2, 158],
       [2560, 1080, 1050, 1, 156],
       [3440, 1440, 1415, 1, 154],
-      [3008, 1692, 1662, 2, 146]
+      [3008, 1692, 1662, 2, 146],
+      [2240, 1260, 1235, 2, 150]
     ],
     "gpus": [
       [
@@ -723,6 +724,16 @@
         "Google Inc. (AMD)",
         "ANGLE (AMD, ANGLE Metal Renderer: AMD Radeon Pro 570X, Unspecified Version)",
         36
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M6, Unspecified Version)",
+        400
+      ],
+      [
+        "Google Inc. (Apple)",
+        "ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Ultra, Unspecified Version)",
+        25
       ]
     ],
     "cores": [
@@ -732,7 +743,8 @@
       [14, 2197],
       [6, 1780],
       [4, 1717],
-      [16, 738]
+      [16, 738],
+      [18, 120]
     ],
     "memory": [[2, 296], [4, 1809], [8, 37220]]
   },

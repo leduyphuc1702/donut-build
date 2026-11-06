@@ -64,7 +64,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ProBadge } from "@/components/ui/pro-badge";
 import {
   Select,
   SelectContent,
@@ -79,7 +78,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { WayfernConfigForm } from "@/components/wayfern-config-form";
-import { useBrowserDownload } from "@/hooks/use-browser-download";
+import { useEngineInstalled } from "@/hooks/use-engine-install";
 import { useGroupEvents } from "@/hooks/use-group-events";
 import { useMotionAllowed } from "@/hooks/use-motion-allowed";
 import { useProfileTemplates } from "@/hooks/use-profile-templates";
@@ -95,7 +94,6 @@ import { notifySystem } from "@/lib/system-notify";
 import { showErrorToast, showSuccessToast } from "@/lib/toast-utils";
 import { cn } from "@/lib/utils";
 import type {
-  BrowserReleaseTypes,
   BulkCreateResult,
   ProfileTemplate,
   TemplateSettings,
@@ -107,12 +105,8 @@ const PASSWORD_MIN_LEN = 8;
 /** The most profiles one bulk creation makes; the backend holds the same cap. */
 const MAX_BULK_CREATE = 100;
 
-const OS_OPTIONS: WayfernOS[] = ["windows", "macos", "linux", "android", "ios"];
-
-// A desktop OS other than this machine's opens on the open-source Apostate
-// engine, which needs no plan, so only mobile claims stay behind the plan.
-const isDesktopOs = (os: WayfernOS) =>
-  os === "windows" || os === "macos" || os === "linux";
+// Apostate presents desktop machines only, so no phone is offered.
+const OS_OPTIONS: WayfernOS[] = ["windows", "macos", "linux"];
 
 const getCurrentOS = (): WayfernOS => {
   if (typeof navigator === "undefined") return "linux";
@@ -136,8 +130,6 @@ interface CreateProfileDialogProps {
   onCreateProfile: (profileData: {
     name: string;
     browserStr: "wayfern";
-    version: string;
-    releaseType: string;
     proxyId?: string;
     vpnId?: string;
     wayfernConfig?: WayfernConfig;
@@ -285,55 +277,13 @@ export function CreateProfileDialog({
   const [extensionGroups, setExtensionGroups] = useState<
     { id: string; name: string; extension_ids: string[] }[]
   >([]);
-  const [releaseTypes, setReleaseTypes] = useState<BrowserReleaseTypes>({});
-  const [isLoadingReleaseTypes, setIsLoadingReleaseTypes] = useState(false);
-  const [releaseTypesError, setReleaseTypesError] = useState(false);
-  const versionRequestRef = useRef(0);
   // The dialog stays mounted; its lists load only while it is open.
   const { storedProxies } = useProxyEvents({ enabled: isOpen });
   const { vpnConfigs } = useVpnEvents({ enabled: isOpen });
   const { groups, isLoading: isLoadingGroups } = useGroupEvents({
     enabled: isOpen,
   });
-  const {
-    isBrowserDownloading,
-    downloadBrowser,
-    loadDownloadedVersions,
-    downloadedVersionsMap,
-  } = useBrowserDownload();
-
-  const loadReleaseTypes = useCallback(async () => {
-    const request = ++versionRequestRef.current;
-    setIsLoadingReleaseTypes(true);
-    setReleaseTypesError(false);
-    try {
-      const releases = await invoke<BrowserReleaseTypes>(
-        "get_browser_release_types",
-        {
-          browserStr: "wayfern",
-        },
-      );
-      await loadDownloadedVersions("wayfern");
-      if (versionRequestRef.current === request) {
-        setReleaseTypes(releases.stable ? { stable: releases.stable } : {});
-      }
-    } catch (error) {
-      console.error("Failed to load Wayfern release types:", error);
-      try {
-        const downloaded = await loadDownloadedVersions("wayfern");
-        if (versionRequestRef.current === request) {
-          setReleaseTypes(downloaded.length ? { stable: downloaded[0] } : {});
-          setReleaseTypesError(downloaded.length === 0);
-        }
-      } catch (error) {
-        console.error("Failed to load downloaded Wayfern versions:", error);
-        if (versionRequestRef.current === request) setReleaseTypesError(true);
-      }
-    } finally {
-      if (versionRequestRef.current === request)
-        setIsLoadingReleaseTypes(false);
-    }
-  }, [loadDownloadedVersions]);
+  const engineInstalled = useEngineInstalled(isOpen);
 
   useEffect(() => {
     if (isOpen) setDestinationGroupId(groupFromFilter(selectedGroupId));
@@ -341,7 +291,6 @@ export function CreateProfileDialog({
 
   useEffect(() => {
     if (!isOpen) return;
-    void loadReleaseTypes();
     void invoke<{ id: string; name: string; extension_ids: string[] }[]>(
       "list_extension_groups",
     )
@@ -354,18 +303,8 @@ export function CreateProfileDialog({
       .catch((error) =>
         console.error("Failed to prepare GeoIP database:", error),
       );
-    return () => {
-      versionRequestRef.current += 1;
-    };
-  }, [isOpen, loadReleaseTypes]);
+  }, [isOpen]);
 
-  const downloadedVersions = downloadedVersionsMap.wayfern ?? [];
-  const latestVersion = releaseTypes.stable;
-  const creatableVersion =
-    latestVersion && downloadedVersions.includes(latestVersion)
-      ? latestVersion
-      : downloadedVersions[0];
-  const downloading = isBrowserDownloading("wayfern");
   // Several profiles, or one from a template, go to one batch, which stops at
   // the allowance even where a single profile past it is only a warning.
   const batchRefused =
@@ -375,8 +314,6 @@ export function CreateProfileDialog({
     count > allowance.remaining;
   const isCreateDisabled =
     !profileName.trim() ||
-    !creatableVersion ||
-    downloading ||
     isCreating ||
     hourlyCapReached ||
     closeABrowser ||
@@ -414,7 +351,6 @@ export function CreateProfileDialog({
   };
 
   const handleClose = () => {
-    versionRequestRef.current += 1;
     setProfileName("");
     setAdvancedOpen(false);
     setSelectedProxyId(undefined);
@@ -427,9 +363,6 @@ export function CreateProfileDialog({
     setStartPages("");
     setLaunchHook("");
     setSelectedExtensionGroupId(undefined);
-    setReleaseTypes({});
-    setIsLoadingReleaseTypes(false);
-    setReleaseTypesError(false);
     setWayfernConfig(defaultWayfernConfig());
     setEphemeral(false);
     setAppliedTemplate(null);
@@ -595,7 +528,7 @@ export function CreateProfileDialog({
   };
 
   const handleCreate = async () => {
-    if (isCreateDisabled || !creatableVersion) return;
+    if (isCreateDisabled) return;
     if (enablePassword && !ephemeral) {
       if (password.length < PASSWORD_MIN_LEN) {
         setPasswordError(
@@ -619,8 +552,6 @@ export function CreateProfileDialog({
       await onCreateProfile({
         name: profileName.trim(),
         browserStr: "wayfern",
-        version: creatableVersion,
-        releaseType: "stable",
         proxyId: isVpnSelection ? undefined : selectedProxyId,
         vpnId: isVpnSelection ? selectedProxyId?.slice(4) : undefined,
         wayfernConfig,
@@ -639,15 +570,6 @@ export function CreateProfileDialog({
       void loadAllowance();
     } finally {
       setIsCreating(false);
-    }
-  };
-
-  const handleDownload = async () => {
-    if (!latestVersion) return;
-    try {
-      await downloadBrowser("wayfern", latestVersion);
-    } catch (error) {
-      console.error("Failed to download Wayfern:", error);
     }
   };
 
@@ -835,14 +757,11 @@ export function CreateProfileDialog({
                   <CommandList id={osListboxId}>
                     <CommandGroup>
                       {OS_OPTIONS.map((os) => {
-                        const locked =
-                          os !== hostOs && !isDesktopOs(os) && !crossOsUnlocked;
                         const Icon = getOSIcon(os);
                         return (
                           <CommandItem
                             key={os}
                             value={os}
-                            disabled={locked}
                             onSelect={() => {
                               updateWayfernConfig("os", os);
                               setOsPopoverOpen(false);
@@ -862,7 +781,6 @@ export function CreateProfileDialog({
                             <span className="truncate">
                               {getOSDisplayName(os)}
                             </span>
-                            {locked && <ProBadge className="ml-auto" />}
                           </CommandItem>
                         );
                       })}
@@ -1234,82 +1152,18 @@ export function CreateProfileDialog({
                 className="mt-0.5 size-3.5 shrink-0"
                 aria-hidden="true"
               />
-              {t(
-                isDesktopOs(selectedOs)
-                  ? "fingerprint.crossOsApostateWarning"
-                  : "fingerprint.crossOsWarning",
-              )}
+              {t("fingerprint.crossOsApostateWarning")}
             </motion.p>
           )}
 
-          {downloading ? (
+          {engineInstalled === false && (
             <motion.p role="status" className={STATUS_CLASS} {...reveal}>
               <LuLoaderCircle
                 className="size-3.5 shrink-0 animate-spin"
                 aria-hidden="true"
               />
-              {t("createProfile.version.downloading", {
-                browser: "Wayfern",
-                version: latestVersion,
-              })}
+              {t("createProfile.engine.preparing")}
             </motion.p>
-          ) : (
-            !creatableVersion &&
-            (isLoadingReleaseTypes ? (
-              <motion.p role="status" className={STATUS_CLASS} {...reveal}>
-                <LuLoaderCircle
-                  className="size-3.5 shrink-0 animate-spin"
-                  aria-hidden="true"
-                />
-                {t("createProfile.version.fetching")}
-              </motion.p>
-            ) : releaseTypesError ? (
-              <motion.div
-                role="alert"
-                className={cn(STATUS_CLASS, "bg-destructive/10 py-1.5 pr-1.5")}
-                {...reveal}
-              >
-                <p className="flex-1 text-destructive-text">
-                  {t("createProfile.version.fetchError")}
-                </p>
-                <Button
-                  onClick={() => void loadReleaseTypes()}
-                  size="sm"
-                  variant="soft"
-                  className="h-7 rounded-md text-xs"
-                >
-                  {t("common.buttons.retry")}
-                </Button>
-              </motion.div>
-            ) : latestVersion ? (
-              <motion.div
-                className={cn(STATUS_CLASS, "py-1.5 pr-1.5")}
-                {...reveal}
-              >
-                <p className="flex-1">
-                  {t("createProfile.version.needsDownload", {
-                    browser: "Wayfern",
-                    version: latestVersion,
-                  })}
-                </p>
-                <Button
-                  onClick={() => void handleDownload()}
-                  size="sm"
-                  className="h-7 rounded-md text-xs"
-                >
-                  {t("common.buttons.download")}
-                </Button>
-              </motion.div>
-            ) : (
-              <p
-                role="status"
-                className={cn(STATUS_CLASS, "text-warning-text")}
-              >
-                {t("createProfile.platformUnavailable", {
-                  browser: "Wayfern",
-                })}
-              </p>
-            ))
           )}
 
           {hourlyCapReached && (
@@ -1493,36 +1347,6 @@ export function CreateProfileDialog({
                     </p>
                   </div>
                   <div className="space-y-4 pt-1">
-                    {creatableVersion && (
-                      <p className="text-xs text-muted-foreground">
-                        {t("createProfile.version.available", {
-                          browser: "Wayfern",
-                          version: creatableVersion,
-                        })}
-                      </p>
-                    )}
-                    {creatableVersion &&
-                      latestVersion &&
-                      !downloadedVersions.includes(latestVersion) &&
-                      !downloading && (
-                        <div className={cn(STATUS_CLASS, "py-1.5 pr-1.5")}>
-                          <p className="flex-1">
-                            {t("createProfile.version.upgradeAvailable", {
-                              browser: "Wayfern",
-                              version: latestVersion,
-                            })}
-                          </p>
-                          <Button
-                            onClick={() => void handleDownload()}
-                            size="sm"
-                            variant="soft"
-                            className="h-7 rounded-md text-xs"
-                            disabled={isCreating}
-                          >
-                            {t("common.buttons.download")}
-                          </Button>
-                        </div>
-                      )}
                     <WayfernConfigForm
                       className="[&_[data-slot=select-trigger]]:w-full"
                       config={wayfernConfig}
@@ -1533,7 +1357,6 @@ export function CreateProfileDialog({
                       crossOsUnlocked={crossOsUnlocked}
                       limitedMode={!crossOsUnlocked}
                       osPicker={false}
-                      profileVersion={creatableVersion}
                       profileBrowser="wayfern"
                     />
                   </div>

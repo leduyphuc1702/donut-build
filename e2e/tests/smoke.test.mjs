@@ -4,6 +4,7 @@ import net from "node:net";
 import path from "node:path";
 import test from "node:test";
 import { appFromEnvironment, withApp } from "../lib/app.mjs";
+import { ENGINE_CHROMIUM, ENGINE_VERSION } from "../lib/fixtures.mjs";
 
 test("table views persist separately, migrate the old sort, and reject invalid settings", async () => {
   await withApp("smoke-table-views", async (app) => {
@@ -138,6 +139,14 @@ test("fresh app renders, completes onboarding, persists settings, and never touc
       assert.ok((await app.invoke("get_system_language")).length >= 2);
       const system = await app.invoke("get_system_info");
       assert.ok(system && typeof system === "object");
+
+      // The engine arrives by itself, so a fresh install reports it present
+      // (the harness seeds a stand-in) with the pinned build, not a prompt.
+      const engine = await app.invoke("get_engine_install_status");
+      assert.equal(engine.installed, true);
+      assert.equal(typeof engine.supported, "boolean");
+      assert.equal(engine.version, ENGINE_VERSION);
+      assert.equal(engine.chromium, ENGINE_CHROMIUM);
       assert.equal(typeof (await app.invoke("read_log_files")), "string");
       const logTail = await app.invoke("read_app_log", { limit: 5 });
       assert.ok(Array.isArray(logTail) && logTail.length <= 5);
@@ -437,6 +446,12 @@ test("Donut's own requests go through the proxy set for it", async () => {
           h.toLowerCase().startsWith("proxy-authorization: basic "),
         ),
       });
+      // The engine's download is refused here: the test only needs to see
+      // that it asked this proxy, not to pull 160 MB through it.
+      if (target.startsWith("github.com:")) {
+        client.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+        return;
+      }
       const [host, port] = target.split(":");
       const upstream = net.connect(Number(port), host, () => {
         client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
@@ -454,7 +469,7 @@ test("Donut's own requests go through the proxy set for it", async () => {
   const closedPort = closed.address().port;
   await new Promise((resolve) => closed.close(resolve));
 
-  const app = appFromEnvironment("smoke-app-proxy");
+  const app = appFromEnvironment("smoke-app-proxy", { engine: "none" });
   const code = async (value) =>
     JSON.parse(
       (await app.invokeError("set_app_proxy", { proxy: value })).replace(
@@ -485,12 +500,16 @@ test("Donut's own requests go through the proxy set for it", async () => {
     await app.restart();
     assert.equal(await app.invoke("get_app_proxy"), `http://127.0.0.1:${port}`);
     const before = tunnels.length;
-    await app.invoke("fetch_browser_versions_with_count", {
-      browserStr: "wayfern",
-    });
+    assert.match(
+      await app.invokeError("download_browser", {
+        browserStr: "wayfern",
+        version: "",
+      }),
+      /APOSTATE_DOWNLOAD_FAILED/,
+    );
     assert.ok(
-      tunnels.slice(before).some((t) => t.target === "donutbrowser.com:443"),
-      "the version check goes through the proxy",
+      tunnels.slice(before).some((t) => t.target === "github.com:443"),
+      "the engine download goes through the proxy",
     );
 
     assert.equal(await app.invoke("set_app_proxy", { proxy: null }), null);

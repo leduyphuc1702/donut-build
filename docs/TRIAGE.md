@@ -15,7 +15,7 @@ that reproduce the problem.
 Call `get_diagnostics`. It returns facts about this install, then the newest app logs
 (`DonutBrowser*.log`) and proxy worker logs (`donut-proxy-*.log`).
 
-- Read the facts first: app version, OS, install kind, sync, installed Wayfern versions,
+- Read the facts first: app version, OS, install kind, sync, installed engine version,
   running browsers and proxy workers, and one line per profile. Nothing about the
   person's account is in them, and feedback you send is anonymous.
 - Profiles, proxies, VPNs and groups appear as aliases (`profile-3`, `proxy-1`). The same

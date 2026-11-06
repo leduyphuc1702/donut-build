@@ -250,7 +250,6 @@ interface TableMeta {
   runningProfiles: Set<string>;
   launchingProfiles: Set<string>;
   stoppingProfiles: Set<string>;
-  isUpdating: (browser: string) => boolean;
   browserState: ReturnType<typeof useBrowserState>;
 
   // Tags editor state
@@ -367,7 +366,6 @@ interface TableMeta {
         failedAtUrl: string | null;
       }
     | undefined;
-  onLaunchWithSync: (profile: BrowserProfile) => void;
 
   // Cookie Bot
   cookieBotUnlocked: boolean;
@@ -2094,7 +2092,6 @@ interface ProfilesDataTableProps {
   extensionGroups: ExtensionGroup[];
   /** Loaded by the page for the same reason: `state:` resolves to names. */
   profileStatuses?: ProfileStatus[];
-  isUpdating: (browser: string) => boolean;
   onDeleteSelectedProfiles: (profileIds: string[]) => Promise<void>;
   onAssignProfilesToGroup: (profileIds: string[]) => void;
   /** Opens proxy assignment for a specific set of profiles. */
@@ -2125,7 +2122,6 @@ interface ProfilesDataTableProps {
         failedAtUrl: string | null;
       }
     | undefined;
-  onLaunchWithSync?: (profile: BrowserProfile) => void;
   onSetPassword?: (profile: BrowserProfile) => void;
   onChangePassword?: (profile: BrowserProfile) => void;
   onRemovePassword?: (profile: BrowserProfile) => void;
@@ -2178,7 +2174,6 @@ export function ProfilesDataTable({
   runningProfiles,
   extensionGroups,
   profileStatuses = EMPTY_STATUSES,
-  isUpdating,
   onAssignProfilesToGroup,
   onAssignProfilesToProxy,
   selectedProfiles,
@@ -2199,7 +2194,6 @@ export function ProfilesDataTable({
   crossOsUnlocked = false,
   syncUnlocked = false,
   getProfileSyncInfo,
-  onLaunchWithSync,
   onSetPassword,
   onChangePassword,
   onRemovePassword,
@@ -2618,7 +2612,6 @@ export function ProfilesDataTable({
   const browserState = useBrowserState(
     profiles,
     runningProfiles,
-    isUpdating,
     launchingProfiles,
     stoppingProfiles,
   );
@@ -2951,14 +2944,11 @@ export function ProfilesDataTable({
   );
   // Callbacks in the meta that read props through a ref: a parent that
   // passes a new function on each render must not re-render every row.
-  const latestRef = React.useRef({ profiles, onLaunchWithSync });
-  latestRef.current = { profiles, onLaunchWithSync };
+  const latestRef = React.useRef({ profiles });
+  latestRef.current = { profiles };
   const openTrafficDialog = React.useCallback((profileId: string) => {
     const profile = latestRef.current.profiles.find((p) => p.id === profileId);
     setTrafficDialogProfile({ id: profileId, name: profile?.name });
-  }, []);
-  const launchWithSync = React.useCallback((profile: BrowserProfile) => {
-    latestRef.current.onLaunchWithSync?.(profile);
   }, []);
   const cookieBotCompact =
     containerWidth > 0 && containerWidth < BOT_LABEL_WIDTH;
@@ -2983,7 +2973,6 @@ export function ProfilesDataTable({
       runningProfiles,
       launchingProfiles,
       stoppingProfiles,
-      isUpdating,
       browserState,
 
       // Tags editor state
@@ -3068,7 +3057,6 @@ export function ProfilesDataTable({
 
       // Synchronizer
       getProfileSyncInfo: getProfileSyncInfo ?? (() => undefined),
-      onLaunchWithSync: launchWithSync,
 
       // Cookie Bot
       cookieBotUnlocked,
@@ -3104,7 +3092,6 @@ export function ProfilesDataTable({
       runningProfiles,
       launchingProfiles,
       stoppingProfiles,
-      isUpdating,
       browserState,
       tagsOverrides,
       allTags,
@@ -3145,7 +3132,6 @@ export function ProfilesDataTable({
       getLockInfo,
       handoffFor,
       getProfileSyncInfo,
-      launchWithSync,
       cookieBotUnlocked,
       cookieBotCompact,
       getProfileBotState,
@@ -4723,7 +4709,6 @@ export function ProfilesDataTable({
                     }}
                     onCloneProfile={onCloneProfile}
                     onSaveAsTemplate={setTemplateProfile}
-                    onLaunchWithSync={onLaunchWithSync}
                     onSetPassword={onSetPassword}
                     onChangePassword={onChangePassword}
                     onRemovePassword={onRemovePassword}

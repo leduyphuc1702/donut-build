@@ -49,6 +49,8 @@ import { StepTransition } from "@/components/ui/step-transition";
 import licenses from "@/generated/licenses.json";
 import xraySource from "@/generated/xray-source.json";
 import type { AppUpdateState } from "@/hooks/use-app-update-notifications";
+import { useEngineInstall } from "@/hooks/use-engine-install";
+import { getBrowserDisplayName } from "@/lib/browser-utils";
 import { MOTION_EASE_OUT } from "@/lib/motion";
 import { showErrorToast } from "@/lib/toast-utils";
 import { playUiSound } from "@/lib/ui-sounds";
@@ -120,7 +122,10 @@ export function AboutDialog({
   const { t, i18n } = useTranslation();
   const reducedMotion = useReducedMotion();
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null);
-  const [wayfernVersions, setWayfernVersions] = useState<string[] | null>(null);
+  const engine = useEngineInstall(isOpen);
+  const engineVersion = engine?.installed
+    ? `${engine.version} (Chromium ${engine.chromium})`
+    : null;
   const [view, setView] = useState<AboutView>("about");
   const [licenseQuery, setLicenseQuery] = useState("");
   const [check, setCheck] = useState<CheckState>("idle");
@@ -153,13 +158,6 @@ export function AboutDialog({
       .then(setSystemInfo)
       .catch(() => {
         setSystemInfo(null);
-      });
-    invoke<string[]>("get_downloaded_browser_versions", {
-      browserStr: "wayfern",
-    })
-      .then(setWayfernVersions)
-      .catch(() => {
-        setWayfernVersions([]);
       });
   }, [isOpen]);
 
@@ -200,11 +198,11 @@ export function AboutDialog({
       `Donut Browser ${systemInfo.app_version}`,
       `Channel: ${build.channel}`,
       `System: ${systemInfo.os} ${systemInfo.arch}`,
-      `Wayfern: ${wayfernVersions?.length ? wayfernVersions.join(", ") : "none"}`,
+      `${getBrowserDisplayName("apostate")}: ${engineVersion ?? "none"}`,
       `Portable: ${systemInfo.portable ? "yes" : "no"}`,
       `Language: ${i18n.language}`,
     ].join("\n");
-  }, [systemInfo, build, wayfernVersions, i18n.language]);
+  }, [systemInfo, build, engineVersion, i18n.language]);
 
   const copyDetails = useCallback(async () => {
     try {
@@ -418,11 +416,9 @@ export function AboutDialog({
                     <DiagnosticRow label={t("about.diagnostics.system")}>
                       {systemInfo && `${systemInfo.os} ${systemInfo.arch}`}
                     </DiagnosticRow>
-                    <DiagnosticRow label="Wayfern">
-                      {wayfernVersions &&
-                        (wayfernVersions.length > 0
-                          ? wayfernVersions.join(", ")
-                          : t("about.diagnostics.notInstalled"))}
+                    <DiagnosticRow label={getBrowserDisplayName("apostate")}>
+                      {engine &&
+                        (engineVersion ?? t("about.diagnostics.notInstalled"))}
                     </DiagnosticRow>
                     <DiagnosticRow label={t("about.portable")}>
                       {systemInfo &&

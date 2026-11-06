@@ -120,7 +120,7 @@ test("a launcher seat is not offered tips for features it may not change", () =>
   ]) {
     assert.ok(!launcher.includes(id), `${id} edits team data`);
   }
-  for (const id of ["commandPalette", "proxyCheck", "synchronizer", "agent"]) {
+  for (const id of ["commandPalette", "proxyCheck", "agent"]) {
     assert.ok(launcher.includes(id), `${id} works on a launcher seat`);
   }
   assert.deepEqual(
@@ -269,7 +269,6 @@ test("a tip for a feature already in use is skipped", () => {
     "shortcuts",
     "importProfiles",
     "totp",
-    "synchronizer",
   ]) {
     assert.deepEqual(
       skipped({ ...IDLE, noted: [feature] }),

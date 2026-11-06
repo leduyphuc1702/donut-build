@@ -220,11 +220,6 @@ fn no_seat_left(running_browsers: Option<usize>, running: usize) -> bool {
   running_browsers.is_some_and(|allowed| running > allowed)
 }
 
-/// Whether the browsers running now leave no seat for a headless one.
-pub async fn headless_browser_refused() -> bool {
-  no_seat_left(policy().await.running_browsers, running_wayfern_browsers())
-}
-
 fn log_path() -> PathBuf {
   crate::app_dirs::settings_dir().join("profile_generations.json")
 }

@@ -571,10 +571,25 @@ async fn hold_stopped(
   let guard = crate::browser_runner::try_lock_profile_launch(&profile.id.to_string())
     .await
     .ok_or_else(|| crate::backend_error("PROFILE_RUNNING"))?;
-  if crate::wayfern_identity_storage::is_running(profile).await {
+  if browser_is_running(profile).await {
     return Err(crate::backend_error("PROFILE_RUNNING"));
   }
   Ok(guard)
+}
+
+/// Whether a browser holds the profile open, here or through a remote handoff.
+async fn browser_is_running(profile: &BrowserProfile) -> bool {
+  if profile.process_id.is_some()
+    || crate::remote_handoff::state_for(&profile.id.to_string()).is_some()
+  {
+    return true;
+  }
+  let profiles_dir = crate::profile::ProfileManager::instance().get_profiles_dir();
+  let data_path = crate::ephemeral_dirs::get_effective_profile_path(profile, &profiles_dir);
+  crate::wayfern_manager::WayfernManager::instance()
+    .find_wayfern_by_profile(&data_path.to_string_lossy())
+    .await
+    .is_some()
 }
 
 /// Move the folders of the named sites aside. Refused while the profile's

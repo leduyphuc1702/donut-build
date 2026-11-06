@@ -164,26 +164,21 @@ fn e2e_automation_profile_dir() -> Option<std::path::PathBuf> {
     .flatten()
 }
 
-mod api_client;
 mod api_server;
 mod apostate;
 mod app_auto_updater;
 pub mod app_dirs;
 mod app_proxy;
-mod auto_updater;
 mod automation_rate_limiter;
 mod browser;
 mod browser_runner;
 mod browser_tabs;
-mod browser_version_manager;
 mod cdp_target;
 mod checksum;
 mod default_browser;
 mod diagnostics;
 mod dialer;
 pub mod dns_blocklist;
-mod downloaded_browsers_registry;
-mod downloader;
 mod entity_trash;
 mod ephemeral_dirs;
 mod extension_fetch;
@@ -200,6 +195,7 @@ mod group_bookmarks;
 mod group_manager;
 mod human_hold;
 mod human_typing;
+mod warmup;
 // An E2E build takes no global shortcut, so nothing calls into it there.
 mod indexed_db;
 mod ip_utils;
@@ -243,10 +239,8 @@ mod synchronizer;
 mod system_proxy;
 pub mod traffic_stats;
 mod wayfern_cdp;
-mod wayfern_identity_storage;
 mod wayfern_manager;
 mod wayfern_persona;
-mod wayfern_terms;
 mod window_decorations;
 // mod theme_detector; // removed: theme detection handled in webview via CSS prefers-color-scheme
 mod agent_console;
@@ -281,7 +275,6 @@ pub mod team_roles;
 mod totp;
 mod tray;
 mod vault;
-mod version_updater;
 pub mod vpn;
 mod vpn_extension_detect;
 pub mod vpn_worker_runner;
@@ -290,9 +283,7 @@ pub mod xray;
 pub mod xray_worker_runner;
 pub mod xray_worker_storage;
 
-use browser_runner::{
-  check_browser_exists, kill_browser_profile, launch_browser_profile, open_url_with_profile,
-};
+use browser_runner::{kill_browser_profile, launch_browser_profile, open_url_with_profile};
 
 use profile::manager::{
   bulk_update_profiles, check_browser_status, clone_profile, create_browser_profile_new,
@@ -312,18 +303,7 @@ use profile::password::{
   set_profile_password, unlock_profile, verify_profile_password,
 };
 
-use browser_version_manager::{
-  fetch_browser_versions_cached_first, fetch_browser_versions_with_count,
-  fetch_browser_versions_with_count_cached_first, get_supported_browsers,
-  is_browser_supported_on_platform,
-};
-
-use downloaded_browsers_registry::{
-  check_missing_binaries, ensure_active_browsers_downloaded, ensure_all_binaries_exist,
-  get_downloaded_browser_versions,
-};
-
-use downloader::{cancel_download, download_browser};
+use apostate::{download_browser, get_engine_install_status};
 
 use settings_manager::{
   complete_onboarding, dismiss_window_resize_warning, get_app_settings, get_onboarding_completed,
@@ -345,15 +325,6 @@ use sync::{
 use tag_manager::get_all_tags;
 
 use default_browser::{is_default_browser, set_as_default_browser};
-
-use version_updater::{
-  clear_all_version_cache_and_refetch, get_version_update_status, get_version_updater,
-  trigger_manual_version_update,
-};
-
-use auto_updater::{
-  check_for_browser_updates, complete_browser_update_with_auto_update, dismiss_update_notification,
-};
 
 use app_auto_updater::{
   check_for_app_updates, check_for_app_updates_manual, download_and_prepare_app_update,
@@ -385,8 +356,6 @@ use group_manager::{
 use proxy_distribution::{distribute_proxies_to_profiles, plan_proxy_distribution};
 
 use geoip_downloader::{check_missing_geoip_database, GeoIPDownloader};
-
-use browser_version_manager::get_browser_release_types;
 
 use api_server::{get_api_server_status, start_api_server, stop_api_server};
 
@@ -771,23 +740,6 @@ async fn export_profile_cookies(profile_id: String, format: String) -> Result<St
 }
 
 #[tauri::command]
-fn check_wayfern_terms_accepted() -> bool {
-  wayfern_terms::WayfernTermsManager::instance().is_terms_accepted()
-}
-
-#[tauri::command]
-fn check_wayfern_downloaded() -> bool {
-  wayfern_terms::WayfernTermsManager::instance().is_wayfern_downloaded()
-}
-
-#[tauri::command]
-async fn accept_wayfern_terms() -> Result<(), String> {
-  wayfern_terms::WayfernTermsManager::instance()
-    .accept_terms()
-    .await
-}
-
-#[tauri::command]
 async fn get_commercial_trial_status(
   app_handle: tauri::AppHandle,
 ) -> Result<commercial_license::TrialStatus, String> {
@@ -915,8 +867,7 @@ async fn check_integration_connection(
 
 /// Open the remote-control bridge to Donut cloud.
 ///
-/// Gated on being signed in and on the Wayfern terms. Everything else, whether
-/// the plan includes remote
+/// Gated on being signed in. Everything else, whether the plan includes remote
 /// control, and whether another instance already holds the slot, is the
 /// relay's answer to give, so the app asks rather than guessing from a cached
 /// entitlement that may be a refresh cycle out of date.
@@ -924,9 +875,6 @@ async fn check_integration_connection(
 async fn start_mcp_remote_bridge(
   app_handle: tauri::AppHandle,
 ) -> Result<mcp_remote::McpRemoteStatus, String> {
-  if !wayfern_terms::WayfernTermsManager::instance().is_terms_accepted() {
-    return Err(backend_error("WAYFERN_TERMS_REQUIRED"));
-  }
   if !cloud_auth::CLOUD_AUTH.is_logged_in().await {
     return Err(backend_error("MCP_REMOTE_REQUIRES_SIGN_IN"));
   }
@@ -2126,14 +2074,13 @@ struct SampleFingerprint {
 async fn generate_sample_fingerprint(
   app_handle: tauri::AppHandle,
   browser: String,
-  version: String,
   config_json: String,
 ) -> Result<SampleFingerprint, String> {
   let temp_profile = crate::profile::BrowserProfile {
     id: uuid::Uuid::new_v4(),
     name: "temp_fingerprint_gen".to_string(),
     browser: browser.clone(),
-    version: version.clone(),
+    version: apostate::CHROMIUM.to_string(),
     process_id: None,
     proxy_id: None,
     vpn_id: None,
@@ -2985,30 +2932,6 @@ pub fn run_with_builder(
         });
       }
 
-      if !e2e_automation_enabled() {
-        // Initialize and start background version updater
-        let app_handle = app.handle().clone();
-        tauri::async_runtime::spawn(async move {
-          let version_updater = get_version_updater();
-
-          {
-            let mut updater_guard = version_updater.lock().await;
-            updater_guard.set_app_handle(app_handle);
-          }
-
-          {
-            let updater_guard = version_updater.lock().await;
-            if let Err(e) = updater_guard.start_background_updates().await {
-              log::error!("Background version updates failed to start err=\"{e}\"");
-            }
-          }
-        });
-
-        tauri::async_runtime::spawn(async move {
-          version_updater::VersionUpdater::run_background_task().await;
-        });
-      }
-
       // Always log the remote-control decision so customer logs reveal
       // whether this browser can be driven over MCP: "automation features
       // don't work" is otherwise indistinguishable from "remote control is off".
@@ -3054,10 +2977,8 @@ pub fn run_with_builder(
       // main thread, in its old order: stale PIDs are cleared and the report
       // of an earlier run is written before STARTUP_SCAN_DONE opens (the
       // orphan sweep and every loop that acts on a stored PID wait for it),
-      // and profiles move to the latest installed browser before the update
-      // check starts.
+      // and profiles move to Apostate before the engine download starts.
       {
-        let handle = app.handle().clone();
         tauri::async_runtime::spawn(async move {
           if let Err(e) = tauri::async_runtime::spawn_blocking(|| {
             clear_stale_browser_pids();
@@ -3070,31 +2991,12 @@ pub fn run_with_builder(
           let _ = STARTUP_SCAN_DONE.set(());
           discard_stale_ephemeral_dirs().await;
 
-          let bump = handle.clone();
-          let moved = tauri::async_runtime::spawn_blocking(move || {
-            auto_updater::AutoUpdater::instance().update_profiles_to_latest_installed(&bump)
-          })
-          .await
-          .map_err(|e| e.to_string())
-          .and_then(|moved| moved.map_err(|e| e.to_string()));
-          match moved {
-            Ok(updated) => {
-              if !updated.is_empty() {
-                log::info!(
-                  "Moved profiles to the latest installed browser count={}",
-                  updated.len()
-                );
-              }
-            }
-            Err(e) => {
-              log::error!("Moving profiles to the latest installed browser failed err=\"{e}\"");
-            }
+          match tauri::async_runtime::spawn_blocking(apostate::migrate_profiles).await {
+            Ok(0) => {}
+            Ok(moved) => log::info!("Profiles moved to Apostate count={moved}"),
+            Err(e) => log::error!("Moving profiles to Apostate failed err=\"{e}\""),
           }
-          wayfern_identity_storage::request_conversion_pass();
-
-          if !e2e_automation_enabled() {
-            auto_updater::check_for_updates_with_progress(handle).await;
-          }
+          apostate::start_background_install();
         });
       }
 
@@ -3225,26 +3127,6 @@ pub fn run_with_builder(
       }
 
       if !e2e_automation_enabled() {
-        // Start periodic cleanup task for unused binaries.
-        tauri::async_runtime::spawn(async move {
-          let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(43200));
-          loop {
-            interval.tick().await;
-            if let Some(scheduler) = sync::get_global_scheduler() {
-              if scheduler.is_sync_in_progress().await {
-                log::debug!("Skipping cleanup: sync is in progress");
-                continue;
-              }
-            }
-
-            let registry =
-              crate::downloaded_browsers_registry::DownloadedBrowsersRegistry::instance();
-            if let Err(e) = registry.cleanup_unused_binaries() {
-              log::error!("Unused browser binary cleanup failed err=\"{e}\"");
-            }
-          }
-        });
-
         tauri::async_runtime::spawn(async move {
           let manager = dns_blocklist::BlocklistManager::instance();
           let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(43200));
@@ -3588,12 +3470,7 @@ pub fn run_with_builder(
         // build has no provisioning key and stays signed out.
         cloud_auth::CLOUD_AUTH.provision_self_hosted().await;
 
-        // On startup, refresh sync token, proxy config, and wayfern token in
-        // PARALLEL. Previously they were awaited sequentially, so the wayfern
-        // token request didn't even start until the earlier two API calls had
-        // finished. Wayfern launch can race with this task — a few seconds of
-        // serialized API calls translates directly into a slow first launch
-        // because launch_wayfern blocks waiting for the token to land.
+        // On startup, refresh the sync token and the proxy config in parallel.
         // api_call_with_retry handles 401/refresh internally — no direct
         // refresh_access_token call needed.
         if cloud_auth::CLOUD_AUTH.is_logged_in().await {
@@ -3604,10 +3481,7 @@ pub fn run_with_builder(
           let proxy_fut = async {
             cloud_auth::CLOUD_AUTH.sync_cloud_proxy().await;
           };
-          let wayfern_fut = async {
-            let _ = cloud_auth::CLOUD_AUTH.request_wayfern_token().await;
-          };
-          tokio::join!(sync_token_fut, proxy_fut, wayfern_fut);
+          tokio::join!(sync_token_fut, proxy_fut);
 
           // Subscribe to remote-session transitions. Started here rather than
           // unconditionally because a signed-out desktop has nothing to stream
@@ -3635,10 +3509,8 @@ pub fn run_with_builder(
       hide_to_tray,
       tray::update_tray_menu,
       autostart::take_reopen_profiles,
-      get_supported_browsers,
-      is_browser_supported_on_platform,
       download_browser,
-      cancel_download,
+      get_engine_install_status,
       delete_profile,
       list_trashed_profiles,
       restore_trashed_profile,
@@ -3649,16 +3521,10 @@ pub fn run_with_builder(
       entity_trash::restore_trashed_entity,
       entity_trash::purge_trashed_entity,
       clone_profile,
-      check_browser_exists,
       create_browser_profile_new,
       list_browser_profiles,
       launch_browser_profile,
-      fetch_browser_versions_with_count,
-      fetch_browser_versions_cached_first,
-      fetch_browser_versions_with_count_cached_first,
-      get_downloaded_browser_versions,
       get_all_tags,
-      get_browser_release_types,
       update_profile_proxy,
       update_profile_vpn,
       update_profile_tags,
@@ -3721,15 +3587,9 @@ pub fn run_with_builder(
       note_tip_feature_used,
       set_tips_auto_show,
       observe_cloud_plan,
-      clear_all_version_cache_and_refetch,
       is_default_browser,
       open_url_with_profile,
       set_as_default_browser,
-      trigger_manual_version_update,
-      get_version_update_status,
-      check_for_browser_updates,
-      dismiss_update_notification,
-      complete_browser_update_with_auto_update,
       check_for_app_updates,
       check_for_app_updates_manual,
       download_and_prepare_app_update,
@@ -3740,10 +3600,7 @@ pub fn run_with_builder(
       scan_folder_for_profiles,
       scan_profile_archive,
       cleanup_profile_import_scratch,
-      check_missing_binaries,
       check_missing_geoip_database,
-      ensure_all_binaries_exist,
-      ensure_active_browsers_downloaded,
       create_stored_proxy,
       get_stored_proxies,
       update_stored_proxy,
@@ -3840,9 +3697,6 @@ pub fn run_with_builder(
       analyze_pasted_cookies,
       import_pasted_cookies,
       export_profile_cookies,
-      check_wayfern_terms_accepted,
-      check_wayfern_downloaded,
-      accept_wayfern_terms,
       get_commercial_trial_status,
       acknowledge_trial_expiration,
       has_acknowledged_trial_expiration,
@@ -3916,8 +3770,6 @@ pub fn run_with_builder(
       cloud_auth::cloud_get_countries,
       cloud_auth::create_cloud_location_proxy,
       cloud_auth::restart_sync_service,
-      cloud_auth::cloud_get_wayfern_token,
-      cloud_auth::cloud_refresh_wayfern_token,
       cloud_auth::get_cloud_api_url,
       cloud_auth::set_cloud_api_url,
       // Team lock commands
@@ -4226,9 +4078,11 @@ mod tests {
       "get_vpn_config",
       "list_active_vpn_connections",
       "get_team_lock_status",
-      "cloud_get_wayfern_token",
-      "cloud_refresh_wayfern_token",
       "lock_profile",
+      // The synchronizer needs Wayfern's input-capture CDP domain, which the
+      // Apostate engine lacks. The UI no longer starts a session; the command
+      // stays registered and refuses with APOSTATE_FEATURE_UNSUPPORTED.
+      "start_sync_session",
       // The credential's revoke-and-clear, exercised by the integrations E2E
       // suite; the Integrations page mints and rotates but has no Forget
       // action yet.
@@ -4240,6 +4094,9 @@ mod tests {
       "delete_extension_group",
       "delete_vpn_config",
       "delete_profile_template",
+      // The app downloads a missing GeoIP database by itself at startup; the
+      // browser E2E suite still checks the state through this command.
+      "check_missing_geoip_database",
     ];
 
     // Extract command names from the generate_handler! macro in this file

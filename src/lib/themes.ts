@@ -1213,15 +1213,36 @@ export function withThemeTransition(mutate: () => void): void {
     typeof window !== "undefined" &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const doc = document as Document & {
-    startViewTransition?: (callback: () => void) => unknown;
+    startViewTransition?: (callback: () => void) => {
+      ready?: Promise<unknown>;
+      finished?: Promise<unknown>;
+      updateCallbackDone?: Promise<unknown>;
+    };
   };
   if (
     reduced ||
+    doc.hidden ||
     isWebKitGtk() ||
     typeof doc.startViewTransition !== "function"
   ) {
     mutate();
     return;
   }
-  doc.startViewTransition(mutate);
+  // A skipped transition (the window hid, another transition started) rejects
+  // its promises and may never run the callback, so the theme is applied here.
+  let applied = false;
+  const apply = () => {
+    if (applied) return;
+    applied = true;
+    mutate();
+  };
+  try {
+    const transition = doc.startViewTransition(apply);
+    const settle = () => apply();
+    transition?.ready?.catch(() => {});
+    transition?.finished?.catch(() => {});
+    transition?.updateCallbackDone?.then(settle, settle);
+  } catch {
+    apply();
+  }
 }

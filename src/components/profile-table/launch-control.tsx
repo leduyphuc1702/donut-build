@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 const STAGE_PROGRESS: Record<LaunchStage, number> = {
   queued: 0.1,
   preparing: 0.25,
+  engine: 0.3,
   network: 0.35,
   extensions: 0.45,
   starting: 0.6,

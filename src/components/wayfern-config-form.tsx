@@ -187,7 +187,6 @@ interface WayfernConfigFormProps {
   limitedMode?: boolean;
   /** False when the caller shows its own operating system picker. */
   osPicker?: boolean;
-  profileVersion?: string;
   profileBrowser?: string;
   /// The saved profile whose persona is edited here. Absent while a profile is
   /// being created: there is no seed yet, so there is no person to show.
@@ -273,6 +272,9 @@ const getCurrentOS = (): WayfernOS => {
   return "linux";
 };
 
+/** Apostate presents desktop machines only; a phone claim is refused. */
+const DESKTOP_OS_OPTIONS: WayfernOS[] = ["windows", "macos", "linux"];
+
 const osLabels: Record<WayfernOS, string> = {
   windows: "Windows",
   macos: "macOS",
@@ -291,7 +293,6 @@ export function WayfernConfigForm({
   crossOsUnlocked = false,
   limitedMode = false,
   osPicker = true,
-  profileVersion,
   profileBrowser,
   profileId,
   nativeOS,
@@ -321,7 +322,6 @@ export function WayfernConfigForm({
   const ownEditRef = useRef<{ json: string | undefined } | null>(null);
 
   const handleGenerateFingerprint = async () => {
-    if (!profileVersion) return;
     setIsGeneratingFingerprint(true);
     try {
       const configJson = JSON.stringify({
@@ -332,7 +332,6 @@ export function WayfernConfigForm({
         "generate_sample_fingerprint",
         {
           browser: profileBrowser ?? "wayfern",
-          version: profileVersion,
           configJson,
         },
       );
@@ -379,18 +378,7 @@ export function WayfernConfigForm({
   };
 
   const selectedOS = config.os || nativeOS || currentOS;
-  // A new profile may claim any desktop OS: another one than this machine's
-  // opens on Apostate, which needs no plan. A saved profile keeps its engine.
-  const opensOnApostate = (os: WayfernOS) =>
-    os !== currentOS &&
-    (isCreating
-      ? os === "windows" || os === "macos" || os === "linux"
-      : config.engine === "apostate" && os === selectedOS);
-  const isOsLocked = (os: WayfernOS) =>
-    os !== currentOS && !crossOsUnlocked && !opensOnApostate(os);
-  const showCrossOsNotice =
-    selectedOS !== currentOS &&
-    (crossOsUnlocked || opensOnApostate(selectedOS));
+  const showCrossOsNotice = selectedOS !== currentOS;
 
   useEffect(() => {
     if (isCreating && typeof window !== "undefined") {
@@ -559,7 +547,7 @@ export function WayfernConfigForm({
    * whereas their absence is the truth. */
   const isIdentityDerived = config.identity_id != null;
 
-  const generateButton = profileVersion && (!isCreating || crossOsUnlocked) && (
+  const generateButton = (!isCreating || crossOsUnlocked) && (
     <LoadingButton
       isLoading={isGeneratingFingerprint}
       onClick={handleRegenerateClick}
@@ -595,29 +583,17 @@ export function WayfernConfigForm({
               <SelectValue placeholder={t("fingerprint.selectOSPlaceholder")} />
             </SelectTrigger>
             <SelectContent>
-              {(
-                ["windows", "macos", "linux", "android", "ios"] as WayfernOS[]
-              ).map((os) => {
-                const isDisabled = isOsLocked(os);
-                return (
-                  <SelectItem key={os} value={os} disabled={isDisabled}>
-                    <span className="flex items-center gap-2">
-                      {osLabels[os]}
-                      {isDisabled && <ProBadge />}
-                    </span>
-                  </SelectItem>
-                );
-              })}
+              {DESKTOP_OS_OPTIONS.map((os) => (
+                <SelectItem key={os} value={os}>
+                  {osLabels[os]}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           {showCrossOsNotice && (
             <Alert className="mt-2">
               <AlertDescription>
-                {t(
-                  opensOnApostate(selectedOS)
-                    ? "fingerprint.crossOsApostateWarning"
-                    : "fingerprint.crossOsWarning",
-                )}
+                {t("fingerprint.crossOsApostateWarning")}
               </AlertDescription>
             </Alert>
           )}
@@ -1759,35 +1735,17 @@ export function WayfernConfigForm({
                     />
                   </SelectTrigger>
                   <SelectContent>
-                    {(
-                      [
-                        "windows",
-                        "macos",
-                        "linux",
-                        "android",
-                        "ios",
-                      ] as WayfernOS[]
-                    ).map((os) => {
-                      const isDisabled = isOsLocked(os);
-                      return (
-                        <SelectItem key={os} value={os} disabled={isDisabled}>
-                          <span className="flex items-center gap-2">
-                            {osLabels[os]}
-                            {isDisabled && <ProBadge />}
-                          </span>
-                        </SelectItem>
-                      );
-                    })}
+                    {DESKTOP_OS_OPTIONS.map((os) => (
+                      <SelectItem key={os} value={os}>
+                        {osLabels[os]}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 {showCrossOsNotice && (
                   <Alert className="mt-2">
                     <AlertDescription>
-                      {t(
-                        opensOnApostate(selectedOS)
-                          ? "fingerprint.crossOsApostateWarning"
-                          : "fingerprint.crossOsLimitations",
-                      )}
+                      {t("fingerprint.crossOsApostateWarning")}
                     </AlertDescription>
                   </Alert>
                 )}

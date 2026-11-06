@@ -242,33 +242,10 @@ pub fn with_edits(seed: &str, edits: &[PersonaField]) -> Vec<PersonaField> {
   fields
 }
 
-/// The stored edits that keep the person `seed` gives today once the profile
-/// derives its persona from another seed: every field as it reads now, and a
-/// blank edit for each derived field the user removed.
-pub fn pinned_edits(seed: &str, edits: Option<&str>) -> Option<String> {
-  let edits: Vec<PersonaField> = edits
-    .map(str::trim)
-    .filter(|edits| !edits.is_empty())
-    .and_then(|edits| serde_json::from_str(edits).ok())
-    .unwrap_or_default();
-  let mut pinned = with_edits(seed, &edits);
-  for id in FIELD_IDS {
-    if !pinned.iter().any(|field| field.id == id) {
-      pinned.push(field(id, "", String::new()));
-    }
-  }
-  serde_json::to_string(&pinned).ok()
-}
-
 fn truncate_chars(text: &mut String, limit: usize) {
   if text.chars().count() > limit {
     *text = text.chars().take(limit).collect();
   }
-}
-
-/// The document the browser reads, as it writes it to disk.
-pub fn document(fields: &[PersonaField]) -> serde_json::Value {
-  serde_json::json!({ "fields": fields })
 }
 
 /// The person this profile presents, as the browser will offer it: derived
@@ -397,15 +374,5 @@ mod tests {
       .iter()
       .all(|f| f.label.chars().count() <= MAX_LABEL_CHARS
         && f.value.chars().count() <= MAX_VALUE_CHARS));
-  }
-
-  #[test]
-  fn the_document_is_the_shape_the_browser_parses() {
-    let document = document(&derive("seed"));
-    let fields = document["fields"].as_array().unwrap();
-    assert_eq!(fields.len(), FIELD_IDS.len());
-    assert!(fields
-      .iter()
-      .all(|f| f["id"].is_string() && f["label"].is_string() && f["value"].is_string()));
   }
 }

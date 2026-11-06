@@ -56,7 +56,6 @@ import { SettingsDialog } from "@/components/settings-dialog";
 import { ShortcutsPage } from "@/components/shortcuts-page";
 import { SyncAllDialog } from "@/components/sync-all-dialog";
 import { SyncConfigDialog } from "@/components/sync-config-dialog";
-import { SyncFollowerDialog } from "@/components/sync-follower-dialog";
 import { SynchronizerPanel } from "@/components/synchronizer-panel";
 import { TableFilterControls } from "@/components/table-controls";
 import { ThankYouDialog } from "@/components/thank-you-dialog";
@@ -66,7 +65,6 @@ import { TotpToolDialog } from "@/components/totp-code";
 import { TrashPage } from "@/components/trash-page";
 import { AutoHeight } from "@/components/ui/auto-height";
 import { WayfernConfigDialog } from "@/components/wayfern-config-dialog";
-import { WayfernTermsDialog } from "@/components/wayfern-terms-dialog";
 import { WelcomeDialog } from "@/components/welcome-dialog";
 import { WindowResizeWarningDialog } from "@/components/window-resize-warning-dialog";
 import { useAgentConsole } from "@/hooks/use-agent-console";
@@ -75,6 +73,7 @@ import { useAppUpdateNotifications } from "@/hooks/use-app-update-notifications"
 import { useCloudAuth } from "@/hooks/use-cloud-auth";
 import { useCommercialTrial } from "@/hooks/use-commercial-trial";
 import { cookieBotScopeFor, useCookieBot } from "@/hooks/use-cookie-bot";
+import { useEngineInstallToasts } from "@/hooks/use-engine-install";
 import { useGroupEvents } from "@/hooks/use-group-events";
 import { useKonamiCode } from "@/hooks/use-konami-code";
 import { useDocumentLanguage } from "@/hooks/use-language";
@@ -89,10 +88,7 @@ import { useSiteStorageNotices } from "@/hooks/use-site-storage-notices";
 import { useSyncSessions } from "@/hooks/use-sync-session";
 import { useTips } from "@/hooks/use-tips";
 import { confirmLeave, hasUnsavedChanges } from "@/hooks/use-unsaved-changes";
-import { useUpdateNotifications } from "@/hooks/use-update-notifications";
-import { useVersionUpdater } from "@/hooks/use-version-updater";
 import { useVpnEvents } from "@/hooks/use-vpn-events";
-import { useWayfernTerms } from "@/hooks/use-wayfern-terms";
 import {
   leaseExpiryTime,
   parseBackendError,
@@ -105,7 +101,6 @@ import {
   getEntitlements,
   isTeamLauncher,
 } from "@/lib/entitlements";
-import { setOnboardingActive } from "@/lib/onboarding-signal";
 import { type ProfileSearchContext } from "@/lib/profile-search";
 import { startRemoteSession } from "@/lib/remote-sessions";
 import {
@@ -216,9 +211,8 @@ interface PendingUrl {
 export default function Home() {
   const { t } = useTranslation();
   const reducedMotion = useReducedMotion();
-  // Mount global version update listener/toasts
-  useVersionUpdater();
   useDocumentLanguage();
+  useEngineInstallToasts();
 
   // Use the new profile events hook for centralized profile management
   const {
@@ -239,6 +233,12 @@ export default function Home() {
   const onboardingHandledRef = useRef(false);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [thankYouOpen, setThankYouOpen] = useState(false);
+  const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
+  // True once the startup permission check has run, whether or not it opened
+  // the dialog. Until then nothing unasked may open: the check can still put
+  // the permission dialog on screen, and two modals must never stack.
+  const [startupPermissionsChecked, setStartupPermissionsChecked] =
+    useState(false);
   // null = onboarding decision pending; false = not a first-run session (run
   // normal permission checks); true = first-run session, so "Not now" really
   // defers the standalone permission dialog until a later launch.
@@ -275,12 +275,6 @@ export default function Home() {
     persistOnboardingComplete();
     setThankYouOpen(true);
   }, [persistOnboardingComplete]);
-
-  // Suppress the global browser-download toasts while onboarding (welcome or
-  // tour) is active — the welcome dialog shows setup progress itself.
-  useEffect(() => {
-    setOnboardingActive(welcomeOpen || tour.open);
-  }, [welcomeOpen, tour.open]);
 
   // On the very first launch, always show the welcome + commercial-use steps.
   // The completion flag is only persisted after the user finishes or skips the
@@ -367,15 +361,7 @@ export default function Home() {
     getProfileSyncInfo,
     applySession,
   } = useSyncSessions();
-  const [syncLeaderProfile, setSyncLeaderProfile] =
-    useState<BrowserProfile | null>(null);
 
-  // Wayfern terms and commercial trial hooks
-  const {
-    termsAccepted,
-    isLoading: termsLoading,
-    checkTerms,
-  } = useWayfernTerms();
   const {
     trialStatus,
     hasAcknowledged: trialAcknowledged,
@@ -391,11 +377,7 @@ export default function Home() {
   const crossOsUnlocked = getEntitlements(cloudUser).crossOsFingerprints;
   // Shown once when the commercial trial runs out; modal, so it goes first.
   const commercialTrialModalOpen =
-    !termsLoading &&
-    termsAccepted === true &&
-    trialStatus?.type === "Expired" &&
-    !trialAcknowledged &&
-    !crossOsUnlocked;
+    trialStatus?.type === "Expired" && !trialAcknowledged && !crossOsUnlocked;
   // Bulk run/stop is a paid (browser automation) feature, matching the
   // /v1/profiles/batch/run API gate. Free/solo users see the bulk Run/Stop
   // actions disabled with a Pro badge.
@@ -470,9 +452,9 @@ export default function Home() {
     !welcomeOpen &&
     !thankYouOpen &&
     !tour.open &&
-    !termsLoading &&
-    termsAccepted === true &&
-    !commercialTrialModalOpen;
+    !commercialTrialModalOpen &&
+    startupPermissionsChecked &&
+    !permissionDialogOpen;
 
   const [currentPage, setCurrentPage] = useState<AppPage>("profiles");
   const currentPageRef = useRef(currentPage);
@@ -585,7 +567,6 @@ export default function Home() {
   const windowResizeWarningResolver = useRef<
     ((proceed: boolean) => void) | null
   >(null);
-  const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
   const [currentPermissionType, setCurrentPermissionType] =
     useState<PermissionType>("microphone");
   const [showBulkDeleteConfirmation, setShowBulkDeleteConfirmation] =
@@ -793,7 +774,6 @@ export default function Home() {
       paletteOpen: commandPaletteOpen,
       searchQuery,
       totpOpen: totpToolOpen,
-      synchronizing: syncSessions.length > 0,
     },
   });
   const { openTips, closeTips } = tipsFlow;
@@ -1086,111 +1066,32 @@ export default function Home() {
     }, [reducedMotion, t]),
   );
 
-  // Check for missing binaries and offer to download them
-  const checkMissingBinaries = useCallback(async () => {
+  // A ref, not state: the handler keeps one identity, so receiving a URL
+  // re-renders nothing and re-subscribes no listener.
+  const processingUrlsRef = useRef<Set<string>>(new Set());
+
+  const handleUrlOpen = useCallback((url: string) => {
+    // Prevent duplicate processing of the same URL
+    if (processingUrlsRef.current.has(url)) {
+      console.log("URL already being processed:", url);
+      return;
+    }
+
+    processingUrlsRef.current.add(url);
+
     try {
-      const missingBinaries = await invoke<[string, string, string][]>(
-        "check_missing_binaries",
-      );
+      console.log("URL received for opening:", url);
 
-      // Also check for missing GeoIP database
-      const missingGeoIP = await invoke<boolean>(
-        "check_missing_geoip_database",
-      );
-
-      if (missingBinaries.length > 0 || missingGeoIP) {
-        if (missingBinaries.length > 0) {
-          console.log("Found missing binaries:", missingBinaries);
-        }
-        if (missingGeoIP) {
-          console.log("Found missing GeoIP database");
-        }
-
-        // Group missing binaries by browser type to avoid concurrent downloads
-        const browserMap = new Map<string, string[]>();
-        for (const [profileName, browser, version] of missingBinaries) {
-          if (!browserMap.has(browser)) {
-            browserMap.set(browser, []);
-          }
-          const versions = browserMap.get(browser);
-          if (versions) {
-            versions.push(`${version} (for ${profileName})`);
-          }
-        }
-
-        // Show a toast notification about missing binaries and auto-download them
-        let missingList = Array.from(browserMap.entries())
-          .map(([browser, versions]) => `${browser}: ${versions.join(", ")}`)
-          .join(", ");
-
-        if (missingGeoIP) {
-          if (missingList) {
-            missingList += ", GeoIP database";
-          } else {
-            missingList = "GeoIP database";
-          }
-        }
-
-        console.log(`Downloading missing components: ${missingList}`);
-
-        try {
-          // Download missing binaries and GeoIP database sequentially to prevent conflicts
-          const downloaded = await invoke<string[]>(
-            "ensure_all_binaries_exist",
-          );
-          if (downloaded.length > 0) {
-            console.log(
-              "Successfully downloaded missing components:",
-              downloaded,
-            );
-          }
-        } catch (downloadError) {
-          console.error(
-            "Failed to download missing components:",
-            downloadError,
-          );
-        }
-      }
-    } catch (err: unknown) {
-      console.error("Failed to check missing components:", err);
+      // Always show profile selector for manual selection - never auto-open
+      // Replace any existing pending URL with the new one
+      setPendingUrls([{ id: Date.now().toString(), url }]);
+    } finally {
+      // Remove URL from processing set after a short delay to prevent rapid duplicates
+      setTimeout(() => {
+        processingUrlsRef.current.delete(url);
+      }, 1000);
     }
   }, []);
-
-  const [processingUrls, setProcessingUrls] = useState<Set<string>>(new Set());
-
-  const handleUrlOpen = useCallback(
-    (url: string) => {
-      // Prevent duplicate processing of the same URL
-      if (processingUrls.has(url)) {
-        console.log("URL already being processed:", url);
-        return;
-      }
-
-      setProcessingUrls((prev) => new Set(prev).add(url));
-
-      try {
-        console.log("URL received for opening:", url);
-
-        // Always show profile selector for manual selection - never auto-open
-        // Replace any existing pending URL with the new one
-        setPendingUrls([{ id: Date.now().toString(), url }]);
-      } finally {
-        // Remove URL from processing set after a short delay to prevent rapid duplicates
-        setTimeout(() => {
-          setProcessingUrls((prev) => {
-            const next = new Set(prev);
-            next.delete(url);
-            return next;
-          });
-        }, 1000);
-      }
-    },
-    [processingUrls],
-  );
-
-  // Auto-update functionality - use the existing hook for compatibility
-  const updateNotifications = useUpdateNotifications();
-  const { checkForUpdates, isUpdating } = updateNotifications;
 
   const appUpdate = useAppUpdateNotifications();
 
@@ -1279,70 +1180,64 @@ export default function Home() {
     [isMicrophoneAccessGranted, isCameraAccessGranted],
   );
 
-  const listenForUrlEvents = useCallback(async () => {
-    // Collect every listener we register so that — whether setup completes or
-    // throws partway through — we tear down exactly what was registered.
-    // Previously the Tauri unlisten handles were discarded (so re-runs stacked
-    // duplicate handlers and a single URL was handled N times), and a failing
-    // listen() call would leak the listeners that had already succeeded.
+  // The URL listeners subscribe once for the page's lifetime and reach the
+  // latest handlers through this ref. Re-subscribing on every dependency
+  // change leaves a window, while the async listen() calls settle, in which an
+  // emitted event has no listener and is lost.
+  const urlEventHandlersRef = useRef({ handleUrlOpen, t });
+  urlEventHandlersRef.current = { handleUrlOpen, t };
+  useEffect(() => {
+    let disposed = false;
     const unlisteners: Array<() => void> = [];
-    let handleLogoUrlEvent: ((event: CustomEvent) => void) | undefined;
-    const teardown = () => {
-      for (const unlisten of unlisteners) unlisten();
-      if (handleLogoUrlEvent) {
-        window.removeEventListener(
-          "url-open-request",
-          handleLogoUrlEvent as EventListener,
-        );
-      }
+
+    const register = async (
+      event: string,
+      handler: (payload: string) => void,
+    ) => {
+      const unlisten = await listen<string>(event, (e) => {
+        handler(e.payload);
+      });
+      // Torn down while listen() was in flight: the cleanup below already ran
+      // and never saw this handle.
+      if (disposed) unlisten();
+      else unlisteners.push(unlisten);
     };
 
-    try {
-      // Listen for URL open events from the deep link handler (when app is already running)
-      unlisteners.push(
-        await listen<string>("url-open-request", (event) => {
-          console.log("Received URL open request:", event.payload);
-          handleUrlOpen(event.payload);
-        }),
-      );
+    // DOM event the update toast raises for its release link
+    const handleLogoUrlEvent = (event: Event) => {
+      const url = (event as CustomEvent<string>).detail;
+      console.log("Received logo URL event:", url);
+      urlEventHandlersRef.current.handleUrlOpen(url);
+    };
+    window.addEventListener("url-open-request", handleLogoUrlEvent);
 
-      // Listen for show profile selector events
-      unlisteners.push(
-        await listen<string>("show-profile-selector", (event) => {
-          console.log("Received show profile selector request:", event.payload);
-          handleUrlOpen(event.payload);
-        }),
-      );
-
-      // Listen for show create profile dialog events
-      unlisteners.push(
-        await listen<string>("show-create-profile-dialog", (event) => {
-          console.log(
-            "Received show create profile dialog request:",
-            event.payload,
-          );
-          showErrorToast(t("errors.noProfilesForUrl"));
-          if (!teamReadOnlyRef.current) setCreateProfileDialogOpen(true);
-        }),
-      );
-
-      // Listen for custom logo click events
-      handleLogoUrlEvent = (event: CustomEvent) => {
-        console.log("Received logo URL event:", event.detail);
-        handleUrlOpen(event.detail);
-      };
-      window.addEventListener(
-        "url-open-request",
-        handleLogoUrlEvent as EventListener,
-      );
-
-      return teardown;
-    } catch (error) {
+    void Promise.all([
+      // URL open events from the deep link handler (when app is already running)
+      register("url-open-request", (url) => {
+        console.log("Received URL open request:", url);
+        urlEventHandlersRef.current.handleUrlOpen(url);
+      }),
+      register("show-profile-selector", (url) => {
+        console.log("Received show profile selector request:", url);
+        urlEventHandlersRef.current.handleUrlOpen(url);
+      }),
+      register("show-create-profile-dialog", (url) => {
+        console.log("Received show create profile dialog request:", url);
+        showErrorToast(
+          urlEventHandlersRef.current.t("errors.noProfilesForUrl"),
+        );
+        if (!teamReadOnlyRef.current) setCreateProfileDialogOpen(true);
+      }),
+    ]).catch((error: unknown) => {
       console.error("Failed to setup URL listener:", error);
-      // Tear down whatever did register before the failure so nothing leaks.
-      teardown();
-    }
-  }, [handleUrlOpen, t]);
+    });
+
+    return () => {
+      disposed = true;
+      window.removeEventListener("url-open-request", handleLogoUrlEvent);
+      for (const unlisten of unlisteners) unlisten();
+    };
+  }, []);
 
   const handleConfigureWayfern = useCallback((profile: BrowserProfile) => {
     setCurrentProfileForWayfernConfig(profile);
@@ -1370,8 +1265,6 @@ export default function Home() {
     async (profileData: {
       name: string;
       browserStr: BrowserTypeString;
-      version: string;
-      releaseType: string;
       proxyId?: string;
       vpnId?: string;
       wayfernConfig?: WayfernConfig;
@@ -1391,8 +1284,6 @@ export default function Home() {
           {
             name: profileData.name,
             browserStr: profileData.browserStr,
-            version: profileData.version,
-            releaseType: profileData.releaseType,
             proxyId: profileData.proxyId,
             vpnId: profileData.vpnId,
             wayfernConfig: profileData.wayfernConfig,
@@ -2846,55 +2737,9 @@ export default function Home() {
   }, [t]);
 
   useEffect(() => {
-    // Listen for URL open events. Guard against the effect tearing down (or
-    // re-running) before the async listener setup resolves: if that happens,
-    // run the cleanup as soon as it's available so the listeners never leak.
-    let cleanup: (() => void) | undefined;
-    let disposed = false;
-    void listenForUrlEvents().then((cleanupFn) => {
-      if (disposed) {
-        cleanupFn?.();
-        return;
-      }
-      cleanup = cleanupFn;
-    });
-
     // Check for startup URLs (when app was launched as default browser)
     void checkCurrentUrl();
-
-    // Set up periodic update checks (every 30 minutes)
-    const updateInterval = setInterval(
-      () => {
-        void checkForUpdates();
-      },
-      30 * 60 * 1000,
-    );
-
-    // Check for missing binaries after initial profile load
-    if (!profilesLoading && profiles.length > 0) {
-      void checkMissingBinaries();
-    }
-
-    // Proactively download Wayfern if not already available
-    if (!profilesLoading) {
-      void invoke("ensure_active_browsers_downloaded").catch((err: unknown) => {
-        console.error("Failed to auto-download browsers:", err);
-      });
-    }
-
-    return () => {
-      disposed = true;
-      clearInterval(updateInterval);
-      cleanup?.();
-    };
-  }, [
-    checkForUpdates,
-    listenForUrlEvents,
-    checkCurrentUrl,
-    checkMissingBinaries,
-    profilesLoading,
-    profiles.length,
-  ]);
+  }, [checkCurrentUrl]);
 
   // E2E encryption listeners — surface password-required prompts and rollover
   // progress so the user isn't left guessing whether sealing finished.
@@ -2904,7 +2749,6 @@ export default function Home() {
     let unlistenStarted: (() => void) | undefined;
     let unlistenProgress: (() => void) | undefined;
     let unlistenCompleted: (() => void) | undefined;
-    let unlistenWayfernBlocked: (() => void) | undefined;
     let unlistenGenerationLimit: (() => void) | undefined;
 
     void (async () => {
@@ -2980,16 +2824,6 @@ export default function Home() {
         },
       );
 
-      unlistenWayfernBlocked = await listen("wayfern-paid-blocked", () => {
-        showToast({
-          id: "wayfern-paid-blocked",
-          type: "error",
-          title: t("wayfernBlocked.title"),
-          description: t("wayfernBlocked.description"),
-          duration: 15000,
-        });
-      });
-
       // If the effect was torn down mid-setup, the cleanup below already ran
       // before these handles existed — unlisten them now so nothing leaks.
       if (disposed) {
@@ -2997,7 +2831,6 @@ export default function Home() {
         unlistenStarted?.();
         unlistenProgress?.();
         unlistenCompleted?.();
-        unlistenWayfernBlocked?.();
         unlistenGenerationLimit?.();
       }
     })();
@@ -3008,29 +2841,9 @@ export default function Home() {
       unlistenStarted?.();
       unlistenProgress?.();
       unlistenCompleted?.();
-      unlistenWayfernBlocked?.();
       unlistenGenerationLimit?.();
     };
   }, [t, handleRailNavigate]);
-
-  // Re-check Wayfern terms when a browser download completes
-  useEffect(() => {
-    let unlisten: (() => void) | null = null;
-    const setup = async () => {
-      unlisten = await listen<{ stage: string }>(
-        "download-progress",
-        (event) => {
-          if (event.payload.stage === "completed") {
-            void checkTerms();
-          }
-        },
-      );
-    };
-    void setup();
-    return () => {
-      if (unlisten) unlisten();
-    };
-  }, [checkTerms]);
 
   // Check permissions when they are initialized. During first-run onboarding
   // the welcome flow requests permissions, so the standalone dialog is deferred
@@ -3038,6 +2851,7 @@ export default function Home() {
   useEffect(() => {
     if (isInitialized && firstRunOnboarding === false) {
       checkAllPermissions();
+      setStartupPermissionsChecked(true);
     }
   }, [isInitialized, firstRunOnboarding, checkAllPermissions]);
 
@@ -3128,7 +2942,7 @@ export default function Home() {
   const reopenCheckedRef = useRef(false);
   useEffect(() => {
     if (reopenCheckedRef.current) return;
-    if (profilesLoading || termsAccepted !== true) return;
+    if (profilesLoading) return;
     reopenCheckedRef.current = true;
     void invoke<string[]>("take_reopen_profiles")
       .then((ids) => {
@@ -3142,7 +2956,7 @@ export default function Home() {
       .catch(() => {
         // An older backend has no such command; nothing to reopen then.
       });
-  }, [profilesLoading, termsAccepted, executeBulkRun]);
+  }, [profilesLoading, executeBulkRun]);
 
   // A profile stores ids, and the query asks about names, so the matcher is
   // handed the resolution up front. Built off the entity lists rather than off
@@ -3309,7 +3123,6 @@ export default function Home() {
                     onOpenCookieManagement={handleOpenCookieManagement}
                     runningProfiles={runningProfiles}
                     extensionGroups={extensionGroups}
-                    isUpdating={isUpdating}
                     onDeleteSelectedProfiles={handleDeleteSelectedProfiles}
                     onAssignProfilesToGroup={handleAssignProfilesToGroup}
                     onAssignProfilesToProxy={handleAssignProfilesToProxy}
@@ -3334,9 +3147,6 @@ export default function Home() {
                     crossOsUnlocked={crossOsUnlocked}
                     syncUnlocked={syncUnlocked}
                     getProfileSyncInfo={getProfileSyncInfo}
-                    onLaunchWithSync={(profile) => {
-                      setSyncLeaderProfile(profile);
-                    }}
                     onCreateProfile={openCreateProfile}
                     onImportProfiles={() => {
                       handleRailNavigate("import");
@@ -3625,7 +3435,6 @@ export default function Home() {
               );
             }}
             url={pendingUrl.url}
-            isUpdating={isUpdating}
             runningProfiles={runningProfiles}
           />
         ))}
@@ -3641,7 +3450,6 @@ export default function Home() {
 
         <WelcomeDialog
           isOpen={welcomeOpen}
-          needsSetup={profiles.length === 0}
           onComplete={handleWelcomeComplete}
         />
         <OnboardingTour
@@ -3951,12 +3759,6 @@ export default function Home() {
           }}
         />
 
-        {/* Wayfern Terms and Conditions Dialog - shown if terms not accepted */}
-        <WayfernTermsDialog
-          isOpen={!termsLoading && termsAccepted === false}
-          onAccepted={checkTerms}
-        />
-
         {/* Commercial Trial Modal - shown once when trial expires (skip for paid users) */}
         <CommercialTrialModal
           isOpen={commercialTrialModalOpen}
@@ -3970,16 +3772,6 @@ export default function Home() {
             windowResizeWarningResolver.current?.(proceed);
             windowResizeWarningResolver.current = null;
           }}
-        />
-
-        <SyncFollowerDialog
-          isOpen={syncLeaderProfile !== null}
-          onClose={() => {
-            setSyncLeaderProfile(null);
-          }}
-          leaderProfile={syncLeaderProfile}
-          allProfiles={profiles}
-          runningProfiles={runningProfiles}
         />
       </div>
     </ProfileGroupDragProvider>

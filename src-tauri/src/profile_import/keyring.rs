@@ -3,7 +3,7 @@
 //! Every Chromium-family browser seals cookies, passwords and payment data with
 //! a key held outside the profile: the macOS Keychain, a DPAPI blob in
 //! `Local State`, or the Freedesktop secret service. Import has to open that
-//! lock before it can re-seal anything with Wayfern's portable key
+//! lock before it can re-seal anything with the engine's key
 //! ([`super::os_crypt::TargetKey`]).
 //!
 //! Failure here is never fatal. A declined Keychain prompt or a locked keyring
@@ -256,7 +256,7 @@ pub fn write_key_file_from_local_state(user_data_dir: &Path) -> Result<bool, Str
 }
 
 #[cfg(target_os = "windows")]
-fn windows_local_state_key(dir: &Path) -> Result<Option<[u8; 32]>, String> {
+pub(super) fn windows_local_state_key(dir: &Path) -> Result<Option<[u8; 32]>, String> {
   use base64::Engine;
 
   let Some(os_crypt) = read_local_state_os_crypt(dir) else {
@@ -308,6 +308,60 @@ fn dpapi_unprotect(ciphertext: &[u8]) -> Result<Vec<u8>, String> {
       output.pbData as *mut core::ffi::c_void,
     )));
     Ok(plaintext)
+  }
+}
+
+#[cfg(target_os = "windows")]
+fn dpapi_protect(plaintext: &[u8]) -> Result<Vec<u8>, String> {
+  use windows::core::PCWSTR;
+  use windows::Win32::Foundation::LocalFree;
+  use windows::Win32::Security::Cryptography::{CryptProtectData, CRYPT_INTEGER_BLOB};
+
+  let input = CRYPT_INTEGER_BLOB {
+    cbData: plaintext.len() as u32,
+    pbData: plaintext.as_ptr() as *mut u8,
+  };
+  let mut output = CRYPT_INTEGER_BLOB::default();
+
+  // SAFETY: `input` points at a live slice for the duration of the call, and
+  // `output` is freed via LocalFree exactly once below, as the API requires.
+  unsafe {
+    CryptProtectData(&input, PCWSTR::null(), None, None, None, 0, &mut output)
+      .map_err(|e| format!("CryptProtectData failed: {e}"))?;
+
+    let wrapped = std::slice::from_raw_parts(output.pbData, output.cbData as usize).to_vec();
+    let _ = LocalFree(Some(windows::Win32::Foundation::HLOCAL(
+      output.pbData as *mut core::ffi::c_void,
+    )));
+    Ok(wrapped)
+  }
+}
+
+/// Makes `key` the key Chromium on Windows seals this profile's secrets with:
+/// `os_crypt.encrypted_key` in `Local State`, DPAPI-wrapped for this user. The
+/// rest of an existing `Local State` is kept. Read back before returning, so a
+/// key that did not land is an error here and not every cookie lost later.
+#[cfg(target_os = "windows")]
+pub(super) fn write_local_state_key(user_data_dir: &Path, key: &[u8; 32]) -> Result<(), String> {
+  use base64::Engine;
+
+  let mut blob = b"DPAPI".to_vec();
+  blob.extend(dpapi_protect(key)?);
+  let encoded = base64::engine::general_purpose::STANDARD.encode(blob);
+
+  let path = user_data_dir.join("Local State");
+  let mut state = std::fs::read_to_string(&path)
+    .ok()
+    .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+    .filter(serde_json::Value::is_object)
+    .unwrap_or_else(|| serde_json::json!({}));
+  state["os_crypt"]["encrypted_key"] = serde_json::Value::String(encoded);
+  let serialized = serde_json::to_vec(&state).map_err(|e| format!("Local State: {e}"))?;
+  std::fs::write(&path, serialized).map_err(|e| format!("Failed to write Local State: {e}"))?;
+
+  match windows_local_state_key(user_data_dir)? {
+    Some(written) if written == *key => Ok(()),
+    _ => Err("Local State key verification failed after write".to_string()),
   }
 }
 

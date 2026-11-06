@@ -1,7 +1,7 @@
 /**
- * The longest command the harness ever waits on: `download_browser` pulling a
- * published Wayfern build of about 1 GB, which a slow link needs the better
- * part of half an hour for.
+ * The longest command the harness ever waits on: `download_browser` pulling the
+ * Apostate engine, about 160 MB, which a slow link needs the better part of a
+ * quarter of an hour for.
  *
  * Every clock around that command is derived from this one number so they can
  * never disagree again. The session script timeout is this value; the client
@@ -10,12 +10,12 @@
  * genuinely too slow surfaces as the driver's own script-timeout error rather
  * than as a torn connection somewhere in between.
  */
-export const WAYFERN_DOWNLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+export const ENGINE_DOWNLOAD_TIMEOUT_MS = 15 * 60 * 1000;
 
 /** How long the client waits on a download command before it gives up. */
-export const WAYFERN_DOWNLOAD_CLIENT_TIMEOUT_MS =
-  WAYFERN_DOWNLOAD_TIMEOUT_MS + 20_000;
+export const ENGINE_DOWNLOAD_CLIENT_TIMEOUT_MS =
+  ENGINE_DOWNLOAD_TIMEOUT_MS + 20_000;
 
 /** The driver's outer per-command bound, in the whole seconds its flag takes. */
 export const DRIVER_COMMAND_TIMEOUT_SECONDS =
-  Math.ceil(WAYFERN_DOWNLOAD_TIMEOUT_MS / 1000) + 60;
+  Math.ceil(ENGINE_DOWNLOAD_TIMEOUT_MS / 1000) + 60;

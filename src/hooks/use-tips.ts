@@ -59,7 +59,6 @@ export interface TipActivity {
   paletteOpen: boolean;
   searchQuery: string;
   totpOpen: boolean;
-  synchronizing: boolean;
 }
 
 /** The settings fields the relevance checks read. */
@@ -388,13 +387,11 @@ export function useTips({
     if (activity.page === "shortcuts") noteFeature("shortcuts");
     if (activity.page === "import") noteFeature("importProfiles");
     if (activity.totpOpen) noteFeature("totp");
-    if (activity.synchronizing) noteFeature("synchronizer");
   }, [
     activity.paletteOpen,
     fieldSearch,
     activity.page,
     activity.totpOpen,
-    activity.synchronizing,
     noteFeature,
   ]);
 

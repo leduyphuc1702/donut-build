@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  readdir,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -10,9 +17,11 @@ import en from "../../src/i18n/locales/en.json" with { type: "json" };
 import { appFromEnvironment } from "../lib/app.mjs";
 import { CdpClient } from "../lib/cdp.mjs";
 import {
-  cachedFixtureVersion,
-  currentHostOs,
-  prepareWayfern,
+  ENGINE_CHROMIUM,
+  ENGINE_VERSION,
+  prepareEngine,
+  sealLikeTheClosedEngine,
+  writeChromiumCookies,
   writeUnpackedExtension,
 } from "../lib/fixtures.mjs";
 
@@ -71,7 +80,7 @@ function processCommandLine(pid) {
 async function waitForProcessExit(app, pid) {
   await app.waitFor(() => !processExists(pid), {
     timeoutMs: 20_000,
-    description: `Wayfern process ${pid} to exit`,
+    description: `Apostate process ${pid} to exit`,
   });
 }
 
@@ -85,54 +94,12 @@ function assertIdleResourceBounds(pid) {
   const cpuPercent = Number(cpuText);
   assert.ok(
     rssKiB > 0 && rssKiB < 2_000_000,
-    `Wayfern main process RSS is ${rssKiB} KiB`,
+    `Apostate main process RSS is ${rssKiB} KiB`,
   );
   assert.ok(
     cpuPercent >= 0 && cpuPercent < 200,
-    `Wayfern main process CPU is ${cpuPercent}%`,
+    `Apostate main process CPU is ${cpuPercent}%`,
   );
-}
-
-function realWayfernTermsPath() {
-  if (process.platform === "darwin") {
-    return path.join(
-      os.homedir(),
-      "Library",
-      "Application Support",
-      "Wayfern",
-      "license-accepted",
-    );
-  }
-  if (process.platform === "win32") {
-    return path.join(
-      process.env.APPDATA ?? path.join(os.homedir(), "AppData", "Roaming"),
-      "Wayfern",
-      "license-accepted",
-    );
-  }
-  return path.join(
-    process.env.XDG_CONFIG_HOME ?? path.join(os.homedir(), ".config"),
-    "Wayfern",
-    "license-accepted",
-  );
-}
-
-async function snapshotFile(file) {
-  try {
-    const [contents, metadata] = await Promise.all([
-      readFile(file),
-      stat(file, { bigint: true }),
-    ]);
-    return {
-      exists: true,
-      contents: contents.toString("base64"),
-      size: metadata.size.toString(),
-      mtime: metadata.mtimeNs.toString(),
-    };
-  } catch (error) {
-    if (error.code === "ENOENT") return { exists: false };
-    throw error;
-  }
 }
 
 /**
@@ -224,134 +191,73 @@ async function createRealProfile(app, version, name, fingerprint = null) {
   });
 }
 
-test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and process cleanup", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
-  const realTermsFile = realWayfernTermsPath();
-  const realTermsBefore = await snapshotFile(realTermsFile);
-  const localWayfernVersion = cachedFixtureVersion(
-    process.env.DONUT_E2E_PROJECT_ROOT,
-  );
-  const app = appFromEnvironment("browser-wayfern", {
-    seedVersionCache: localWayfernVersion ?? false,
-    wayfernTermsAccepted: false,
-  });
+test("real Apostate fingerprinting, API automation, CDP, cookies, and process cleanup", async () => {
+  const app = appFromEnvironment("browser-wayfern");
   let cdp;
   let browserPid;
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
 
-    assert.equal(await app.invoke("check_wayfern_downloaded"), true);
-    assert.equal(await app.invoke("check_wayfern_terms_accepted"), false);
-    // The gate is a real modal until the terms are accepted, and acceptance
-    // through the bridge (not the dialog's own button) must lift it too: the
-    // frontend learns about the marker from the backend's event, not from a
-    // restart.
-    const termsDialogVisible = () =>
-      app.execute(
-        `return [...document.querySelectorAll('[role="dialog"]')].some(node => node.textContent.includes(arguments[0]));`,
-        [en.wayfernTerms.title],
-      );
-    await app.waitFor(termsDialogVisible, {
-      description: "the Wayfern terms dialog before acceptance",
+    // The engine is on disk (seeded or downloaded), the status command says so,
+    // and asking for it again is idempotent: it answers the Chromium it is.
+    assert.deepEqual(await app.invoke("get_engine_install_status"), {
+      installed: true,
+      supported: true,
+      version: ENGINE_VERSION,
+      chromium: ENGINE_CHROMIUM,
     });
-    await app.invoke("accept_wayfern_terms");
-    assert.equal(await app.invoke("check_wayfern_terms_accepted"), true);
-    await app.waitFor(async () => !(await termsDialogVisible()), {
-      description: "the Wayfern terms dialog to close after acceptance",
-    });
-    assert.ok(
-      (
-        await app.invoke("get_downloaded_browser_versions", {
-          browserStr: "wayfern",
-        })
-      ).includes(prepared.version),
+    assert.equal(prepared.version, ENGINE_CHROMIUM);
+    assert.equal(
+      await app.invoke("download_browser", {
+        browserStr: "wayfern",
+        version: "",
+      }),
+      ENGINE_CHROMIUM,
+    );
+    // A first-run download legitimately shows its own toast ("Apostate x
+    // downloaded"); nothing else on the page names the engine or blocks it.
+    assert.equal(
+      await app.execute(
+        `
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            if (!node.textContent.includes("Apostate")) continue;
+            const element = node.parentElement;
+            if (!element || element.closest('[data-slot="toast-content"]')) continue;
+            const rect = element.getBoundingClientRect();
+            if (rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== "hidden") return true;
+          }
+          return false;
+        `,
+      ),
+      false,
+      "the engine's name is shown nowhere but in its own download toast",
     );
     assert.equal(
-      await app.invoke("check_browser_exists", {
-        browserStr: "wayfern",
-        version: prepared.version,
-      }),
-      true,
-    );
-    assert.deepEqual(await app.invoke("check_missing_binaries"), []);
-    assert.deepEqual(await app.invoke("ensure_all_binaries_exist"), []);
-    assert.deepEqual(await app.invoke("ensure_active_browsers_downloaded"), []);
-    assert.deepEqual(await app.invoke("get_supported_browsers"), ["wayfern"]);
-    assert.equal(
-      await app.invoke("is_browser_supported_on_platform", {
-        browserStr: "wayfern",
-      }),
-      true,
-    );
-    assert.ok(
-      (
-        await app.invoke("fetch_browser_versions_cached_first", {
-          browserStr: "wayfern",
-        })
-      ).some((item) => item.version === prepared.version),
-    );
-    assert.ok(
-      (
-        await app.invoke("fetch_browser_versions_with_count_cached_first", {
-          browserStr: "wayfern",
-        })
-      ).versions.includes(prepared.version),
-    );
-    // The app's own resolver must agree with the release manifest the harness
-    // read when it decided the cached fixture was current. If these two ever
-    // diverge, the fixture check compares against a version the app will never
-    // ask for, and the suite silently runs an old browser again.
-    assert.ok(
-      (
-        await app.invoke("fetch_browser_versions_with_count", {
-          browserStr: "wayfern",
-        })
-      ).versions.includes(prepared.version),
-      "the app must resolve the same published version the fixture was chosen for",
-    );
-    assert.equal(
-      (await app.invoke("get_browser_release_types", { browserStr: "wayfern" }))
-        .stable,
-      prepared.version,
-    );
-    assert.match(
-      await app.invokeError("cancel_download", {
-        browserStr: "wayfern",
-        version: prepared.version,
-      }),
-      /No active download/,
+      await app.execute(
+        `return document.querySelectorAll('[role="dialog"]').length;`,
+      ),
+      0,
+      "nothing stands between the person and the profile list",
     );
 
     const sample = await app.invoke("generate_sample_fingerprint", {
       browser: "wayfern",
-      version: prepared.version,
       configJson: JSON.stringify({ geoip: false }),
     });
     const fingerprint = JSON.parse(sample.fingerprint);
     assert.ok(
       Object.keys(fingerprint).length >= 10,
-      "Wayfern returned an incomplete fingerprint",
+      "the local generator returned an incomplete device",
     );
-    // A browser with the identity API must hand back the UUID the device was
-    // derived from. The device itself is a view to show once and discard: an
-    // identity-backed profile stores the id and the exit's location, never the
-    // payload, so no fingerprint sits on disk to be copied.
-    const identityCapable =
-      Number.parseInt(prepared.version.split(".")[0], 10) >= 151;
-    assert.equal(
-      typeof sample.identity_id === "string",
-      identityCapable,
-      "identity_id must be present exactly on browsers with the identity API",
-    );
-    assert.equal(
-      sample.identity_baseline,
-      undefined,
-      "the retired identity baseline must not be handed back",
-    );
+    // Apostate has no identity API: a device is a payload the profile stores,
+    // never an identity id the browser rebuilds it from.
+    assert.equal(sample.identity_id, null, "no identity is ever minted");
+    assert.equal(sample.identity_baseline, undefined);
     assert.ok(
       sample.location === null || typeof sample.location === "string",
       "location is the exit-derived JSON object, or null when none resolved",
@@ -370,27 +276,19 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
     const profile = await createRealProfile(
       app,
       prepared.version,
-      `Real Wayfern (${prepared.source})`,
+      `Real Apostate (${prepared.source})`,
     );
-    // An identity-backed profile stores the identity and the location and never
-    // the device: the browser rebuilds it from the id on every launch. A legacy
-    // browser stores the whole payload.
-    assert.equal(
-      typeof profile.wayfern_config.identity_id === "string",
-      identityCapable,
-      "a created profile must carry the identity its device came from",
+    // Every new profile runs on Apostate and stores its device as a payload.
+    assert.equal(profile.wayfern_config.engine, "apostate");
+    assert.equal(profile.version, ENGINE_CHROMIUM);
+    assert.ok(
+      !profile.wayfern_config.identity_id,
+      "a created profile carries no identity",
     );
-    assert.equal(
-      profile.wayfern_config.fingerprint === undefined,
-      identityCapable,
-      "an identity-backed profile must store no device payload",
+    assert.ok(
+      Object.keys(JSON.parse(profile.wayfern_config.fingerprint)).length >= 10,
+      "a created profile stores the device it was drawn with",
     );
-    if (!identityCapable) {
-      assert.ok(
-        Object.keys(JSON.parse(profile.wayfern_config.fingerprint)).length >=
-          10,
-      );
-    }
     assert.equal(await app.invoke("check_missing_geoip_database"), true);
     assert.equal(await app.invoke("is_geoip_database_available"), false);
     await app.invoke("download_geoip_database");
@@ -439,31 +337,22 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
       profileId: profile.id,
       exitIp: "8.8.8.8",
     });
-    // The identity is internal state that neither call above sends back.
-    // Losing it would silently re-mint the device on the next launch and throw
-    // the user's edits away with it, so both paths must carry it forward
-    // unchanged. The exit re-match moves only the location: the profile comes
-    // out of it still identity-only, with the exit's timezone stored.
-    if (identityCapable) {
-      const stored = (await app.invoke("list_browser_profiles")).find(
-        (p) => p.id === profile.id,
-      );
-      assert.equal(
-        stored.wayfern_config.identity_id,
-        profile.wayfern_config.identity_id,
-        "the identity must survive update_wayfern_config and an exit re-match",
-      );
-      assert.equal(
-        stored.wayfern_config.fingerprint,
-        undefined,
-        "neither call may leave a device payload behind",
-      );
-      assert.equal(
-        typeof JSON.parse(stored.wayfern_config.location).timezone,
-        "string",
-        "an exit re-match stores the exit's timezone in the location",
-      );
-    }
+    // Neither call may lose the stored device: a re-draw on the next launch
+    // would throw the person's edits away. The exit re-match moves only the
+    // location, and stores the exit's timezone in it.
+    const stored = (await app.invoke("list_browser_profiles")).find(
+      (p) => p.id === profile.id,
+    );
+    assert.equal(
+      stored.wayfern_config.fingerprint,
+      profile.wayfern_config.fingerprint,
+      "the device must survive update_wayfern_config and an exit re-match",
+    );
+    assert.equal(
+      typeof JSON.parse(stored.wayfern_config.location).timezone,
+      "string",
+      "an exit re-match stores the exit's timezone in the location",
+    );
     // The session-restore switch is profile configuration and round-trips
     // like the rest of it; `undefined` (the default) reads as on.
     await app.invoke("update_wayfern_config", {
@@ -784,13 +673,18 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
       },
     );
     assert.equal(resolved.response.status, 200, JSON.stringify(resolved.value));
-    const resolvedNode = await cdp.command("DOM.describeNode", {
-      backendNodeId: resolved.value.backendNodeId,
-    });
-    assert.equal(resolvedNode.node.nodeName, "BUTTON");
+    // Apostate answers through the page, with no DOM agent behind it, so the
+    // resolution names the element by what it is rather than by a node id.
+    assert.equal(resolved.value.engine, "fallback");
+    assert.equal(resolved.value.backendNodeId, undefined);
+    assert.equal(resolved.value.matchCount, 1);
+    assert.equal(resolved.value.match.role, "button");
     assert.ok(
-      resolvedNode.node.attributes.includes("fixture-button"),
-      JSON.stringify(resolvedNode.node),
+      resolved.value.match.attributes.some(
+        (attribute) =>
+          attribute.name === "id" && attribute.value === "fixture-button",
+      ),
+      JSON.stringify(resolved.value.match),
     );
     const byId = await agentClick(byIdLocator);
     assert.equal(byId.navigated, false);
@@ -832,8 +726,10 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
     );
     assert.ok(Object.keys(shown).length >= 10, JSON.stringify(shown));
     assert.equal(shown.platform, await cdp.evaluate("navigator.platform"));
+    // The engine refuses more cores than this machine has, since a page can
+    // measure them, so the page shows the device's count up to the host's.
     assert.equal(
-      shown.hardwareConcurrency,
+      Math.min(shown.hardwareConcurrency, os.availableParallelism()),
       await cdp.evaluate("navigator.hardwareConcurrency"),
     );
     const restFingerprint = await request(
@@ -1202,7 +1098,7 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
           ) ?? false
         );
       },
-      { timeoutMs: 20_000, description: "API-opened Wayfern target" },
+      { timeoutMs: 20_000, description: "API-opened Apostate target" },
     );
     // The tab's document request starts before the tab exists as a target, so
     // the capture cannot see it; what the tab sends once it is open is
@@ -1284,7 +1180,7 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
     const batchProfile = await createRealProfile(
       app,
       prepared.version,
-      "Wayfern Batch Automation",
+      "Apostate Batch Automation",
       // The fingerprint STRING, not the envelope `generate_sample_fingerprint`
       // returns it in. `WayfernConfig.fingerprint` is an `Option<String>`
       // (wayfern_manager.rs), so passing `sample` made the whole command fail
@@ -1304,9 +1200,8 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
       },
     });
     assert.equal(batchRun.response.status, 200);
-    // A whole supplied device becomes an identity plus overrides. The browser
-    // refuses some override values and names each one; the launcher drops it
-    // and launches again, so the batch launches.
+    // A whole supplied device is stored as the profile's payload and the batch
+    // launches with it.
     assert.equal(
       batchRun.value.results[0].ok,
       true,
@@ -1358,8 +1253,8 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
       await app.invokeError("start_recipe_recording", {
         profileId: profile.id,
       }),
-      /PROFILE_NOT_RUNNING/,
-      "a recording needs a live browser to attach to",
+      /APOSTATE_FEATURE_UNSUPPORTED/,
+      "a recording drives the closed engine's own CDP domain, which Apostate lacks",
     );
 
     // Export and import: a profile is moved to another machine as one archive
@@ -1396,10 +1291,11 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
       "a proxy id belongs to the machine that assigned it",
     );
     assert.equal(
-      importedProfile.wayfern_config.identity_id,
-      profile.wayfern_config.identity_id,
-      "the device travels: the same identity rebuilds the same browser",
+      importedProfile.wayfern_config.fingerprint,
+      profile.wayfern_config.fingerprint,
+      "the device travels: the same payload rebuilds the same browser",
     );
+    assert.equal(importedProfile.wayfern_config.engine, "apostate");
     // Twice from one archive gives two profiles, under distinct names.
     const importedAgain = await app.invoke("import_profile_archive", {
       path: exportPath,
@@ -1475,10 +1371,21 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
     );
     // The browser runs from the profile's RAM directory, and the tools must
     // find it there: they once looked only under the profiles dir.
-    const ephemeralPage = await mcp("tools/call", {
-      name: "get_page_info",
-      arguments: { profile_id: temporaryId },
-    });
+    // The run returns once the browser is up, before its first page loads.
+    let ephemeralPage;
+    for (let attempt = 0; attempt < 60; attempt += 1) {
+      ephemeralPage = await mcp("tools/call", {
+        name: "get_page_info",
+        arguments: { profile_id: temporaryId },
+      });
+      if (
+        ephemeralPage.isError === true ||
+        /temporary/.test(ephemeralPage.content?.[0]?.text ?? "")
+      ) {
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
     assert.notEqual(ephemeralPage.isError, true, JSON.stringify(ephemeralPage));
     assert.match(ephemeralPage.content[0].text, /temporary/);
     await request(`${base}/v1/profiles/${temporaryId}/kill`, {
@@ -1517,11 +1424,6 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
         await app.invoke("kill_browser_profile", { profile }).catch(() => {});
     }
     await app.close();
-    assert.deepEqual(
-      await snapshotFile(realTermsFile),
-      realTermsBefore,
-      "the browser suite modified the real Wayfern terms marker",
-    );
   }
 });
 
@@ -1532,25 +1434,15 @@ test("real Wayfern fingerprinting, terms, API automation, CDP, cookies, and proc
 // share settles on the exact one, and typing either leaves the text in the
 // field, through the input events a framework listens to, or fails and says so.
 test("MCP locators and typing act on the field a person sees", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
-  const localWayfernVersion = cachedFixtureVersion(
-    process.env.DONUT_E2E_PROJECT_ROOT,
-  );
-  const app = appFromEnvironment("browser-mcp-forms", {
-    seedVersionCache: localWayfernVersion ?? false,
-    wayfernTermsAccepted: false,
-  });
+  const app = appFromEnvironment("browser-mcp-forms");
   let cdp;
   let browserPid;
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    if (!(await app.invoke("check_wayfern_terms_accepted"))) {
-      await app.invoke("accept_wayfern_terms");
-    }
     const profile = await createRealProfile(app, prepared.version, "MCP Forms");
     const settings = await app.invoke("get_app_settings");
     const saved = await app.invoke("save_app_settings", {
@@ -1860,7 +1752,7 @@ async function launchWithWorker(app, version, name) {
     url: `${fixtureUrl}/worker-lifecycle`,
   });
   const browserPid = launched.process_id;
-  assert.ok(browserPid, "Wayfern must report a process id");
+  assert.ok(browserPid, "Apostate must report a process id");
 
   const worker = await app.waitFor(
     async () =>
@@ -1891,15 +1783,7 @@ async function launchWithWorker(app, version, name) {
 // by hand. Phase one covers closing the browser; phase two covers the reported
 // order (app closed first, so nothing is left to reap anything).
 test("a proxy worker recovers for a live browser and dies with its browser", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
-  const localWayfernVersion = cachedFixtureVersion(
-    process.env.DONUT_E2E_PROJECT_ROOT,
-  );
   const app = appFromEnvironment("browser-worker-lifecycle", {
-    seedVersionCache: localWayfernVersion ?? false,
-    // Let the app run the real acceptance flow below; the pre-seeded marker is
-    // not what the Wayfern binary itself honours, and it would exit on launch.
-    wayfernTermsAccepted: false,
     // The worker polls its owner every 15s in production; shorten it so a reap
     // is observable without padding the suite by minutes.
     extraEnv: { DONUT_PROXY_WATCHDOG_INTERVAL_MS: "500" },
@@ -1907,14 +1791,11 @@ test("a proxy worker recovers for a live browser and dies with its browser", asy
 
   const strays = new Set();
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    if (!(await app.invoke("check_wayfern_terms_accepted"))) {
-      await app.invoke("accept_wayfern_terms");
-    }
 
     // Phase one: the app is up, the browser goes away.
     const first = await launchWithWorker(app, prepared.version, "Worker Reap");
@@ -1957,7 +1838,7 @@ test("a proxy worker recovers for a live browser and dies with its browser", asy
     process.kill(first.browserPid, "SIGKILL");
     await waitForCondition(
       () => !processExists(first.browserPid),
-      `Wayfern ${first.browserPid} to exit`,
+      `Apostate ${first.browserPid} to exit`,
     );
     await waitForCondition(
       () => !processExists(first.workerPid),
@@ -1994,7 +1875,7 @@ test("a proxy worker recovers for a live browser and dies with its browser", asy
     process.kill(second.browserPid, "SIGKILL");
     await waitForCondition(
       () => !processExists(second.browserPid),
-      `Wayfern ${second.browserPid} to exit`,
+      `Apostate ${second.browserPid} to exit`,
     );
     await waitForCondition(
       () => !processExists(second.workerPid),
@@ -2023,7 +1904,6 @@ test("a proxy worker recovers for a live browser and dies with its browser", asy
 // disk mounted after Donut quits, so macOS lists Donut as running in the
 // background, and keeps the Windows RAM volume's host process running.
 test("a closed browser takes its proxy worker and in-memory profile with it", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
   const name = "browser-exit-cleanup";
   const ephemeralRoot = path.join(
     process.env.DONUT_E2E_RUN_ROOT,
@@ -2032,9 +1912,6 @@ test("a closed browser takes its proxy worker and in-memory profile with it", as
     "ephemeral",
   );
   const app = appFromEnvironment(name, {
-    seedVersionCache:
-      cachedFixtureVersion(process.env.DONUT_E2E_PROJECT_ROOT) ?? false,
-    wayfernTermsAccepted: false,
     extraEnv: { DONUTBROWSER_EPHEMERAL_ROOT: ephemeralRoot },
   });
 
@@ -2062,7 +1939,7 @@ test("a closed browser takes its proxy worker and in-memory profile with it", as
       url: `${fixtureUrl}/worker-lifecycle`,
     });
     const browserPid = launched.process_id;
-    assert.ok(browserPid, "Wayfern must report a process id");
+    assert.ok(browserPid, "Apostate must report a process id");
     strays.add(browserPid);
     const worker = await app.waitFor(
       async () =>
@@ -2081,18 +1958,18 @@ test("a closed browser takes its proxy worker and in-memory profile with it", as
   };
   const killBrowser = async (pid) => {
     if (processExists(pid)) process.kill(pid, "SIGKILL");
-    await waitForCondition(() => !processExists(pid), `Wayfern ${pid} to exit`);
+    await waitForCondition(
+      () => !processExists(pid),
+      `Apostate ${pid} to exit`,
+    );
   };
 
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    if (!(await app.invoke("check_wayfern_terms_accepted"))) {
-      await app.invoke("accept_wayfern_terms");
-    }
 
     // The app is up and the browser goes away.
     const first = await launchEphemeral(prepared.version, "Closed Beside App");
@@ -2138,32 +2015,22 @@ test("a closed browser takes its proxy worker and in-memory profile with it", as
 });
 
 // Two things nothing else covers. First, that an assigned extension group
-// actually reaches Wayfern: a loaded MV3 extension registers a
+// actually reaches Apostate: a loaded MV3 extension registers a
 // `chrome-extension://<id>/background.js` service-worker target, so CDP can see
 // it from outside. Second, that staging is per profile. It used to be one
 // shared `extensions/unpacked` directory wiped on every launch, and because
 // Chromium records the absolute staging path and reads those files lazily for
 // the life of the process instead of copying them into the profile, launching a
 // second profile broke the extension in every browser already running.
-test("an assigned extension group reaches Wayfern and each profile stages its own copy", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
-  const localWayfernVersion = cachedFixtureVersion(
-    process.env.DONUT_E2E_PROJECT_ROOT,
-  );
-  const app = appFromEnvironment("browser-extensions", {
-    seedVersionCache: localWayfernVersion ?? false,
-    wayfernTermsAccepted: false,
-  });
+test("an assigned extension group reaches Apostate and each profile stages its own copy", async () => {
+  const app = appFromEnvironment("browser-extensions");
   const launched = [];
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    if (!(await app.invoke("check_wayfern_terms_accepted"))) {
-      await app.invoke("accept_wayfern_terms");
-    }
 
     const extension = await app.invoke("add_unpacked_extension", {
       name: "Donut Launch Fixture",
@@ -2207,10 +2074,13 @@ test("an assigned extension group reaches Wayfern and each profile stages its ow
       const targets = await fetch(
         `http://127.0.0.1:${debuggingPort}/json`,
       ).then((response) => response.json());
+      // Apostate ships Chromium's own component extensions (speech synthesis
+      // registers a `service_worker.js` of its own), so only the fixture's
+      // `background.js` worker proves the assigned extension was loaded.
       return targets.filter(
         (target) =>
           target.type === "service_worker" &&
-          String(target.url).startsWith("chrome-extension://"),
+          /^chrome-extension:\/\/\w+\/background\.js$/.test(String(target.url)),
       );
     };
     const launchWithExtension = async (name) => {
@@ -2271,7 +2141,7 @@ test("an assigned extension group reaches Wayfern and each profile stages its ow
         command.includes(
           `--load-extension=${path.dirname(stagedManifest(first.profile.id))}`,
         ),
-        "Wayfern must be pointed at this profile's own staged copy",
+        "Apostate must be pointed at this profile's own staged copy",
       );
     }
     await launchWithExtension("Extension Launch Two");
@@ -2335,51 +2205,24 @@ async function targetUrls(port) {
     .map((target) => target.url);
 }
 
-test("an interactive launch continues the last session once the identity travels at launch", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
-  const localWayfernVersion = cachedFixtureVersion(
-    process.env.DONUT_E2E_PROJECT_ROOT,
-  );
-  const app = appFromEnvironment("browser-session", {
-    seedVersionCache: localWayfernVersion ?? false,
-    wayfernTermsAccepted: false,
-  });
+test("an interactive launch continues the last session", async () => {
+  const app = appFromEnvironment("browser-session");
   let browserPid;
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    // The browser itself refuses to start until its terms marker exists, and
-    // only its own acceptance run writes one it recognises.
-    await app.invoke("accept_wayfern_terms");
-    const major = Number.parseInt(prepared.version.split(".")[0], 10);
-    if (major < 152) {
-      // Older builds take no launch identity, so Donut starts them on a fresh
-      // tab and there is nothing to continue.
-      console.log(
-        `[donut-e2e] Wayfern ${prepared.version} takes no launch identity; session restore is off by design, skipping the restore assertions`,
-      );
-      return;
-    }
 
     const profile = await createRealProfile(
       app,
       prepared.version,
       "Session Restore",
     );
-    // A launch identity needs the exit's timezone; the geoip match writes it.
-    await app.invoke("download_geoip_database");
-    await app.invoke("match_profile_fingerprint_to_exit", {
-      profileId: profile.id,
-      exitIp: "8.8.8.8",
-    });
     const stored = (await app.invoke("list_browser_profiles")).find(
       (p) => p.id === profile.id,
     );
-    const location = JSON.parse(stored.wayfern_config.location);
-    assert.equal(typeof location.timezone, "string");
     const userDataDir = path.join(
       app.dataRoot,
       "data",
@@ -2434,17 +2277,11 @@ test("an interactive launch continues the last session once the identity travels
     const first = await launch(`${fixtureUrl}/session-a`);
     const { port: firstPort, command } = debuggingPortOf(first.process_id);
     assert.match(command, /--restore-last-session/);
-    assert.match(command, /--wayfern-identity-file=/);
-    const identityFile = JSON.parse(
-      await readFile(path.join(userDataDir, "wayfern-identity.json"), "utf8"),
-    );
-    assert.equal(identityFile.identityId, stored.wayfern_config.identity_id);
-    assert.equal(identityFile.timezone, location.timezone);
-    // No claimed OS means the host, which is what an omitted operatingSystem
-    // means over CDP as well; the document has to spell it out.
+    // The persona travels on the command line; no identity file is written.
+    assert.match(command, /--fingerprint-platform=/);
     assert.equal(
-      identityFile.operatingSystem,
-      stored.wayfern_config.os ?? currentHostOs(),
+      existsSync(path.join(userDataDir, "wayfern-identity.json")),
+      false,
     );
     await waitForTargets(firstPort, ["/session-a"]);
     await app.invoke("open_url_with_profile", {
@@ -2525,109 +2362,116 @@ test("an interactive launch continues the last session once the identity travels
   }
 });
 
-test("a payload profile an older version stored launches and is stored as an identity", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
-  const localWayfernVersion = cachedFixtureVersion(
-    process.env.DONUT_E2E_PROJECT_ROOT,
-  );
-  const app = appFromEnvironment("browser-legacy-payload", {
-    seedVersionCache: localWayfernVersion ?? false,
-    wayfernTermsAccepted: false,
-  });
+test("a profile stored for the closed engine launches on Apostate with its data and edit time intact", async () => {
+  const app = appFromEnvironment("browser-legacy-engine");
   let browserPid;
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    await app.invoke("accept_wayfern_terms");
-    const major = Number.parseInt(prepared.version.split(".")[0], 10);
-    if (major < 152) {
-      console.log(
-        `[donut-e2e] Wayfern ${prepared.version} converts no stored payload; skipping the legacy launch`,
-      );
-      return;
-    }
 
     const profile = await createRealProfile(
       app,
       prepared.version,
-      "Stored By 0.30",
+      "Stored For Apostate",
     );
+    const profileDir = path.join(app.dataRoot, "data", "profiles", profile.id);
+    const marker = path.join(profileDir, "profile", "Default", "donut-marker");
+    await mkdir(path.dirname(marker), { recursive: true });
+    await writeFile(marker, "kept");
 
-    // The file as v0.30 wrote it: the whole device payload, no identity, and
-    // none of the fields added since. Its raw JSON never equals the profile it
-    // parses to, and comparing the two raw once refused every launch of such
-    // a profile as WAYFERN_BROWSER_BUSY.
-    const metadataFile = path.join(
-      app.dataRoot,
-      "data",
-      "profiles",
-      profile.id,
-      "metadata.json",
-    );
+    // The file as the closed engine's builds wrote it: no engine field, the
+    // device behind an identity id (no payload), and an older Chromium.
+    const metadataFile = path.join(profileDir, "metadata.json");
     const stored = JSON.parse(await readFile(metadataFile, "utf8"));
-    // Set, so listing the profiles never rewrites the file in the new shape.
-    assert.equal(typeof stored.host_os, "string");
-    delete stored.temporary;
-    for (const key of [
-      "webrtc_mode",
-      "persona",
-      "camera_file",
-      "camera_crop",
-      "restore_session",
-      "identity_overrides",
-      "location",
-    ]) {
-      delete stored.wayfern_config[key];
-    }
-    stored.wayfern_config.identity_id = null;
-    stored.wayfern_config.fingerprint = JSON.stringify({
-      userAgent:
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
-      platform: "MacIntel",
-      vendor: "Google Inc.",
-      hardwareConcurrency: 8,
-      deviceMemory: 8,
-      maxTouchPoints: 0,
-      screenWidth: 1512,
-      screenHeight: 982,
-      screenAvailWidth: 1512,
-      screenAvailHeight: 944,
-      screenColorDepth: 30,
-      devicePixelRatio: 2,
-      language: "en-US",
-      languages: ["en-US", "en"],
-      timezone: "Europe/Berlin",
-      timezoneOffset: -120,
-    });
+    const editedAt = 1_700_000_000;
+    stored.version = "150.0.7871.100";
+    stored.updated_at = editedAt;
+    delete stored.wayfern_config.engine;
+    delete stored.wayfern_config.fingerprint;
+    stored.wayfern_config.identity_id = "6f9619ff-8b86-4d01-b42d-00c04fc964ff";
     await writeFile(metadataFile, JSON.stringify(stored, null, 2));
+
+    // The closed engine sealed cookies with a key file kept in the profile.
+    // Apostate never reads it, so the cookie only survives if the app re-seals
+    // it for the engine before the first launch. Windows keeps the engine's key
+    // in the OS, which this suite cannot write to.
+    const sealsWithKeyFile = process.platform !== "win32";
+    const legacyHost = ".legacy-sealed.example";
+    if (sealsWithKeyFile) {
+      const keyFilePassword = "bGVnYWN5LXdheWZlcm4ta2V5";
+      const userDataDir = path.join(profileDir, "profile");
+      await writeFile(path.join(userDataDir, "os_crypt_key"), keyFilePassword);
+      const cookieStore = path.join(userDataDir, "Default", "Cookies");
+      await rm(cookieStore, { force: true });
+      writeChromiumCookies(cookieStore, [
+        {
+          host: legacyHost,
+          name: "legacy_sid",
+          encryptedValue: sealLikeTheClosedEngine(
+            keyFilePassword,
+            legacyHost,
+            "carried-over",
+          ),
+          expires: 14_000_000_000_000_000,
+        },
+      ]);
+    }
+    await app.restart();
 
     const legacy = (await app.invoke("list_browser_profiles")).find(
       (p) => p.id === profile.id,
     );
-    assert.equal(legacy.wayfern_config.identity_id, null);
     const launched = await app.invoke("launch_browser_profile", {
       profile: legacy,
     });
     assert.ok(launched.process_id);
     browserPid = launched.process_id;
 
-    const converted = (await app.invoke("list_browser_profiles")).find(
+    if (sealsWithKeyFile) {
+      const cdp = await CdpClient.connect(
+        debuggingPortOf(launched.process_id).port,
+      );
+      try {
+        let carried;
+        for (let attempt = 0; attempt < 100 && !carried; attempt++) {
+          const { cookies } = await cdp.command("Network.getAllCookies");
+          carried = cookies.find(
+            (cookie) =>
+              cookie.domain === legacyHost && cookie.name === "legacy_sid",
+          );
+          if (!carried)
+            await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        assert.equal(
+          carried?.value,
+          "carried-over",
+          "a cookie the closed engine sealed must open on Apostate",
+        );
+      } finally {
+        cdp.close();
+      }
+    }
+
+    const migrated = (await app.invoke("list_browser_profiles")).find(
       (p) => p.id === profile.id,
     );
-    assert.equal(
-      typeof converted.wayfern_config.identity_id,
-      "string",
-      "the launch must store the payload profile as an identity",
+    assert.equal(migrated.wayfern_config.engine, "apostate");
+    assert.equal(migrated.version, ENGINE_CHROMIUM);
+    assert.ok(!migrated.wayfern_config.identity_id);
+    assert.ok(
+      Object.keys(JSON.parse(migrated.wayfern_config.fingerprint)).length >= 10,
+      "the identity-backed profile got a locally drawn device",
     );
     assert.equal(
-      converted.wayfern_config.fingerprint,
-      undefined,
-      "a converted profile must store no device payload",
+      migrated.updated_at,
+      editedAt,
+      "a migration is not an edit, so the edit time stays",
     );
-    await app.invoke("kill_browser_profile", { profile: converted });
+    assert.equal(await readFile(marker, "utf8"), "kept");
+    await app.invoke("kill_browser_profile", { profile: migrated });
     await waitForProcessExit(app, browserPid);
     await app.invoke("delete_profile", { profileId: profile.id });
   } catch (error) {
@@ -2646,20 +2490,14 @@ test("a payload profile an older version stored launches and is stored as an ide
 });
 
 test("start pages open on a launch from the app, and a given URL replaces them", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
-  const app = appFromEnvironment("browser-start-pages", {
-    seedVersionCache:
-      cachedFixtureVersion(process.env.DONUT_E2E_PROJECT_ROOT) ?? false,
-    wayfernTermsAccepted: false,
-  });
+  const app = appFromEnvironment("browser-start-pages");
   let browserPid;
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    await app.invoke("accept_wayfern_terms");
     const profile = await createRealProfile(
       app,
       prepared.version,
@@ -2747,19 +2585,13 @@ test("start pages open on a launch from the app, and a given URL replaces them",
 });
 
 test("a batch from a template makes numbered profiles, each with its own device", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
-  const app = appFromEnvironment("browser-template-batch", {
-    seedVersionCache:
-      cachedFixtureVersion(process.env.DONUT_E2E_PROJECT_ROOT) ?? false,
-    wayfernTermsAccepted: false,
-  });
+  const app = appFromEnvironment("browser-template-batch");
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    await app.invoke("accept_wayfern_terms");
     // A profile that already holds the name, so numbering continues after it.
     await createRealProfile(app, prepared.version, "Real Batch 1");
     const template = await app.invoke("create_profile_template", {
@@ -2814,21 +2646,15 @@ test("a batch from a template makes numbered profiles, each with its own device"
   }
 });
 
-test("Local Storage that Donut writes, Wayfern reads, and what Wayfern writes exports", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
-  const app = appFromEnvironment("browser-local-storage", {
-    seedVersionCache:
-      cachedFixtureVersion(process.env.DONUT_E2E_PROJECT_ROOT) ?? false,
-    wayfernTermsAccepted: false,
-  });
+test("Local Storage that Donut writes, Apostate reads, and what Apostate writes exports", async () => {
+  const app = appFromEnvironment("browser-local-storage");
   let browserPid;
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    await app.invoke("accept_wayfern_terms");
     const profile = await createRealProfile(
       app,
       prepared.version,
@@ -2910,7 +2736,7 @@ test("Local Storage that Donut writes, Wayfern reads, and what Wayfern writes ex
       await cdp.evaluate("localStorage.getItem('unicode')"),
       "日本語 🍩",
     );
-    await cdp.evaluate("localStorage.setItem('written', 'by Wayfern'); true");
+    await cdp.evaluate("localStorage.setItem('written', 'by Apostate'); true");
     const inShop = (body) =>
       cdp.evaluate(`(async () => {
         const db = await new Promise((resolve, reject) => {
@@ -2969,7 +2795,7 @@ test("Local Storage that Donut writes, Wayfern reads, and what Wayfern writes ex
       site.localStorage.map((i) => [i.name, i.value]),
     );
     assert.equal(items.imported, "from Donut");
-    assert.equal(items.written, "by Wayfern");
+    assert.equal(items.written, "by Apostate");
     assert.equal(site.indexedDB, undefined, "IndexedDB only when asked for");
 
     // With IndexedDB the closed profile opens headless for a moment.
@@ -3024,21 +2850,15 @@ test("Local Storage that Donut writes, Wayfern reads, and what Wayfern writes ex
   }
 });
 
-test("custom launch arguments reach only their Wayfern profile", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
-  const app = appFromEnvironment("browser-launch-args", {
-    seedVersionCache:
-      cachedFixtureVersion(process.env.DONUT_E2E_PROJECT_ROOT) ?? false,
-    wayfernTermsAccepted: false,
-  });
+test("custom launch arguments reach only their Apostate profile", async () => {
+  const app = appFromEnvironment("browser-launch-args");
   let cdp;
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    await app.invoke("accept_wayfern_terms");
     const profile = await createRealProfile(
       app,
       prepared.version,
@@ -3167,22 +2987,16 @@ test("custom launch arguments reach only their Wayfern profile", async () => {
 });
 
 test("a password-protected profile keeps what each session saved", async () => {
-  assert.ok(process.env.WAYFERN_TEST_TOKEN, "WAYFERN_TEST_TOKEN is required");
-  const app = appFromEnvironment("browser-sealed", {
-    seedVersionCache:
-      cachedFixtureVersion(process.env.DONUT_E2E_PROJECT_ROOT) ?? false,
-    wayfernTermsAccepted: false,
-  });
+  const app = appFromEnvironment("browser-sealed");
   const password = "sealed-sessions";
   let cdp;
   let browserPid;
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    await app.invoke("accept_wayfern_terms");
     const profile = await createRealProfile(
       app,
       prepared.version,

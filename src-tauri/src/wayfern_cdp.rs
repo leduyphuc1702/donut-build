@@ -1463,9 +1463,6 @@ pub(crate) mod test_support {
     FramedNode,
     /// `resolveLocator` matches "First Name (optional)" and "First Name".
     AmbiguousByName,
-    /// `resolveLocator` answers the ambiguity error, which lists no boxes, and
-    /// the page's own resolver settles on node 353.
-    AmbiguousForTheBrowser,
   }
 
   pub(crate) type Frames = Arc<Mutex<Vec<Value>>>;
@@ -1663,7 +1660,7 @@ pub(crate) mod test_support {
                 ok(result)
               }
               "Wayfern.resolveLocator"
-                if matches!(behaviour, Fake::AmbiguousLocator | Fake::AmbiguousForTheBrowser) =>
+                if matches!(behaviour, Fake::AmbiguousLocator) =>
               {
                 error(
                 "Ambiguous locator: 2 nodes match. Refine it with a role, a stable attribute, or more exact text. Candidates: [{\"backendNodeId\":7,\"role\":\"button\",\"name\":\"Save\",\"text\":\"Save\",\"signature\":\"s7\",\"attributes\":[]},{\"backendNodeId\":8,\"role\":\"button\",\"name\":\"Save\",\"text\":\"Save\",\"signature\":\"s8\",\"attributes\":[]}]",

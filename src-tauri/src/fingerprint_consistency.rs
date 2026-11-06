@@ -559,10 +559,10 @@ fn compare_direct_exit(profile: &BrowserProfile, exit_ip: String) -> Consistency
   }
 }
 
-/// Rewrite a profile's stored fingerprint so its geolocation (timezone,
-/// language, coordinates) matches `exit_ip`, and persist it. This is the
+/// Rewrite a profile's stored location (timezone, language, coordinates) so it
+/// matches `exit_ip`, and persist it; the device is left alone. This is the
 /// on-demand resolution for the consistency warning: launches no longer rewrite
-/// the fingerprint silently, so the user opts into matching it here.
+/// the location silently, so the user opts into matching it here.
 ///
 /// `exit_ip` is the exit the consistency check already resolved, applied via
 /// MaxMind directly — no second proxy round-trip — and it forces geolocation
@@ -587,31 +587,28 @@ pub async fn match_profile_fingerprint_to_exit(
     .filter(|c| c.fingerprint.is_some() || c.identity_id.is_some())
     .ok_or_else(|| serde_json::json!({ "code": "FINGERPRINT_MATCH_FAILED" }).to_string())?;
 
+  // Only the location object moves; the device stays as the person left it.
+  // The check and the launch both read `location` before the device's own
+  // copy of those fields, so rewriting the device would leave a stored location
+  // winning over the match, and the warning would stay.
+  let location = config.location.clone().unwrap_or_else(|| {
+    config
+      .fingerprint
+      .as_deref()
+      .and_then(crate::wayfern_manager::WayfernManager::fingerprint_object)
+      .and_then(|device| crate::wayfern_manager::WayfernManager::location_of(&device))
+      .unwrap_or_else(|| "{}".to_string())
+  });
   let geoip_override = serde_json::Value::String(exit_ip);
-  if let Some(fingerprint) = config.fingerprint.clone() {
-    // Legacy payload: the location lives inside the stored device.
-    let refreshed = crate::wayfern_manager::WayfernManager::refresh_fingerprint_geolocation(
-      &fingerprint,
-      None,
-      Some(&geoip_override),
-    )
-    .await
-    .ok_or_else(|| serde_json::json!({ "code": "FINGERPRINT_MATCH_FAILED" }).to_string())?;
-    config.fingerprint = Some(refreshed);
-  } else {
-    // Identity-backed: only the location object moves; the device stays
-    // whatever the identity derives.
-    let location = config.location.clone().unwrap_or_else(|| "{}".to_string());
-    let refreshed = crate::wayfern_manager::WayfernManager::refresh_fingerprint_geolocation(
-      &location,
-      None,
-      Some(&geoip_override),
-    )
-    .await
-    .ok_or_else(|| serde_json::json!({ "code": "FINGERPRINT_MATCH_FAILED" }).to_string())?;
-    config.location = crate::wayfern_manager::WayfernManager::fingerprint_object(&refreshed)
-      .and_then(|object| crate::wayfern_manager::WayfernManager::location_of(&object));
-  }
+  let refreshed = crate::wayfern_manager::WayfernManager::refresh_fingerprint_geolocation(
+    &location,
+    None,
+    Some(&geoip_override),
+  )
+  .await
+  .ok_or_else(|| serde_json::json!({ "code": "FINGERPRINT_MATCH_FAILED" }).to_string())?;
+  config.location = crate::wayfern_manager::WayfernManager::fingerprint_object(&refreshed)
+    .and_then(|object| crate::wayfern_manager::WayfernManager::location_of(&object));
   profile.wayfern_config = Some(config);
   manager.save_profile(&profile).map_err(|e| {
     serde_json::json!({ "code": "INTERNAL_ERROR", "params": { "detail": e.to_string() } })

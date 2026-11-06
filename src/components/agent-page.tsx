@@ -90,8 +90,11 @@ const TABS: AgentTab[] = [
   "schedules",
 ];
 
-/** Chat, tasks and routines run by Wayfern's engine; shown only with the agent. */
+/** Chat, tasks and routines run by the agent engine; shown only with it. */
 const AGENT_TABS: AgentTab[] = ["chat", "tasks", "routines"];
+
+/** Recipes record and replay through the same engine, so they wait for it too. */
+const ENGINE_TABS: ReadonlySet<AgentTab> = new Set(["recipes", "schedules"]);
 
 interface AgentPageProps {
   isOpen: boolean;
@@ -316,7 +319,9 @@ export function AgentPage({
   const { t } = useTranslation();
   const now = useNow();
   const { remote, known: remoteKnown } = useRemoteStatus(isOpen);
-  const tabs = agentReady ? [...AGENT_TABS, ...TABS] : TABS;
+  const tabs = agentReady
+    ? [...AGENT_TABS, ...TABS]
+    : TABS.filter((tab) => !ENGINE_TABS.has(tab));
   const agentBatches = useAgentBatches(agentReady && isOpen);
   const agentChats = useAgentChats(agentReady && isOpen);
   const credits = useAgentCredits(

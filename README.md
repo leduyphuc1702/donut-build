@@ -36,7 +36,7 @@ Websites link accounts that come from the same device, and then one ban can take
 
 <img alt="In an ordinary browser, four accounts show websites the same device, so they are linked and one ban takes down all four. In Donut Browser, each account shows a different device, so the accounts stay separate." src="assets/readme/linking.svg" width="100%">
 
-The fingerprints come from [Wayfern](https://wayfern.com), a privacy-focused Chromium fork that sets them inside the engine, not with scripts on the page.
+The fingerprints come from [Apostate](https://github.com/heretic-tech/apostate), an open-source Chromium build that sets them inside the engine, not with scripts on the page. The app downloads and verifies it by itself the first time it opens.
 
 ## Your data stays on your device
 
@@ -51,12 +51,12 @@ The fingerprints come from [Wayfern](https://wayfern.com), a privacy-focused Chr
 
 <img alt="Start a profile from the local REST API and connect Playwright to it over CDP, or let your AI agent work with profiles over remote MCP." src="assets/readme/automation.svg" width="100%">
 
-Start any profile from the local REST API on `127.0.0.1:10108`, then connect Playwright, Puppeteer or Selenium to it over CDP. Or connect Claude, Cursor, Codex or another MCP client over remote MCP, and watch what each agent does. Browser automation and remote MCP come with the paid plans. See the [quickstart](https://donutbrowser.com/docs/quickstart), [Playwright with Wayfern](https://donutbrowser.com/docs/wayfern) and [MCP](https://donutbrowser.com/docs/mcp) guides.
+Start any profile from the local REST API on `127.0.0.1:10108`, then connect Playwright, Puppeteer or Selenium to it over CDP. Or connect Claude, Cursor, Codex or another MCP client over remote MCP, and watch what each agent does. Browser automation and remote MCP come with the paid plans. See the [quickstart](https://donutbrowser.com/docs/quickstart) and [MCP](https://donutbrowser.com/docs/mcp) guides.
 
 ## Features
 
 - Unlimited browser profiles: each fully isolated with its own fingerprint, cookies, extensions, and data
-- Anti-detect Chromium engine: powered by [Wayfern](https://wayfern.com), a privacy-focused Chromium fork whose fingerprint spoofing is not detected by Cloudflare, reCaptcha v3, or other browser fingerprinting and anti-bot services
+- Anti-detect Chromium engine: [Apostate](https://github.com/heretic-tech/apostate), an open-source Chromium build that presents a Windows, macOS or Linux machine from the engine's C++, with no script injected into the page
 - DNS AdBlocker: block ads, trackers, and other unwanted content with per-profile DNS blocking
 - Proxy support: HTTP, HTTPS, SOCKS4, SOCKS5 per profile, with dynamic proxy URLs
 - VPN support: WireGuard configs per profile

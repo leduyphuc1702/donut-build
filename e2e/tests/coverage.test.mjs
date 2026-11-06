@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { allCoveredCommands, commandCoverage } from "../coverage-map.mjs";
-import { seedWayfern } from "../lib/fixtures.mjs";
+import { engineTarget, seedEngine } from "../lib/fixtures.mjs";
 import { WebDriverClient } from "../lib/webdriver.mjs";
 
 function registeredCommands(source) {
@@ -109,36 +109,29 @@ test("WebDriver client preserves application values that contain an error field"
   }
 });
 
-test("Wayfern fixtures are copied into the isolated data root, never linked", async (t) => {
-  const root = await mkdtemp(path.join(os.tmpdir(), "donut-wayfern-copy-"));
-  t.after(() => rm(root, { recursive: true, force: true }));
-  const source =
-    process.platform === "darwin"
-      ? path.join(root, "source", "Wayfern.app", "Contents", "MacOS", "Wayfern")
-      : path.join(
-          root,
-          "source",
-          process.platform === "win32" ? "Wayfern.exe" : "wayfern",
-        );
+test("engine fixtures are copied into the isolated data root, never linked", async (t) => {
+  const engine = engineTarget();
+  if (!engine) {
+    t.skip("Apostate has no build for this machine");
+    return;
+  }
+  const root = await mkdtemp(path.join(os.tmpdir(), "donut-engine-copy-"));
+  const pinned = process.env.DONUT_E2E_APOSTATE_PATH;
+  t.after(async () => {
+    if (pinned === undefined) delete process.env.DONUT_E2E_APOSTATE_PATH;
+    else process.env.DONUT_E2E_APOSTATE_PATH = pinned;
+    await rm(root, { recursive: true, force: true });
+  });
+  const sourceDir = path.join(root, "source");
+  const source = path.join(sourceDir, engine.executable);
   await mkdir(path.dirname(source), { recursive: true });
   await writeFile(source, "source-fixture");
-  const bundlePath =
-    process.platform === "darwin"
-      ? path.join(root, "source", "Wayfern.app")
-      : source;
-  const installDir = await seedWayfern(path.join(root, "isolated"), {
-    bundlePath,
-    executable: source,
-    version: "1.2.3.4",
-  });
-  const destination =
-    process.platform === "darwin"
-      ? path.join(installDir, "Wayfern.app", "Contents", "MacOS", "Wayfern")
-      : path.join(
-          installDir,
-          process.platform === "win32" ? "wayfern.exe" : "wayfern",
-        );
+  process.env.DONUT_E2E_APOSTATE_PATH = sourceDir;
 
-  await writeFile(destination, "isolated-mutation");
+  const installDir = await seedEngine(path.join(root, "isolated"), root);
+  await writeFile(
+    path.join(installDir, engine.executable),
+    "isolated-mutation",
+  );
   assert.equal(await readFile(source, "utf8"), "source-fixture");
 });

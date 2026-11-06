@@ -69,7 +69,6 @@ export type TipId =
   | "cloudBackup"
   | "cookieBot"
   | "crossOs"
-  | "synchronizer"
   | "automation"
   | "agent"
   | "team"
@@ -81,12 +80,7 @@ export type TipId =
  */
 export type NotedFeature = Extract<
   TipId,
-  | "commandPalette"
-  | "searchSyntax"
-  | "shortcuts"
-  | "importProfiles"
-  | "totp"
-  | "synchronizer"
+  "commandPalette" | "searchSyntax" | "shortcuts" | "importProfiles" | "totp"
 >;
 
 /** The profile fields the relevance checks read. */
@@ -381,14 +375,6 @@ export const TIPS: readonly TipDefinition[] = [
         const native = profile.host_os ?? usage.currentOs;
         return !!reported && reported !== native;
       }),
-  },
-  {
-    id: "synchronizer",
-    section: "plan",
-    action: { kind: "page", page: "profiles" },
-    anchors: ["row-inspect", "rail-profiles"],
-    requires: "crossOsFingerprints",
-    inUse: noted("synchronizer"),
   },
   {
     id: "automation",

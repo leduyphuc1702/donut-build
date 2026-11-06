@@ -120,15 +120,13 @@ async function submitProfileCreation(app, name) {
 }
 
 test("profile creation stays compact and saves basic, protected, and ephemeral profiles", async () => {
-  await withApp(
-    "ui-profile-creation",
-    async (app) => {
-      // The UI suite has no browser binary or live network routes. Record
-      // the chosen route, then create locally with a fixed device. The real
-      // backend still saves the options and encrypts the profile. The network
-      // suite covers creation with a real browser and working proxy.
-      await stubCommand(app, "is_geoip_database_available", true);
-      await app.execute(`
+  await withApp("ui-profile-creation", async (app) => {
+    // The UI suite has no browser binary or live network routes. Record
+    // the chosen route, then create locally with a fixed device. The real
+    // backend still saves the options and encrypts the profile. The network
+    // suite covers creation with a real browser and working proxy.
+    await stubCommand(app, "is_geoip_database_available", true);
+    await app.execute(`
         const originalFetch = window.fetch;
         window.__donutProfileRequests = [];
         window.fetch = function(input, init) {
@@ -144,21 +142,21 @@ test("profile creation stays compact and saves basic, protected, and ephemeral p
           return originalFetch.apply(window, arguments);
         };
       `);
-      await app.session.command("POST", "/window/rect", {
-        width: 1280,
-        height: 900,
-      });
-      await openProfileCreation(app);
-      await app.fillSelector("#profile-name", "Simple profile");
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return [...document.querySelectorAll('[role="dialog"] button')].some(button => button.textContent.trim() === arguments[0] && !button.disabled);`,
-            [en.common.buttons.create],
-          ),
-        { description: "creation is available" },
-      );
-      const basic = await app.execute(`
+    await app.session.command("POST", "/window/rect", {
+      width: 1280,
+      height: 900,
+    });
+    await openProfileCreation(app);
+    await app.fillSelector("#profile-name", "Simple profile");
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return [...document.querySelectorAll('[role="dialog"] button')].some(button => button.textContent.trim() === arguments[0] && !button.disabled);`,
+          [en.common.buttons.create],
+        ),
+      { description: "creation is available" },
+    );
+    const basic = await app.execute(`
       const dialog = document.querySelector('#profile-name').closest('[role="dialog"]');
       const rect = dialog.getBoundingClientRect();
       return {
@@ -170,19 +168,16 @@ test("profile creation stays compact and saves basic, protected, and ephemeral p
         checkboxes: [...dialog.querySelectorAll('[role="checkbox"]')].map(input => input.id),
       };
     `);
-      assert.ok(
-        basic.width <= 512 && basic.height < 450,
-        JSON.stringify(basic),
-      );
-      assert.equal(basic.tabs, 0);
-      assert.deepEqual(basic.fields, ["profile-name", "profile-count"]);
-      assert.deepEqual(basic.checkboxes, ["enable-password", "ephemeral"]);
-      assert.equal(basic.advancedVisible, false);
-      assert.ok(!basic.text.includes(en.profiles.ephemeralDescription));
-      assert.ok(
-        !basic.text.includes(en.createProfile.passwordProtect.description),
-      );
-      const chrome = await app.execute(`
+    assert.ok(basic.width <= 512 && basic.height < 450, JSON.stringify(basic));
+    assert.equal(basic.tabs, 0);
+    assert.deepEqual(basic.fields, ["profile-name", "profile-count"]);
+    assert.deepEqual(basic.checkboxes, ["enable-password", "ephemeral"]);
+    assert.equal(basic.advancedVisible, false);
+    assert.ok(!basic.text.includes(en.profiles.ephemeralDescription));
+    assert.ok(
+      !basic.text.includes(en.createProfile.passwordProtect.description),
+    );
+    const chrome = await app.execute(`
       const dialog = document.querySelector('#profile-name').closest('[role="dialog"]');
       const border = (node) => getComputedStyle(node).borderTopWidth;
       return {
@@ -210,410 +205,404 @@ test("profile creation stays compact and saves basic, protected, and ephemeral p
         cornerCloses: dialog.querySelectorAll(':scope > button:not([data-slot])').length,
       };
     `);
-      assert.equal(chrome.name, "0px", "the name field has no box");
-      assert.deepEqual(chrome.options, ["0px", "0px", "0px"]);
-      assert.deepEqual(chrome.proxyName, [
-        en.createProfile.proxy.title,
-        en.createProfile.proxy.noProxy,
-      ]);
-      // The options sit on one row; the destination group is behind More
-      // options: none while the list shows all.
-      assert.equal(chrome.rowTops.length, 4, JSON.stringify(chrome));
-      assert.equal(new Set(chrome.rowTops).size, 1, JSON.stringify(chrome));
-      // The options fill the row, and the close button ends the header row at
-      // the same edge, centred on the title and the template picker.
-      assert.equal(new Set(chrome.edges).size, 1, JSON.stringify(chrome));
-      assert.ok(
-        Math.max(...chrome.headerMiddles) - Math.min(...chrome.headerMiddles) <=
-          1,
-        JSON.stringify(chrome),
-      );
-      assert.equal(chrome.cornerCloses, 0, JSON.stringify(chrome));
-      assert.equal(chrome.more, en.createProfile.moreOptions);
-      assert.equal(chrome.moreDescribed, null);
-      await app.clickSelector("#profile-more-options");
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelectorAll('[cmdk-item]').length > 0;`,
-          ),
-        { description: "group options" },
-      );
-      const groupOptions = await app.execute(`
+    assert.equal(chrome.name, "0px", "the name field has no box");
+    assert.deepEqual(chrome.options, ["0px", "0px", "0px"]);
+    assert.deepEqual(chrome.proxyName, [
+      en.createProfile.proxy.title,
+      en.createProfile.proxy.noProxy,
+    ]);
+    // The options sit on one row; the destination group is behind More
+    // options: none while the list shows all.
+    assert.equal(chrome.rowTops.length, 4, JSON.stringify(chrome));
+    assert.equal(new Set(chrome.rowTops).size, 1, JSON.stringify(chrome));
+    // The options fill the row, and the close button ends the header row at
+    // the same edge, centred on the title and the template picker.
+    assert.equal(new Set(chrome.edges).size, 1, JSON.stringify(chrome));
+    assert.ok(
+      Math.max(...chrome.headerMiddles) - Math.min(...chrome.headerMiddles) <=
+        1,
+      JSON.stringify(chrome),
+    );
+    assert.equal(chrome.cornerCloses, 0, JSON.stringify(chrome));
+    assert.equal(chrome.more, en.createProfile.moreOptions);
+    assert.equal(chrome.moreDescribed, null);
+    await app.clickSelector("#profile-more-options");
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelectorAll('[cmdk-item]').length > 0;`,
+        ),
+      { description: "group options" },
+    );
+    const groupOptions = await app.execute(`
       return [...document.querySelectorAll('[cmdk-group-heading], [cmdk-item]')]
         .map((node) => node.textContent.trim());
     `);
-      assert.deepEqual(groupOptions, [
-        en.profiles.table.group,
-        en.groups.noGroup,
-      ]);
-      await app.pressShortcut({ key: "Escape" });
-      await app.waitFor(
-        async () =>
-          (await app.execute(
-            `return document.querySelector('#profile-more-options').getAttribute('aria-expanded');`,
-          )) === "false",
-        { description: "More options closes" },
-      );
-      await app.capture("profile-create-compact-wide");
-      // The device's operating system is chosen on the dialog itself. Every
-      // desktop system can be picked (another one opens on Apostate); without
-      // a plan that includes cross-OS fingerprints, mobile ones stay locked.
-      const hostOs =
-        { darwin: "macOS", win32: "Windows" }[process.platform] ?? "Linux";
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#profile-os').textContent.trim();`,
-        ),
-        hostOs,
-      );
-      await app.clickSelector("#profile-os");
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelectorAll('[cmdk-item]').length;`,
-          ),
-        { description: "operating system options" },
-      );
-      const osOptions = await app.execute(`
+    assert.deepEqual(groupOptions, [
+      en.profiles.table.group,
+      en.groups.noGroup,
+    ]);
+    await app.pressShortcut({ key: "Escape" });
+    await app.waitFor(
+      async () =>
+        (await app.execute(
+          `return document.querySelector('#profile-more-options').getAttribute('aria-expanded');`,
+        )) === "false",
+      { description: "More options closes" },
+    );
+    await app.capture("profile-create-compact-wide");
+    // The device's operating system is chosen on the dialog itself. Every
+    // desktop system can be picked; phones are not offered.
+    const hostOs =
+      { darwin: "macOS", win32: "Windows" }[process.platform] ?? "Linux";
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#profile-os').textContent.trim();`,
+      ),
+      hostOs,
+    );
+    await app.clickSelector("#profile-os");
+    await app.waitFor(
+      () =>
+        app.execute(`return document.querySelectorAll('[cmdk-item]').length;`),
+      { description: "operating system options" },
+    );
+    const osOptions = await app.execute(`
       return [...document.querySelectorAll('[cmdk-item]')].map((item) => ({
         text: item.textContent.trim(),
         disabled: item.getAttribute('aria-disabled') === 'true',
       }));
     `);
-      assert.equal(osOptions.length, 5, JSON.stringify(osOptions));
-      assert.deepEqual(
-        osOptions.filter((option) => !option.disabled).map((o) => o.text),
-        ["Windows", "macOS", "Linux"],
-      );
-      assert.ok(
-        osOptions
-          .filter((option) => option.disabled)
-          .every((option) => option.text.endsWith("PRO")),
-        JSON.stringify(osOptions),
-      );
-      await app.pressShortcut({ key: "Escape" });
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return !document.querySelector('[cmdk-item]') && Boolean(document.querySelector('#profile-name'));`,
-          ),
-        { description: "the OS menu to close and the dialog to stay" },
-      );
-      // Adding a route is part of the route list, and stays there when the
-      // search finds nothing.
-      await app.clickSelector("#profile-proxy");
-      await app.fillSelector("[cmdk-input]", "no such route");
-      await app.waitForText(en.createProfile.proxy.notFound);
-      await app.clickText(en.createProfile.proxy.addProxy, {
-        roles: ["option"],
-      });
-      await app.waitFor(
-        () =>
-          app.execute(`return Boolean(document.querySelector('#proxy-name'));`),
-        { description: "proxy form from the route list" },
-      );
-      await app.pressShortcut({ key: "Escape" });
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return !document.querySelector('#proxy-name') && document.querySelector('#profile-name')?.value === arguments[0];`,
-            ["Simple profile"],
-          ),
-        { description: "creation dialog kept after the proxy form closes" },
-      );
-      await app.clickSelector("#profile-proxy");
-      await app.clickText(en.common.labels.none, { roles: ["option"] });
-      const simple = await submitProfileCreation(app, "Simple profile");
-      assert.ok(simple);
-      assert.equal(simple.ephemeral, false);
-      assert.equal(simple.password_protected, false);
-      assert.equal(simple.proxy_id, null);
-      assert.equal(simple.vpn_id, null);
-      assert.ok(simple.wayfern_config.screen_max_width > 0);
-      assert.ok(simple.wayfern_config.screen_max_height > 0);
-
-      const proxy = await app.invoke("create_stored_proxy", {
-        name: "Creation proxy",
-        proxySettings: {
-          proxy_type: "http",
-          host: "127.0.0.1",
-          port: 9,
-          username: null,
-          password: null,
-        },
-      });
-      const vpn = await app.invoke("create_vpn_config_manual", {
-        name: "Creation VPN",
-        vpnType: "WireGuard",
-        configData: wireGuardFixture(),
-      });
-      await app.invoke("plugin:event|emit", {
-        event: "vpn-configs-changed",
-        payload: null,
-      });
-      const extensions = await app.invoke("create_extension_group", {
-        name: "Creation extensions",
-      });
-      await openProfileCreation(app);
-      await app.fillSelector("#profile-name", "Protected profile");
-      await app.clickSelector("#profile-proxy");
-      await app.fillSelector("[cmdk-input]", "Creation proxy");
-      await app.clickText(proxy.name, { roles: ["option"] });
-      await app.clickSelector("#enable-password");
-      await app.fillSelector("#profile-password", "short");
-      await app.clickTextIn('[role="dialog"]', en.common.buttons.create, {
-        roles: ["button"],
-      });
-      await app.waitForText(
-        en.profilePassword.errors.tooShort.replace("{{min}}", "8"),
-      );
-      await app.fillSelector("#profile-password", "creation test password");
-      await app.fillSelector("#profile-password-confirm", "different password");
-      await app.clickTextIn('[role="dialog"]', en.common.buttons.create, {
-        roles: ["button"],
-      });
-      await app.waitForText(en.profilePassword.errors.mismatch);
-      await app.fillSelector(
-        "#profile-password-confirm",
-        "creation test password",
-      );
-      await app.clickText(en.createProfile.advancedOptions, {
-        roles: ["button"],
-      });
-      await app.fillSelector(
-        "#launch-hook-url",
-        "https://example.com/hooks/created",
-      );
-      await chooseSelectOption(
-        app,
-        "#profile-dns-blocklist",
-        en.dnsBlocklist.normal,
-      );
-      // The DNS field reads the value back from the backend: a value it cannot
-      // use blocks creation, a plain address says it is not encrypted, and a
-      // preset is encrypted.
-      const dnsStatus = (state) =>
-        app.waitFor(
-          () =>
-            app.execute(
-              `return document.querySelector('[data-slot="dns-server-status"]')?.dataset.state === arguments[0];`,
-              [state],
-            ),
-          { description: `DNS server status ${state}` },
-        );
-      const createEnabled = () =>
+    // Every desktop system is free to pick; phones are not offered at all.
+    assert.deepEqual(
+      osOptions,
+      [
+        { text: "Windows", disabled: false },
+        { text: "macOS", disabled: false },
+        { text: "Linux", disabled: false },
+      ],
+      JSON.stringify(osOptions),
+    );
+    await app.pressShortcut({ key: "Escape" });
+    await app.waitFor(
+      () =>
         app.execute(
-          `return [...document.querySelectorAll('[role="dialog"] button')].some(button => button.textContent.trim() === arguments[0] && !button.disabled);`,
-          [en.common.buttons.create],
-        );
-      await dnsStatus("default");
-      await app.waitForText(en.dnsServer.summary.default);
-      await app.fillSelector("#profile-dns-server", "udp://1.1.1.1");
-      await dnsStatus("invalid");
-      await app.waitForText(en.backendErrors.dnsServerInvalid);
-      await app.waitFor(async () => !(await createEnabled()), {
-        description: "an invalid DNS server blocks creation",
-      });
-      await app.fillSelector("#profile-dns-server", "10.0.0.53");
-      await dnsStatus("valid");
-      await app.waitForText(
-        en.dnsServer.summary.tcp.replace("{{server}}", "10.0.0.53"),
-      );
-      await app.clickText("Quad9", { roles: ["button"] });
-      await app.waitForText(
-        en.dnsServer.summary.https.replace("{{server}}", "dns.quad9.net"),
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#profile-dns-server').value;`,
+          `return !document.querySelector('[cmdk-item]') && Boolean(document.querySelector('#profile-name'));`,
         ),
-        "https://dns.quad9.net/dns-query",
-      );
-      await app.waitFor(createEnabled, {
-        description: "a valid DNS server allows creation",
-      });
-      await chooseSelectOption(
-        app,
-        "#profile-extension-group",
-        `${extensions.name} (0)`,
-      );
-      await app.clickSelector("#restore-session");
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#profile-name').closest('[role="dialog"]').querySelectorAll('[role="tab"]').length;`,
+      { description: "the OS menu to close and the dialog to stay" },
+    );
+    // Adding a route is part of the route list, and stays there when the
+    // search finds nothing.
+    await app.clickSelector("#profile-proxy");
+    await app.fillSelector("[cmdk-input]", "no such route");
+    await app.waitForText(en.createProfile.proxy.notFound);
+    await app.clickText(en.createProfile.proxy.addProxy, {
+      roles: ["option"],
+    });
+    await app.waitFor(
+      () =>
+        app.execute(`return Boolean(document.querySelector('#proxy-name'));`),
+      { description: "proxy form from the route list" },
+    );
+    await app.pressShortcut({ key: "Escape" });
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return !document.querySelector('#proxy-name') && document.querySelector('#profile-name')?.value === arguments[0];`,
+          ["Simple profile"],
         ),
-        0,
+      { description: "creation dialog kept after the proxy form closes" },
+    );
+    await app.clickSelector("#profile-proxy");
+    await app.clickText(en.common.labels.none, { roles: ["option"] });
+    const simple = await submitProfileCreation(app, "Simple profile");
+    assert.ok(simple);
+    assert.equal(simple.ephemeral, false);
+    assert.equal(simple.password_protected, false);
+    assert.equal(simple.proxy_id, null);
+    assert.equal(simple.vpn_id, null);
+    assert.ok(simple.wayfern_config.screen_max_width > 0);
+    assert.ok(simple.wayfern_config.screen_max_height > 0);
+
+    const proxy = await app.invoke("create_stored_proxy", {
+      name: "Creation proxy",
+      proxySettings: {
+        proxy_type: "http",
+        host: "127.0.0.1",
+        port: 9,
+        username: null,
+        password: null,
+      },
+    });
+    const vpn = await app.invoke("create_vpn_config_manual", {
+      name: "Creation VPN",
+      vpnType: "WireGuard",
+      configData: wireGuardFixture(),
+    });
+    await app.invoke("plugin:event|emit", {
+      event: "vpn-configs-changed",
+      payload: null,
+    });
+    const extensions = await app.invoke("create_extension_group", {
+      name: "Creation extensions",
+    });
+    await openProfileCreation(app);
+    await app.fillSelector("#profile-name", "Protected profile");
+    await app.clickSelector("#profile-proxy");
+    await app.fillSelector("[cmdk-input]", "Creation proxy");
+    await app.clickText(proxy.name, { roles: ["option"] });
+    await app.clickSelector("#enable-password");
+    await app.fillSelector("#profile-password", "short");
+    await app.clickTextIn('[role="dialog"]', en.common.buttons.create, {
+      roles: ["button"],
+    });
+    await app.waitForText(
+      en.profilePassword.errors.tooShort.replace("{{min}}", "8"),
+    );
+    await app.fillSelector("#profile-password", "creation test password");
+    await app.fillSelector("#profile-password-confirm", "different password");
+    await app.clickTextIn('[role="dialog"]', en.common.buttons.create, {
+      roles: ["button"],
+    });
+    await app.waitForText(en.profilePassword.errors.mismatch);
+    await app.fillSelector(
+      "#profile-password-confirm",
+      "creation test password",
+    );
+    await app.clickText(en.createProfile.advancedOptions, {
+      roles: ["button"],
+    });
+    await app.fillSelector(
+      "#launch-hook-url",
+      "https://example.com/hooks/created",
+    );
+    await chooseSelectOption(
+      app,
+      "#profile-dns-blocklist",
+      en.dnsBlocklist.normal,
+    );
+    // The DNS field reads the value back from the backend: a value it cannot
+    // use blocks creation, a plain address says it is not encrypted, and a
+    // preset is encrypted.
+    const dnsStatus = (state) =>
+      app.waitFor(
+        () =>
+          app.execute(
+            `return document.querySelector('[data-slot="dns-server-status"]')?.dataset.state === arguments[0];`,
+            [state],
+          ),
+        { description: `DNS server status ${state}` },
       );
+    const createEnabled = () =>
+      app.execute(
+        `return [...document.querySelectorAll('[role="dialog"] button')].some(button => button.textContent.trim() === arguments[0] && !button.disabled);`,
+        [en.common.buttons.create],
+      );
+    await dnsStatus("default");
+    await app.waitForText(en.dnsServer.summary.default);
+    await app.fillSelector("#profile-dns-server", "udp://1.1.1.1");
+    await dnsStatus("invalid");
+    await app.waitForText(en.backendErrors.dnsServerInvalid);
+    await app.waitFor(async () => !(await createEnabled()), {
+      description: "an invalid DNS server blocks creation",
+    });
+    await app.fillSelector("#profile-dns-server", "10.0.0.53");
+    await dnsStatus("valid");
+    await app.waitForText(
+      en.dnsServer.summary.tcp.replace("{{server}}", "10.0.0.53"),
+    );
+    await app.clickText("Quad9", { roles: ["button"] });
+    await app.waitForText(
+      en.dnsServer.summary.https.replace("{{server}}", "dns.quad9.net"),
+    );
+    assert.equal(
       await app.execute(
-        `document.querySelector('[data-slot="profile-create-fields"]').scrollTop = 0;`,
-      );
-      await app.capture("profile-create-advanced-wide");
-      await app.clickText(en.createProfile.advancedOptions, {
-        roles: ["button"],
-      });
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#profile-name').value;`,
-        ),
-        "Protected profile",
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#profile-password').value;`,
-        ),
-        "creation test password",
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#profile-proxy').textContent.trim();`,
-        ),
-        proxy.name,
-      );
-      await app.clickText(en.createProfile.advancedOptions, {
-        roles: ["button"],
-      });
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#launch-hook-url').value;`,
-        ),
-        "https://example.com/hooks/created",
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#restore-session').getAttribute('aria-checked');`,
-        ),
-        "false",
-      );
-      await app.clickText(en.createProfile.advancedOptions, {
-        roles: ["button"],
-      });
-      await app.session.command("POST", "/window/rect", {
-        width: 480,
-        height: 700,
-      });
-      await app.capture("profile-create-password-narrow");
-      const fit = await app.execute(`
+        `return document.querySelector('#profile-dns-server').value;`,
+      ),
+      "https://dns.quad9.net/dns-query",
+    );
+    await app.waitFor(createEnabled, {
+      description: "a valid DNS server allows creation",
+    });
+    await chooseSelectOption(
+      app,
+      "#profile-extension-group",
+      `${extensions.name} (0)`,
+    );
+    await app.clickSelector("#restore-session");
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#profile-name').closest('[role="dialog"]').querySelectorAll('[role="tab"]').length;`,
+      ),
+      0,
+    );
+    await app.execute(
+      `document.querySelector('[data-slot="profile-create-fields"]').scrollTop = 0;`,
+    );
+    await app.capture("profile-create-advanced-wide");
+    await app.clickText(en.createProfile.advancedOptions, {
+      roles: ["button"],
+    });
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#profile-name').value;`,
+      ),
+      "Protected profile",
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#profile-password').value;`,
+      ),
+      "creation test password",
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#profile-proxy').textContent.trim();`,
+      ),
+      proxy.name,
+    );
+    await app.clickText(en.createProfile.advancedOptions, {
+      roles: ["button"],
+    });
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#launch-hook-url').value;`,
+      ),
+      "https://example.com/hooks/created",
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#restore-session').getAttribute('aria-checked');`,
+      ),
+      "false",
+    );
+    await app.clickText(en.createProfile.advancedOptions, {
+      roles: ["button"],
+    });
+    await app.session.command("POST", "/window/rect", {
+      width: 480,
+      height: 700,
+    });
+    await app.capture("profile-create-password-narrow");
+    const fit = await app.execute(`
       const dialog = document.querySelector('#profile-name').closest('[role="dialog"]');
       const rect = dialog.getBoundingClientRect();
       const footer = dialog.querySelector('[data-slot="dialog-footer"]').getBoundingClientRect();
       return rect.left >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight &&
         dialog.scrollWidth <= dialog.clientWidth && footer.bottom <= rect.bottom;
     `);
-      assert.equal(fit, true);
-      const protectedProfile = await submitProfileCreation(
-        app,
-        "Protected profile",
-      );
-      assert.ok(protectedProfile);
-      assert.equal(protectedProfile.password_protected, true);
-      assert.equal(protectedProfile.ephemeral, false);
-      const protectedRequest = await app.execute(
-        `return window.__donutProfileRequests.at(-1);`,
-      );
-      assert.equal(protectedRequest.proxyId, proxy.id);
-      assert.equal(protectedRequest.vpnId, undefined);
-      assert.equal(protectedProfile.dns_blocklist, "normal");
-      assert.equal(
-        protectedProfile.dns_server,
-        "https://dns.quad9.net/dns-query",
-      );
-      assert.equal(
-        protectedProfile.launch_hook,
-        "https://example.com/hooks/created",
-      );
-      assert.equal(protectedProfile.extension_group_id, extensions.id);
-      assert.equal(protectedProfile.wayfern_config.restore_session, false);
-      await app.invoke("verify_profile_password", {
-        profileId: protectedProfile.id,
-        password: "creation test password",
-      });
+    assert.equal(fit, true);
+    const protectedProfile = await submitProfileCreation(
+      app,
+      "Protected profile",
+    );
+    assert.ok(protectedProfile);
+    assert.equal(protectedProfile.password_protected, true);
+    assert.equal(protectedProfile.ephemeral, false);
+    const protectedRequest = await app.execute(
+      `return window.__donutProfileRequests.at(-1);`,
+    );
+    assert.equal(protectedRequest.proxyId, proxy.id);
+    assert.equal(protectedRequest.vpnId, undefined);
+    assert.equal(protectedProfile.dns_blocklist, "normal");
+    assert.equal(
+      protectedProfile.dns_server,
+      "https://dns.quad9.net/dns-query",
+    );
+    assert.equal(
+      protectedProfile.launch_hook,
+      "https://example.com/hooks/created",
+    );
+    assert.equal(protectedProfile.extension_group_id, extensions.id);
+    assert.equal(protectedProfile.wayfern_config.restore_session, false);
+    await app.invoke("verify_profile_password", {
+      profileId: protectedProfile.id,
+      password: "creation test password",
+    });
 
-      await openProfileCreation(app);
-      await app.fillSelector("#profile-name", "Ephemeral profile");
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#enable-password').getAttribute('aria-checked');`,
-        ),
-        "false",
-      );
-      await app.capture("profile-create-compact-narrow");
-      await app.clickText(en.createProfile.advancedOptions, {
-        roles: ["button"],
-      });
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#launch-hook-url').value;`,
-        ),
-        "",
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#profile-dns-blocklist').textContent.trim();`,
-        ),
-        en.dnsBlocklist.none,
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#profile-dns-server').value;`,
-        ),
-        "",
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#profile-extension-group').textContent.trim();`,
-        ),
-        en.profileInfo.values.none,
-      );
-      await app.capture("profile-create-advanced-narrow");
-      await app.clickText(en.createProfile.advancedOptions, {
-        roles: ["button"],
-      });
-      await app.clickSelector("#profile-proxy");
-      await app.fillSelector("[cmdk-input]", "Creation VPN");
-      await app.clickText(vpn.name, { exact: false, roles: ["option"] });
-      await app.clickSelector("#enable-password");
-      await app.fillSelector("#profile-password", "discarded password");
-      await app.clickSelector("#ephemeral");
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#enable-password').getAttribute('aria-checked');`,
-        ),
-        "false",
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#profile-password') === null;`,
-        ),
-        true,
-      );
-      await app.clickSelector("#enable-password");
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#ephemeral').getAttribute('aria-checked');`,
-        ),
-        "false",
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#profile-password').value;`,
-        ),
-        "",
-      );
-      await app.clickSelector("#ephemeral");
-      const ephemeral = await submitProfileCreation(app, "Ephemeral profile");
-      assert.ok(ephemeral);
-      assert.equal(ephemeral.ephemeral, true);
-      assert.equal(ephemeral.password_protected, false);
-      const ephemeralRequest = await app.execute(
-        `return window.__donutProfileRequests.at(-1);`,
-      );
-      assert.equal(ephemeralRequest.proxyId, undefined);
-      assert.equal(ephemeralRequest.vpnId, vpn.id);
-      assert.equal(ephemeral.launch_hook, null);
-    },
-    { seedDownloadedBrowser: true },
-  );
+    await openProfileCreation(app);
+    await app.fillSelector("#profile-name", "Ephemeral profile");
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#enable-password').getAttribute('aria-checked');`,
+      ),
+      "false",
+    );
+    await app.capture("profile-create-compact-narrow");
+    await app.clickText(en.createProfile.advancedOptions, {
+      roles: ["button"],
+    });
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#launch-hook-url').value;`,
+      ),
+      "",
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#profile-dns-blocklist').textContent.trim();`,
+      ),
+      en.dnsBlocklist.none,
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#profile-dns-server').value;`,
+      ),
+      "",
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#profile-extension-group').textContent.trim();`,
+      ),
+      en.profileInfo.values.none,
+    );
+    await app.capture("profile-create-advanced-narrow");
+    await app.clickText(en.createProfile.advancedOptions, {
+      roles: ["button"],
+    });
+    await app.clickSelector("#profile-proxy");
+    await app.fillSelector("[cmdk-input]", "Creation VPN");
+    await app.clickText(vpn.name, { exact: false, roles: ["option"] });
+    await app.clickSelector("#enable-password");
+    await app.fillSelector("#profile-password", "discarded password");
+    await app.clickSelector("#ephemeral");
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#enable-password').getAttribute('aria-checked');`,
+      ),
+      "false",
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#profile-password') === null;`,
+      ),
+      true,
+    );
+    await app.clickSelector("#enable-password");
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#ephemeral').getAttribute('aria-checked');`,
+      ),
+      "false",
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#profile-password').value;`,
+      ),
+      "",
+    );
+    await app.clickSelector("#ephemeral");
+    const ephemeral = await submitProfileCreation(app, "Ephemeral profile");
+    assert.ok(ephemeral);
+    assert.equal(ephemeral.ephemeral, true);
+    assert.equal(ephemeral.password_protected, false);
+    const ephemeralRequest = await app.execute(
+      `return window.__donutProfileRequests.at(-1);`,
+    );
+    assert.equal(ephemeralRequest.proxyId, undefined);
+    assert.equal(ephemeralRequest.vpnId, vpn.id);
+    assert.equal(ephemeral.launch_hook, null);
+  });
 });
 
 test("a found update waits while automatic updates are off; on, it downloads by itself and offers a restart", async () => {
@@ -758,13 +747,6 @@ test("the open-link dialog names the link, lists the profiles, and opens the cho
       ]) {
         await createUiProfile(app, name);
       }
-      await app.waitFor(
-        async () =>
-          (await app.execute(
-            `return document.querySelectorAll("tbody tr").length;`,
-          )) === 6,
-        { description: "the table lists six profiles" },
-      );
       await app.invoke("plugin:event|emit", {
         event: "show-profile-selector",
         payload: "https://example.org/",
@@ -794,29 +776,27 @@ test("the open-link dialog names the link, lists the profiles, and opens the cho
 });
 
 test("profile table filters, range selection, view settings, and keyboard edits work together", async () => {
-  await withApp(
-    "ui-table-controls",
-    async (app) => {
-      await app.session.command("POST", "/window/rect", {
-        width: 1480,
-        height: 900,
-      });
-      const profiles = [];
-      for (let i = 0; i < 32; i++)
-        profiles.push(
-          await createUiProfile(app, `Table ${String(i + 1).padStart(2, "0")}`),
-        );
-      for (const profile of profiles.slice(0, 2))
-        await app.invoke("update_profile_tags", {
-          profileId: profile.id,
-          tags: ["table-work"],
-        });
-      await app.waitFor(
-        async () => (await tableRows(app, "profiles")).length >= 4,
-        { description: "profile table rows" },
+  await withApp("ui-table-controls", async (app) => {
+    await app.session.command("POST", "/window/rect", {
+      width: 1480,
+      height: 900,
+    });
+    const profiles = [];
+    for (let i = 0; i < 32; i++)
+      profiles.push(
+        await createUiProfile(app, `Table ${String(i + 1).padStart(2, "0")}`),
       );
-      const chrome = await app.execute(
-        `
+    for (const profile of profiles.slice(0, 2))
+      await app.invoke("update_profile_tags", {
+        profileId: profile.id,
+        tags: ["table-work"],
+      });
+    await app.waitFor(
+      async () => (await tableRows(app, "profiles")).length >= 4,
+      { description: "profile table rows" },
+    );
+    const chrome = await app.execute(
+      `
         const root = document.querySelector('[data-table-id="profiles"]');
         const border = (node) => getComputedStyle(node).borderTopWidth;
         const filters = [...root.querySelectorAll('[data-slot="table-filters"] button')]
@@ -831,131 +811,131 @@ test("profile table filters, range selection, view settings, and keyboard edits 
             .filter((cell) => parseFloat(getComputedStyle(cell).borderBottomWidth) > 0).length,
         };
       `,
-        [en.tables.filters],
-      );
-      assert.deepEqual(chrome.controls, ["0px", "0px", "0px"]);
-      assert.equal(chrome.rowRules, 0, "rows are not divided by rules");
-      assert.deepEqual(
-        await offCenterSelectionControls(app, '[data-table-id="profiles"]'),
-        [],
-      );
-      const row = (index) => `tr[data-table-row="${profiles[index].id}"]`;
-      // A new profile is scrolled into view, so the last of the 32 leaves the
-      // table at its end. Scroll back to the first row.
-      await app.waitFor(
-        () =>
-          app.execute(
-            `
+      [en.tables.filters],
+    );
+    assert.deepEqual(chrome.controls, ["0px", "0px", "0px"]);
+    assert.equal(chrome.rowRules, 0, "rows are not divided by rules");
+    assert.deepEqual(
+      await offCenterSelectionControls(app, '[data-table-id="profiles"]'),
+      [],
+    );
+    const row = (index) => `tr[data-table-row="${profiles[index].id}"]`;
+    // A new profile is scrolled into view, so the last of the 32 leaves the
+    // table at its end. Scroll back to the first row.
+    await app.waitFor(
+      () =>
+        app.execute(
+          `
             const root = document.querySelector('[data-table-id="profiles"]');
             if (root?.querySelector('table')?.getAttribute('aria-rowcount') !== "33") return false;
             root.querySelector('.scroll-fade').scrollTop = 0;
             return Boolean(root.querySelector(arguments[0]));
           `,
-            [row(0)],
-          ),
-        { description: "the first profile row in view" },
-      );
-      await app.clickSelector(`${row(0)} [role="checkbox"]`);
-      await tableShiftClick(app, `${row(3)} [role="checkbox"]`);
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelectorAll('tr[data-table-row][aria-selected="true"]').length === 4;`,
-          ),
-        { description: "Shift-click selects four rows" },
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('[data-table-id="profiles"] thead [role="checkbox"]').getAttribute('data-state');`,
+          [row(0)],
         ),
-        "indeterminate",
-      );
-      assert.match(
-        await app.execute(
-          `return document.querySelector('[data-slot="table-action-bar"]').textContent;`,
-        ),
-        /4/,
-      );
-      const searchSelector = `input[placeholder="${en.header.searchPlaceholder}"]`;
-      // Quoted: an unquoted "02" is its own term, which also prefix-matches
-      // any profile whose random id starts with 02.
-      await app.fillSelector(searchSelector, '"Table 02"');
-      await app.waitFor(
-        async () =>
-          JSON.stringify(await tableRows(app, "profiles")) ===
-          JSON.stringify([profiles[1].id]),
-        { description: "profile text search" },
-      );
-      // The selection outlives the search; the bar counts what it hides.
-      assert.ok(
-        (
-          await app.execute(
-            `return document.querySelector('[data-slot="table-action-bar"]')?.textContent ?? "";`,
-          )
-        ).includes(
-          en.dataTableActionBar.selectedHidden
-            .replace("{{selected}}", "4")
-            .replace("{{hidden}}", "3"),
-        ),
-        "the bar counts the selected rows the search hides",
-      );
-      await app.clickSelector(
-        `[data-slot="table-action-bar"] [aria-label="${en.dataTableActionBar.clearSelection}"]`,
-      );
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return !document.querySelector('[data-slot="table-action-bar"]');`,
-          ),
-        { description: "clearing the selection removes the bar" },
-      );
-      const searchValue = () =>
-        app.execute("return document.querySelector(arguments[0]).value;", [
-          searchSelector,
-        ]);
-      const searchGhost = () =>
+      { description: "the first profile row in view" },
+    );
+    await app.clickSelector(`${row(0)} [role="checkbox"]`);
+    await tableShiftClick(app, `${row(3)} [role="checkbox"]`);
+    await app.waitFor(
+      () =>
         app.execute(
-          `return document.querySelector('[data-slot="profile-search-ghost"]')?.textContent ?? "";`,
-        );
-      const suggestionsOpen = () =>
+          `return document.querySelectorAll('tr[data-table-row][aria-selected="true"]').length === 4;`,
+        ),
+      { description: "Shift-click selects four rows" },
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('[data-table-id="profiles"] thead [role="checkbox"]').getAttribute('data-state');`,
+      ),
+      "indeterminate",
+    );
+    assert.match(
+      await app.execute(
+        `return document.querySelector('[data-slot="table-action-bar"]').textContent;`,
+      ),
+      /4/,
+    );
+    const searchSelector = `input[placeholder="${en.header.searchPlaceholder}"]`;
+    // Quoted: an unquoted "02" is its own term, which also prefix-matches
+    // any profile whose random id starts with 02.
+    await app.fillSelector(searchSelector, '"Table 02"');
+    await app.waitFor(
+      async () =>
+        JSON.stringify(await tableRows(app, "profiles")) ===
+        JSON.stringify([profiles[1].id]),
+      { description: "profile text search" },
+    );
+    // The selection outlives the search; the bar counts what it hides.
+    assert.ok(
+      (
+        await app.execute(
+          `return document.querySelector('[data-slot="table-action-bar"]')?.textContent ?? "";`,
+        )
+      ).includes(
+        en.dataTableActionBar.selectedHidden
+          .replace("{{selected}}", "4")
+          .replace("{{hidden}}", "3"),
+      ),
+      "the bar counts the selected rows the search hides",
+    );
+    await app.clickSelector(
+      `[data-slot="table-action-bar"] [aria-label="${en.dataTableActionBar.clearSelection}"]`,
+    );
+    await app.waitFor(
+      () =>
         app.execute(
-          `return Boolean(document.querySelector('[data-slot="profile-search-suggestions"]'));`,
-        );
-      await app.clickSelector(`[aria-label="${en.header.clearSearch}"]`);
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelectorAll('[data-slot="profile-search-suggestions"] [role="option"][data-suggestion-kind="example"]').length === arguments[0];`,
-            [3],
-          ),
-        { description: "an emptied search lists example queries" },
+          `return !document.querySelector('[data-slot="table-action-bar"]');`,
+        ),
+      { description: "clearing the selection removes the bar" },
+    );
+    const searchValue = () =>
+      app.execute("return document.querySelector(arguments[0]).value;", [
+        searchSelector,
+      ]);
+    const searchGhost = () =>
+      app.execute(
+        `return document.querySelector('[data-slot="profile-search-ghost"]')?.textContent ?? "";`,
       );
-      await app.pressShortcut({ key: "\uE00C" });
-      await app.waitFor(async () => !(await suggestionsOpen()), {
-        description: "Escape closes the suggestions",
-      });
+    const suggestionsOpen = () =>
+      app.execute(
+        `return Boolean(document.querySelector('[data-slot="profile-search-suggestions"]'));`,
+      );
+    await app.clickSelector(`[aria-label="${en.header.clearSearch}"]`);
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelectorAll('[data-slot="profile-search-suggestions"] [role="option"][data-suggestion-kind="example"]').length === arguments[0];`,
+          [3],
+        ),
+      { description: "an emptied search lists example queries" },
+    );
+    await app.pressShortcut({ key: "\uE00C" });
+    await app.waitFor(async () => !(await suggestionsOpen()), {
+      description: "Escape closes the suggestions",
+    });
 
-      // Ghost completion: a field name, then a value from the profiles' tags.
-      await app.fillSelector(searchSelector, "ta");
-      await app.waitFor(async () => (await searchGhost()) === "g:", {
-        description: "field name ghost text",
-      });
-      await app.pressShortcut({ key: "\uE004" });
-      await app.waitFor(async () => (await searchValue()) === "tag:", {
-        description: "Tab accepts the field name",
-      });
-      await app.waitFor(async () => (await searchGhost()) === "table-work", {
-        description: "tag value ghost text",
-      });
-      await app.pressShortcut({ key: "\uE004" });
-      await app.waitFor(
-        async () =>
-          (await searchValue()) === "tag:table-work " &&
-          (await tableRows(app, "profiles")).length === 2,
-        { description: "Tab accepts the tag value" },
-      );
-      const highlight = await app.execute(
-        `
+    // Ghost completion: a field name, then a value from the profiles' tags.
+    await app.fillSelector(searchSelector, "ta");
+    await app.waitFor(async () => (await searchGhost()) === "g:", {
+      description: "field name ghost text",
+    });
+    await app.pressShortcut({ key: "\uE004" });
+    await app.waitFor(async () => (await searchValue()) === "tag:", {
+      description: "Tab accepts the field name",
+    });
+    await app.waitFor(async () => (await searchGhost()) === "table-work", {
+      description: "tag value ghost text",
+    });
+    await app.pressShortcut({ key: "\uE004" });
+    await app.waitFor(
+      async () =>
+        (await searchValue()) === "tag:table-work " &&
+        (await tableRows(app, "profiles")).length === 2,
+      { description: "Tab accepts the tag value" },
+    );
+    const highlight = await app.execute(
+      `
         const input = document.querySelector(arguments[0]);
         const layer = document.querySelector('[data-slot="profile-search-highlight"]');
         const field = [...layer.children].find((node) => node.textContent === "tag:");
@@ -966,277 +946,268 @@ test("profile table filters, range selection, view settings, and keyboard edits 
           value: getComputedStyle([...layer.children].find((node) => node.textContent === "table-work")).color,
         };
       `,
-        [searchSelector],
-      );
-      assert.equal(highlight.mirrored, true, "the highlight mirrors the input");
-      assert.equal(highlight.inputText, "rgba(0, 0, 0, 0)");
-      assert.ok(highlight.field, "the field name is its own span");
-      assert.notEqual(
-        highlight.field,
-        highlight.value,
-        "field and value differ",
-      );
-      assert.equal(
-        await suggestionsOpen(),
-        false,
-        "a finished term closes the list",
-      );
+      [searchSelector],
+    );
+    assert.equal(highlight.mirrored, true, "the highlight mirrors the input");
+    assert.equal(highlight.inputText, "rgba(0, 0, 0, 0)");
+    assert.ok(highlight.field, "the field name is its own span");
+    assert.notEqual(highlight.field, highlight.value, "field and value differ");
+    assert.equal(
+      await suggestionsOpen(),
+      false,
+      "a finished term closes the list",
+    );
 
-      // Picking a value with the mouse, and with the arrow keys.
-      await app.fillSelector(searchSelector, "tag:");
-      const option =
-        '[data-slot="profile-search-suggestions"] [role="option"][data-suggestion="table-work"]';
-      await app.waitFor(
-        () =>
-          app.execute(
-            "return document.querySelector(arguments[0])?.textContent === '2';",
-            [`${option} [data-slot="profile-search-count"]`],
+    // Picking a value with the mouse, and with the arrow keys.
+    await app.fillSelector(searchSelector, "tag:");
+    const option =
+      '[data-slot="profile-search-suggestions"] [role="option"][data-suggestion="table-work"]';
+    await app.waitFor(
+      () =>
+        app.execute(
+          "return document.querySelector(arguments[0])?.textContent === '2';",
+          [`${option} [data-slot="profile-search-count"]`],
+        ),
+      { description: "tag value with its profile count" },
+    );
+    await app.clickSelector(option);
+    await app.waitFor(
+      async () =>
+        (await searchValue()) === "tag:table-work " &&
+        (await tableRows(app, "profiles")).length === 2,
+      { description: "a clicked suggestion fills the value" },
+    );
+    await app.fillSelector(searchSelector, "tag:");
+    await app.waitFor(suggestionsOpen, { description: "tag values listed" });
+    await app.pressShortcut({ key: "\uE015" });
+    await app.waitFor(
+      () =>
+        app.execute(
+          "return document.getElementById(document.querySelector(arguments[0]).getAttribute('aria-activedescendant'))?.dataset.suggestion === 'table-work';",
+          [searchSelector],
+        ),
+      { description: "ArrowDown chooses the first value" },
+    );
+    await app.pressShortcut({ key: "\uE007" });
+    await app.waitFor(async () => (await searchValue()) === "tag:table-work ", {
+      description: "Enter accepts the chosen suggestion",
+    });
+
+    // A value the field cannot take is explained in the list.
+    await app.fillSelector(searchSelector, "os:solaris");
+    await app.waitFor(
+      () =>
+        app
+          .execute(
+            `return document.querySelector('[data-slot="profile-search-issue"]')?.textContent ?? "";`,
+          )
+          .then(
+            (text) =>
+              text ===
+              en.search.issues.enum
+                .replace("{{field}}", "os:")
+                .replace("{{values}}", "macos, windows, linux"),
           ),
-        { description: "tag value with its profile count" },
+      { description: "an invalid enum value explains itself" },
+    );
+
+    // The syntax help inserts a field where the caret is.
+    await app.clickSelector(`[aria-label="${en.header.clearSearch}"]`);
+    await app.clickSelector(`[aria-label="${en.search.helpLabel}"]`);
+    await app.clickSelector(
+      '[data-slot="profile-search-help"] [data-search-field="group"]',
+    );
+    await app.waitFor(
+      async () =>
+        (await searchValue()) === "group:" &&
+        (await app.execute(
+          "return document.activeElement === document.querySelector(arguments[0]);",
+          [searchSelector],
+        )),
+      { description: "the help inserts a field and returns to the box" },
+    );
+    await app.clickSelector(`[aria-label="${en.header.clearSearch}"]`);
+    await app.pressShortcut({ key: "\uE00C" });
+    await app.clickTextIn(
+      '[data-table-id="profiles"] [data-slot="table-filters"]',
+      en.tables.filters,
+      { roles: ["button"] },
+    );
+    await app.clickSelector(
+      `[cmdk-item][data-value="${en.profileTable.tagsHeader} table-work"]`,
+    );
+    await app.pressShortcut({ key: "Escape" });
+    await app.waitFor(
+      async () => (await tableRows(app, "profiles")).length === 2,
+      { description: "visible tag filter" },
+    );
+    assert.match(
+      await app.execute(
+        `return document.querySelector('[data-slot="table-result-count"]').textContent;`,
+      ),
+      /2.*32/,
+    );
+    await app.clickTextIn(
+      '[data-table-id="profiles"] [data-slot="table-filters"]',
+      en.tables.clearFilters,
+      { roles: ["button"] },
+    );
+
+    await app.clickSelector(
+      '[data-table-id="profiles"] [data-slot="table-sort-trigger"]',
+    );
+    await app.clickText(en.tables.addSort, { roles: ["button"] });
+    await app.clickSelector(
+      `[data-sort-index="1"] button[aria-label="${en.tables.moveSortUp}"]`,
+    );
+    await app.pressShortcut({ key: "Escape" });
+    await app.waitFor(
+      async () =>
+        (await app.invoke("get_table_preferences", { tableId: "profiles" }))
+          .sorting[0].id === "created_at",
+      { description: "ordered sort rules saved" },
+    );
+    assert.match(
+      await app.execute(
+        `return document.querySelector('[data-slot="table-sort-trigger"]').textContent;`,
+      ),
+      new RegExp(en.search.fields.created),
+    );
+
+    await app.clickSelector(
+      '[data-table-id="profiles"] [data-slot="table-view-trigger"]',
+    );
+    await app.clickSelector("#table-visible-profiles-note");
+    await app.clickSelector(`[aria-label="${en.tables.rowHeight}"]`);
+    await app.clickText(en.tables.comfortable, { roles: ["option"] });
+    await app.pressShortcut({ key: "Escape" });
+    await app.waitFor(
+      async () =>
+        (await app.invoke("get_table_preferences", { tableId: "profiles" }))
+          .density === "comfortable",
+      { description: "comfortable rows saved" },
+    );
+    assert.equal(
+      await app.execute(
+        `return Boolean(document.querySelector('[data-table-column="note"]'));`,
+      ),
+      false,
+    );
+    assert.equal(
+      await app.execute(
+        `return Math.round(document.querySelector('tr[data-table-row]').getBoundingClientRect().height);`,
+      ),
+      48,
+    );
+    const resizeName = `[data-table-id="profiles"] [role="separator"][aria-label="${en.tables.resizeColumn.replace("{{column}}", en.common.labels.name)}"]`;
+    const columnWidth = () =>
+      app.execute(
+        `return document.querySelector(arguments[0]).parentElement.getBoundingClientRect().width;`,
+        [resizeName],
       );
-      await app.clickSelector(option);
-      await app.waitFor(
-        async () =>
-          (await searchValue()) === "tag:table-work " &&
-          (await tableRows(app, "profiles")).length === 2,
-        { description: "a clicked suggestion fills the value" },
-      );
-      await app.fillSelector(searchSelector, "tag:");
-      await app.waitFor(suggestionsOpen, { description: "tag values listed" });
+    const initialWidth = await columnWidth();
+    await app.execute(`document.querySelector(arguments[0]).focus();`, [
+      resizeName,
+    ]);
+    await app.pressShortcut({ key: "\uE014" });
+    await app.waitFor(
+      async () =>
+        (await app.invoke("get_table_preferences", { tableId: "profiles" }))
+          .sizing.name > 48,
+      { description: "keyboard column resize saved" },
+    );
+    const saved = await app.invoke("get_table_preferences", {
+      tableId: "profiles",
+    });
+    assert.ok(Math.abs((await columnWidth()) - initialWidth - 16) < 2);
+    assert.ok(Math.abs((await columnWidth()) - saved.sizing.name) < 2);
+    await app.capture("table-controls-wide");
+    await app.restart();
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelector('tr[data-table-row]')?.getBoundingClientRect().height === 48;`,
+        ),
+      { description: "saved view restored after restart" },
+    );
+    assert.deepEqual(
+      await app.invoke("get_table_preferences", { tableId: "profiles" }),
+      saved,
+    );
+    assert.ok(Math.abs((await columnWidth()) - saved.sizing.name) < 2);
+
+    await app.clickSelector(
+      '[data-table-id="profiles"] [data-slot="table-view-trigger"]',
+    );
+    await app.clickText(en.tables.resetView, { roles: ["button"] });
+    await app.pressShortcut({ key: "Escape" });
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelector('tr[data-table-row]')?.getBoundingClientRect().height === 36;`,
+        ),
+      { description: "default view restored" },
+    );
+    await app.session.command("POST", "/window/rect", {
+      width: 1280,
+      height: 500,
+    });
+    await app.waitFor(
+      () =>
+        app.execute(`return !document.querySelector(arguments[0]);`, [row(24)]),
+      { description: "keyboard target starts outside the rendered rows" },
+    );
+    await app.execute(`document.querySelector(arguments[0]).focus();`, [
+      `${row(0)} [data-table-column="name"]`,
+    ]);
+    for (let i = 0; i < 24; i++) {
       await app.pressShortcut({ key: "\uE015" });
       await app.waitFor(
         () =>
           app.execute(
-            "return document.getElementById(document.querySelector(arguments[0]).getAttribute('aria-activedescendant'))?.dataset.suggestion === 'table-work';",
-            [searchSelector],
-          ),
-        { description: "ArrowDown chooses the first value" },
-      );
-      await app.pressShortcut({ key: "\uE007" });
-      await app.waitFor(
-        async () => (await searchValue()) === "tag:table-work ",
-        {
-          description: "Enter accepts the chosen suggestion",
-        },
-      );
-
-      // A value the field cannot take is explained in the list.
-      await app.fillSelector(searchSelector, "os:solaris");
-      await app.waitFor(
-        () =>
-          app
-            .execute(
-              `return document.querySelector('[data-slot="profile-search-issue"]')?.textContent ?? "";`,
-            )
-            .then(
-              (text) =>
-                text ===
-                en.search.issues.enum
-                  .replace("{{field}}", "os:")
-                  .replace("{{values}}", "macos, windows, linux"),
-            ),
-        { description: "an invalid enum value explains itself" },
-      );
-
-      // The syntax help inserts a field where the caret is.
-      await app.clickSelector(`[aria-label="${en.header.clearSearch}"]`);
-      await app.clickSelector(`[aria-label="${en.search.helpLabel}"]`);
-      await app.clickSelector(
-        '[data-slot="profile-search-help"] [data-search-field="group"]',
-      );
-      await app.waitFor(
-        async () =>
-          (await searchValue()) === "group:" &&
-          (await app.execute(
-            "return document.activeElement === document.querySelector(arguments[0]);",
-            [searchSelector],
-          )),
-        { description: "the help inserts a field and returns to the box" },
-      );
-      await app.clickSelector(`[aria-label="${en.header.clearSearch}"]`);
-      await app.pressShortcut({ key: "\uE00C" });
-      await app.clickTextIn(
-        '[data-table-id="profiles"] [data-slot="table-filters"]',
-        en.tables.filters,
-        { roles: ["button"] },
-      );
-      await app.clickSelector(
-        `[cmdk-item][data-value="${en.profileTable.tagsHeader} table-work"]`,
-      );
-      await app.pressShortcut({ key: "Escape" });
-      await app.waitFor(
-        async () => (await tableRows(app, "profiles")).length === 2,
-        { description: "visible tag filter" },
-      );
-      assert.match(
-        await app.execute(
-          `return document.querySelector('[data-slot="table-result-count"]').textContent;`,
-        ),
-        /2.*32/,
-      );
-      await app.clickTextIn(
-        '[data-table-id="profiles"] [data-slot="table-filters"]',
-        en.tables.clearFilters,
-        { roles: ["button"] },
-      );
-
-      await app.clickSelector(
-        '[data-table-id="profiles"] [data-slot="table-sort-trigger"]',
-      );
-      await app.clickText(en.tables.addSort, { roles: ["button"] });
-      await app.clickSelector(
-        `[data-sort-index="1"] button[aria-label="${en.tables.moveSortUp}"]`,
-      );
-      await app.pressShortcut({ key: "Escape" });
-      await app.waitFor(
-        async () =>
-          (await app.invoke("get_table_preferences", { tableId: "profiles" }))
-            .sorting[0].id === "created_at",
-        { description: "ordered sort rules saved" },
-      );
-      assert.match(
-        await app.execute(
-          `return document.querySelector('[data-slot="table-sort-trigger"]').textContent;`,
-        ),
-        new RegExp(en.search.fields.created),
-      );
-
-      await app.clickSelector(
-        '[data-table-id="profiles"] [data-slot="table-view-trigger"]',
-      );
-      await app.clickSelector("#table-visible-profiles-note");
-      await app.clickSelector(`[aria-label="${en.tables.rowHeight}"]`);
-      await app.clickText(en.tables.comfortable, { roles: ["option"] });
-      await app.pressShortcut({ key: "Escape" });
-      await app.waitFor(
-        async () =>
-          (await app.invoke("get_table_preferences", { tableId: "profiles" }))
-            .density === "comfortable",
-        { description: "comfortable rows saved" },
-      );
-      assert.equal(
-        await app.execute(
-          `return Boolean(document.querySelector('[data-table-column="note"]'));`,
-        ),
-        false,
-      );
-      assert.equal(
-        await app.execute(
-          `return Math.round(document.querySelector('tr[data-table-row]').getBoundingClientRect().height);`,
-        ),
-        48,
-      );
-      const resizeName = `[data-table-id="profiles"] [role="separator"][aria-label="${en.tables.resizeColumn.replace("{{column}}", en.common.labels.name)}"]`;
-      const columnWidth = () =>
-        app.execute(
-          `return document.querySelector(arguments[0]).parentElement.getBoundingClientRect().width;`,
-          [resizeName],
-        );
-      const initialWidth = await columnWidth();
-      await app.execute(`document.querySelector(arguments[0]).focus();`, [
-        resizeName,
-      ]);
-      await app.pressShortcut({ key: "\uE014" });
-      await app.waitFor(
-        async () =>
-          (await app.invoke("get_table_preferences", { tableId: "profiles" }))
-            .sizing.name > 48,
-        { description: "keyboard column resize saved" },
-      );
-      const saved = await app.invoke("get_table_preferences", {
-        tableId: "profiles",
-      });
-      assert.ok(Math.abs((await columnWidth()) - initialWidth - 16) < 2);
-      assert.ok(Math.abs((await columnWidth()) - saved.sizing.name) < 2);
-      await app.capture("table-controls-wide");
-      await app.restart();
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelector('tr[data-table-row]')?.getBoundingClientRect().height === 48;`,
-          ),
-        { description: "saved view restored after restart" },
-      );
-      assert.deepEqual(
-        await app.invoke("get_table_preferences", { tableId: "profiles" }),
-        saved,
-      );
-      assert.ok(Math.abs((await columnWidth()) - saved.sizing.name) < 2);
-
-      await app.clickSelector(
-        '[data-table-id="profiles"] [data-slot="table-view-trigger"]',
-      );
-      await app.clickText(en.tables.resetView, { roles: ["button"] });
-      await app.pressShortcut({ key: "Escape" });
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelector('tr[data-table-row]')?.getBoundingClientRect().height === 36;`,
-          ),
-        { description: "default view restored" },
-      );
-      await app.session.command("POST", "/window/rect", {
-        width: 1280,
-        height: 500,
-      });
-      await app.waitFor(
-        () =>
-          app.execute(`return !document.querySelector(arguments[0]);`, [
-            row(24),
-          ]),
-        { description: "keyboard target starts outside the rendered rows" },
-      );
-      await app.execute(`document.querySelector(arguments[0]).focus();`, [
-        `${row(0)} [data-table-column="name"]`,
-      ]);
-      for (let i = 0; i < 24; i++) {
-        await app.pressShortcut({ key: "\uE015" });
-        await app.waitFor(
-          () =>
-            app.execute(
-              `return document.activeElement?.closest('tr')?.dataset.tableRow === arguments[0];`,
-              [profiles[i + 1].id],
-            ),
-          { description: `keyboard row ${i + 2}` },
-        );
-      }
-      await app.waitFor(
-        () =>
-          app.execute(
             `return document.activeElement?.closest('tr')?.dataset.tableRow === arguments[0];`,
-            [profiles[24].id],
+            [profiles[i + 1].id],
           ),
-        { description: "keyboard crosses the virtual row boundary" },
+        { description: `keyboard row ${i + 2}` },
       );
-      await app.pressShortcut({ key: "\uE032" });
-      await app.fillSelector(`${row(24)} input`, "Table renamed by keyboard");
-      await app.pressShortcut({ key: "\uE006" });
-      await app.waitFor(
-        async () =>
-          (await app.invoke("list_browser_profiles")).find(
-            (profile) => profile.id === profiles[24].id,
-          )?.name === "Table renamed by keyboard",
-        { description: "F2 edit saved through the backend" },
-      );
-      await app.session.command("POST", "/window/rect", {
-        width: 640,
-        height: 600,
-      });
-      await app.capture("table-controls-narrow");
-      assert.equal(
-        await app.execute(
-          `return document.documentElement.scrollWidth <= innerWidth;`,
+    }
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.activeElement?.closest('tr')?.dataset.tableRow === arguments[0];`,
+          [profiles[24].id],
         ),
-        true,
-        "controls do not widen the window",
-      );
-      await app.clickSelector(
-        '[data-table-id="profiles"] thead [role="checkbox"]',
-      );
-      await app.waitFor(
-        () =>
-          app.execute(
-            `
+      { description: "keyboard crosses the virtual row boundary" },
+    );
+    await app.pressShortcut({ key: "\uE032" });
+    await app.fillSelector(`${row(24)} input`, "Table renamed by keyboard");
+    await app.pressShortcut({ key: "\uE006" });
+    await app.waitFor(
+      async () =>
+        (await app.invoke("list_browser_profiles")).find(
+          (profile) => profile.id === profiles[24].id,
+        )?.name === "Table renamed by keyboard",
+      { description: "F2 edit saved through the backend" },
+    );
+    await app.session.command("POST", "/window/rect", {
+      width: 640,
+      height: 600,
+    });
+    await app.capture("table-controls-narrow");
+    assert.equal(
+      await app.execute(
+        `return document.documentElement.scrollWidth <= innerWidth;`,
+      ),
+      true,
+      "controls do not widen the window",
+    );
+    await app.clickSelector(
+      '[data-table-id="profiles"] thead [role="checkbox"]',
+    );
+    await app.waitFor(
+      () =>
+        app.execute(
+          `
             const scroll = document.querySelector('[data-table-id="profiles"] .scroll-fade');
             scroll.scrollTop = scroll.scrollHeight;
             const rows = [...scroll.querySelectorAll('tr[data-table-row]')];
@@ -1244,14 +1215,12 @@ test("profile table filters, range selection, view settings, and keyboard edits 
             return rows.at(-1)?.dataset.tableRow === arguments[0] &&
               rows.at(-1).getBoundingClientRect().bottom <= bar?.getBoundingClientRect().top - 4;
           `,
-            [profiles[24].id],
-          ),
-        { description: "last row clears the wrapped bulk action bar" },
-      );
-      await app.capture("table-controls-narrow-selection");
-    },
-    { seedDownloadedBrowser: true },
-  );
+          [profiles[24].id],
+        ),
+      { description: "last row clears the wrapped bulk action bar" },
+    );
+    await app.capture("table-controls-narrow-selection");
+  });
 });
 
 test("a proxy with a change-IP link offers Change IP on its row", async () => {
@@ -1901,82 +1870,73 @@ function assertQuietTint(painted, page, maximum, description) {
 }
 
 test("soft table and creation surfaces stay quiet and readable in every theme", async () => {
-  await withApp(
-    "ui-soft-surfaces",
-    async (app) => {
-      await app.session.command("POST", "/window/rect", {
-        width: 1280,
-        height: 860,
+  await withApp("ui-soft-surfaces", async (app) => {
+    await app.session.command("POST", "/window/rect", {
+      width: 1280,
+      height: 860,
+    });
+    const tagged = await createUiProfile(app, "Theme Alpha");
+    await createUiProfile(app, "Theme Beta");
+    await app.invoke("update_profile_tags", {
+      profileId: tagged.id,
+      tags: ["theme-tag"],
+    });
+    await app.waitFor(
+      async () => (await tableRows(app, "profiles")).length === 2,
+      { description: "theme table rows" },
+    );
+    await app.clickSelector(
+      `tr[data-table-row="${tagged.id}"] [role="checkbox"]`,
+    );
+    const table = '[data-table-id="profiles"]';
+    const captured = new Set(["dracula", "tokyo-night", "ayu-light"]);
+    for (const theme of THEMES) {
+      await applyThemeForContrastAudit(app, theme);
+      const colors = await paintedColors(app, {
+        header: [`${table} thead th`, en.profileTable.tagsHeader],
+        selected: [
+          `${table} tr[data-state="selected"] > td[data-table-column="name"]`,
+        ],
+        button: [`${table} [data-slot="table-view-trigger"]`],
+        tag: [`${table} tbody [data-slot="badge"]`, "theme-tag"],
       });
-      const tagged = await createUiProfile(app, "Theme Alpha");
-      await createUiProfile(app, "Theme Beta");
-      await app.invoke("update_profile_tags", {
-        profileId: tagged.id,
-        tags: ["theme-tag"],
-      });
-      await app.waitFor(
-        async () => (await tableRows(app, "profiles")).length === 2,
-        { description: "theme table rows" },
+      assert.ok(colors.page, `${theme.id} page colour`);
+      assertQuietTint(colors.header, colors.page, 1.35, `${theme.id} header`);
+      assertQuietTint(
+        colors.selected,
+        colors.page,
+        1.6,
+        `${theme.id} selected row`,
       );
-      await app.clickSelector(
-        `tr[data-table-row="${tagged.id}"] [role="checkbox"]`,
-      );
-      const table = '[data-table-id="profiles"]';
-      const captured = new Set(["dracula", "tokyo-night", "ayu-light"]);
-      for (const theme of THEMES) {
-        await applyThemeForContrastAudit(app, theme);
-        const colors = await paintedColors(app, {
-          header: [`${table} thead th`, en.profileTable.tagsHeader],
-          selected: [
-            `${table} tr[data-state="selected"] > td[data-table-column="name"]`,
-          ],
-          button: [`${table} [data-slot="table-view-trigger"]`],
-          tag: [`${table} tbody [data-slot="badge"]`, "theme-tag"],
-        });
-        assert.ok(colors.page, `${theme.id} page colour`);
-        assertQuietTint(colors.header, colors.page, 1.35, `${theme.id} header`);
-        assertQuietTint(
-          colors.selected,
-          colors.page,
-          1.6,
-          `${theme.id} selected row`,
-        );
-        assertQuietTint(colors.button, colors.page, 1.35, `${theme.id} button`);
-        assertQuietTint(colors.tag, colors.page, 1.4, `${theme.id} tag`);
-        if (captured.has(theme.id)) await app.capture(`table-${theme.id}`);
-      }
+      assertQuietTint(colors.button, colors.page, 1.35, `${theme.id} button`);
+      assertQuietTint(colors.tag, colors.page, 1.4, `${theme.id} tag`);
+      if (captured.has(theme.id)) await app.capture(`table-${theme.id}`);
+    }
 
-      await openProfileCreation(app);
-      await app.fillSelector("#profile-name", "Theme profile");
-      await app.clickSelector("#enable-password");
-      await app.fillSelector("#profile-password", "theme password");
-      for (const theme of THEMES) {
-        await applyThemeForContrastAudit(app, theme);
-        const colors = await paintedColors(app, {
-          off: ["#ephemeral"],
-          on: ["#enable-password"],
-          name: ['[data-slot="profile-name-field"]'],
-          password: ["#profile-password"],
-        });
-        assertQuietTint(colors.off, colors.page, 1.35, `${theme.id} option`);
-        assertQuietTint(
-          colors.on,
-          colors.page,
-          1.6,
-          `${theme.id} chosen option`,
-        );
-        assertQuietTint(colors.name, colors.page, 1.35, `${theme.id} name`);
-        assertQuietTint(
-          colors.password,
-          colors.page,
-          1.35,
-          `${theme.id} password field`,
-        );
-        if (captured.has(theme.id)) await app.capture(`creation-${theme.id}`);
-      }
-    },
-    { seedDownloadedBrowser: true },
-  );
+    await openProfileCreation(app);
+    await app.fillSelector("#profile-name", "Theme profile");
+    await app.clickSelector("#enable-password");
+    await app.fillSelector("#profile-password", "theme password");
+    for (const theme of THEMES) {
+      await applyThemeForContrastAudit(app, theme);
+      const colors = await paintedColors(app, {
+        off: ["#ephemeral"],
+        on: ["#enable-password"],
+        name: ['[data-slot="profile-name-field"]'],
+        password: ["#profile-password"],
+      });
+      assertQuietTint(colors.off, colors.page, 1.35, `${theme.id} option`);
+      assertQuietTint(colors.on, colors.page, 1.6, `${theme.id} chosen option`);
+      assertQuietTint(colors.name, colors.page, 1.35, `${theme.id} name`);
+      assertQuietTint(
+        colors.password,
+        colors.page,
+        1.35,
+        `${theme.id} password field`,
+      );
+      if (captured.has(theme.id)) await app.capture(`creation-${theme.id}`);
+    }
+  });
 });
 test("the integrations page ships only the Local API tab and never names remote control for a regular desktop", async () => {
   await withApp("ui-integrations", async (app) => {
@@ -3172,21 +3132,25 @@ test("first-run onboarding stays recoverable, responsive, and platform-aware", a
       await app.waitForText("Licensing");
       await app.clickText("I understand", { roles: ["button"] });
 
+      // The engine arrives by itself, so no step waits for it: licensing is
+      // followed by the microphone and camera step on a Mac that has not
+      // granted them, and by the product tour everywhere else.
       await app.waitFor(
         async () =>
-          /Allow microphone & camera|Setting things up|Setup failed/.test(
-            await app.bodyText(),
-          ),
+          (await app.bodyText()).includes(en.welcome.permissions.title) ||
+          (await tourState(app))?.step === "0",
         { description: "platform-appropriate onboarding step" },
       );
-      const body = await app.bodyText();
       if (process.platform !== "darwin") {
-        assert.doesNotMatch(body, /Allow microphone & camera/);
-        assert.match(body, /Setting things up|Setup failed/);
+        assert.equal(
+          await app.visibleTextIncludes(en.welcome.permissions.title),
+          false,
+        );
+        assert.equal((await tourState(app))?.step, "0");
       }
 
-      // Setup and the optional product tour are still unfinished, so a crash
-      // or restart must be able to resume onboarding.
+      // The optional product tour is still unfinished, so a crash or restart
+      // must be able to resume onboarding.
       assert.equal(await app.invoke("get_onboarding_completed"), false);
     },
     { onboardingCompleted: false },
@@ -3207,6 +3171,33 @@ async function tourState(app) {
   `);
 }
 
+test("an install without the engine yet opens straight to a usable app and says the engine is on its way", async () => {
+  await withApp(
+    "ui-engine-missing",
+    async (app) => {
+      const status = await app.invoke("get_engine_install_status");
+      assert.equal(status.installed, false);
+      await app.waitForText(en.profiles.empty);
+      assert.equal(
+        await app.execute(
+          `return document.querySelectorAll('[role="dialog"]').length;`,
+        ),
+        0,
+        "no dialog stands between the person and the app",
+      );
+      assert.equal(await app.visibleTextIncludes("Wayfern"), false);
+
+      await openProfileCreation(app);
+      await app.waitForText(en.createProfile.engine.preparing);
+      await app.fillSelector("#profile-name", "Before the engine");
+      const created = await submitProfileCreation(app, "Before the engine");
+      assert.ok(created, "a profile is created while the engine downloads");
+      assert.equal(created.wayfern_config.engine, "apostate");
+    },
+    { engine: "none" },
+  );
+});
+
 test("a new install walks from the welcome into a tour on the real controls", async () => {
   await withApp(
     "ui-onboarding-tour",
@@ -3217,12 +3208,13 @@ test("a new install walks from the welcome into a tour on the real controls", as
       await app.clickText(en.welcome.next, { roles: ["button"] });
       await app.waitForText(en.welcome.license.title);
       await app.clickText(en.welcome.license.agree, { roles: ["button"] });
-      // macOS asks for the microphone and camera unless they are granted.
+      // macOS asks for the microphone and camera unless they are granted;
+      // every other platform goes straight on to the tour.
       const next = await app.waitFor(
         async () => {
           const body = await app.bodyText();
           if (body.includes(en.welcome.permissions.title)) return "permissions";
-          if (body.includes(en.welcome.ready.title)) return "setup";
+          if ((await tourState(app))?.step === "0") return "tour";
           return null;
         },
         { description: "the step after licensing" },
@@ -3230,9 +3222,6 @@ test("a new install walks from the welcome into a tour on the real controls", as
       if (next === "permissions") {
         await app.clickText(en.welcome.permissions.skip, { roles: ["button"] });
       }
-      // The browser is registered already, so setup is ready at once.
-      await app.waitForText(en.welcome.ready.cta);
-      await app.clickText(en.welcome.ready.cta, { roles: ["button"] });
 
       // Step one dims the page around the New button and waits for a profile.
       const first = await app.waitFor(
@@ -3282,7 +3271,7 @@ test("a new install walks from the welcome into a tour on the real controls", as
         { description: "the tour gone after its exit" },
       );
     },
-    { onboardingCompleted: false, seedDownloadedBrowser: true },
+    { onboardingCompleted: false },
   );
 });
 
@@ -3292,8 +3281,6 @@ test("Escape skips the tour and still completes onboarding", async () => {
     async (app) => {
       await app.waitForText(en.welcome.title);
       await app.clickText(en.welcome.skip, { roles: ["button"] });
-      await app.waitForText(en.welcome.ready.cta);
-      await app.clickText(en.welcome.ready.cta, { roles: ["button"] });
       await app.waitFor(async () => (await tourState(app))?.step === "0", {
         description: "the tour",
       });
@@ -3314,7 +3301,7 @@ test("Escape skips the tour and still completes onboarding", async () => {
         "only a finished tour is celebrated",
       );
     },
-    { onboardingCompleted: false, seedDownloadedBrowser: true },
+    { onboardingCompleted: false },
   );
 });
 
@@ -3967,7 +3954,7 @@ test("a folder with no manifest fails with the translated reason, not a raw code
   });
 });
 
-test("scheduled recipes stay behind the plan, and a schedule is built from the form", async () => {
+test("a schedule is built from the form and a recipe runs on demand", async () => {
   await withApp(
     "ui-agent-schedules",
     async (app) => {
@@ -3986,6 +3973,23 @@ test("scheduled recipes stay behind the plan, and a schedule is built from the f
           proxyBandwidthUsedMb: 0,
           proxyBandwidthExtraMb: 0,
           isPrimaryDevice: true,
+          // Recipes and schedules wait for the agent engine, which the page
+          // shows only to an account the server flags for it (`agent`, never
+          // derived from the plan) while the mock answers for the engine.
+          entitlements: {
+            active: true,
+            browserAutomation: true,
+            crossOsFingerprints: true,
+            cloudBackup: true,
+            teamCollaboration: false,
+            cookieBot: true,
+            remoteInteractive: true,
+            remoteControl: true,
+            scheduledAutomation: true,
+            agent: true,
+            profileLimit: 50,
+            requestsPerHour: 100,
+          },
         },
       });
       await stubCommand(app, "get_mcp_remote_status", {
@@ -4034,20 +4038,6 @@ test("scheduled recipes stay behind the plan, and a schedule is built from the f
           payload: null,
         });
       };
-
-      // A plan without schedules never reaches the form.
-      await signIn("free");
-      await app.clickSelector(`[aria-label="${en.rail.agent}"]`);
-      await app.clickSelector('[data-testid="agent-tab-schedules"]');
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      assert.equal(
-        await app.execute(
-          `return !document.querySelector('[data-slot="agent-schedules"]');`,
-        ),
-        true,
-        "the schedules list is not shown without the plan",
-      );
-      await app.clickSelector(`[aria-label="${en.rail.profiles}"]`);
 
       await signIn("pro");
       // Turning paid opens the one-time welcome; close it first.
@@ -4154,278 +4144,274 @@ test("scheduled recipes stay behind the plan, and a schedule is built from the f
       assert.equal(run.recipeId, "r1");
       assert.equal(run.profileId, profile.id);
       assert.equal(run.target, "desktop", "a connected desktop runs it here");
+      // The tabs wait for the agent engine; the mock stands in for it here.
     },
-    { seedDownloadedBrowser: true },
+    { extraEnv: { DONUT_E2E_AGENT_ENGINE: "mock" } },
   );
 });
 
 test("a launcher seat opens the team's profiles but cannot change them, and an owner reads the team's log", async () => {
-  await withApp(
-    "ui-team-roles",
-    async (app) => {
-      const profile = await createUiProfile(app, "Team Profile");
-      const group = await app.invoke("create_profile_group", { name: "Shop" });
-      const calls = (command) =>
-        app.execute(
-          "return (window.__donutStubbedCalls ?? []).filter((c) => c.command === arguments[0]).map((c) => c.payload);",
-          [command],
-        );
-      const user = (teamRole) => ({
-        logged_in_at: new Date().toISOString(),
-        user: {
-          id: "ui-team-seat",
-          email: "seat@example.test",
-          plan: "team",
-          planPeriod: "monthly",
-          subscriptionStatus: "active",
-          profileLimit: 50,
-          cloudProfilesUsed: 0,
-          proxyBandwidthLimitMb: 0,
-          proxyBandwidthUsedMb: 0,
-          proxyBandwidthExtraMb: 0,
-          isPrimaryDevice: true,
-          teamId: "team-1",
-          teamName: "Shop team",
-          teamRole,
-        },
+  await withApp("ui-team-roles", async (app) => {
+    const profile = await createUiProfile(app, "Team Profile");
+    const group = await app.invoke("create_profile_group", { name: "Shop" });
+    const calls = (command) =>
+      app.execute(
+        "return (window.__donutStubbedCalls ?? []).filter((c) => c.command === arguments[0]).map((c) => c.payload);",
+        [command],
+      );
+    const user = (teamRole) => ({
+      logged_in_at: new Date().toISOString(),
+      user: {
+        id: "ui-team-seat",
+        email: "seat@example.test",
+        plan: "team",
+        planPeriod: "monthly",
+        subscriptionStatus: "active",
+        profileLimit: 50,
+        cloudProfilesUsed: 0,
+        proxyBandwidthLimitMb: 0,
+        proxyBandwidthUsedMb: 0,
+        proxyBandwidthExtraMb: 0,
+        isPrimaryDevice: true,
+        teamId: "team-1",
+        teamName: "Shop team",
+        teamRole,
+      },
+    });
+    const signIn = async (teamRole) => {
+      await stubCommand(app, "cloud_get_user", user(teamRole));
+      await app.invoke("plugin:event|emit", {
+        event: "cloud-auth-changed",
+        payload: null,
       });
-      const signIn = async (teamRole) => {
-        await stubCommand(app, "cloud_get_user", user(teamRole));
-        await app.invoke("plugin:event|emit", {
-          event: "cloud-auth-changed",
-          payload: null,
-        });
-      };
-      // A paid seat opens the one-time welcome; close it when it comes.
-      const closeWelcome = async () => {
-        const opened = await app
-          .waitFor(
-            () =>
-              app.execute(
-                `return Boolean(document.querySelector('[role="dialog"]'));`,
-              ),
-            { timeoutMs: 4000, description: "the paid welcome" },
-          )
-          .catch(() => false);
-        if (!opened) return;
-        await dismissSurface(app);
-        await app.waitFor(
+    };
+    // A paid seat opens the one-time welcome; close it when it comes.
+    const closeWelcome = async () => {
+      const opened = await app
+        .waitFor(
           () =>
-            app.execute(`return !document.querySelector('[role="dialog"]');`),
-          { description: "the welcome closed" },
-        );
-      };
-
-      const launcherSeat = path.join(app.root, "donut", "e2e-team-read-only");
-      await writeFile(launcherSeat, "");
-      await signIn("launcher");
-      await closeWelcome();
+            app.execute(
+              `return Boolean(document.querySelector('[role="dialog"]'));`,
+            ),
+          { timeoutMs: 4000, description: "the paid welcome" },
+        )
+        .catch(() => false);
+      if (!opened) return;
+      await dismissSurface(app);
       await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelector('[data-testid="team-read-only-notice"]')?.innerText ?? null;`,
-          ),
-        { description: "the launcher notice" },
+        () => app.execute(`return !document.querySelector('[role="dialog"]');`),
+        { description: "the welcome closed" },
       );
-      assert.equal(
-        await app.execute(
-          `return Boolean(document.querySelector('[data-tip-anchor="new-profile"]'));`,
+    };
+
+    const launcherSeat = path.join(app.root, "donut", "e2e-team-read-only");
+    await writeFile(launcherSeat, "");
+    await signIn("launcher");
+    await closeWelcome();
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelector('[data-testid="team-read-only-notice"]')?.innerText ?? null;`,
         ),
-        false,
-        "a launcher is not offered a new profile",
-      );
-      await app.capture("team-launcher-profiles");
+      { description: "the launcher notice" },
+    );
+    assert.equal(
+      await app.execute(
+        `return Boolean(document.querySelector('[data-tip-anchor="new-profile"]'));`,
+      ),
+      false,
+      "a launcher is not offered a new profile",
+    );
+    await app.capture("team-launcher-profiles");
 
-      // The app refuses the edit itself; the profile stays as the team set it.
-      assert.match(
-        await app.invokeError("rename_profile", {
-          profileId: profile.id,
-          newName: "Renamed by a launcher",
-        }),
-        /"code":"TEAM_ROLE_READ_ONLY"/,
-      );
-      assert.match(
-        await app.invokeError("create_profile_group", { name: "Blocked" }),
-        /"code":"TEAM_ROLE_READ_ONLY"/,
-      );
-      const profiles = await app.invoke("list_browser_profiles");
-      assert.equal(
-        profiles.find((p) => p.id === profile.id)?.name,
-        "Team Profile",
-      );
+    // The app refuses the edit itself; the profile stays as the team set it.
+    assert.match(
+      await app.invokeError("rename_profile", {
+        profileId: profile.id,
+        newName: "Renamed by a launcher",
+      }),
+      /"code":"TEAM_ROLE_READ_ONLY"/,
+    );
+    assert.match(
+      await app.invokeError("create_profile_group", { name: "Blocked" }),
+      /"code":"TEAM_ROLE_READ_ONLY"/,
+    );
+    const profiles = await app.invoke("list_browser_profiles");
+    assert.equal(
+      profiles.find((p) => p.id === profile.id)?.name,
+      "Team Profile",
+    );
 
-      await stubCommand(app, "list_team_activity", {
-        items: [
-          {
-            id: 3,
-            at: new Date().toISOString(),
-            actor: {
-              userId: "u-admin",
-              email: "admin@example.test",
-              kind: "desktop",
-            },
-            action: "profile.update",
-            target: { type: "profile", id: profile.id, name: null },
-            detail: { fields: ["tags", "dns_server"] },
-            source: "client",
-          },
-          {
-            id: 2,
-            at: new Date(Date.now() - 60_000).toISOString(),
-            actor: {
-              userId: "u-launcher",
-              email: "launcher@example.test",
-              kind: "desktop",
-            },
-            action: "profile.launch",
-            target: { type: "profile", id: profile.id, name: null },
-            detail: null,
-            source: "server",
-          },
-          {
-            id: 1,
-            at: new Date(Date.now() - 120_000).toISOString(),
-            actor: {
-              userId: "u-launcher",
-              email: "launcher@example.test",
-              kind: "web",
-            },
-            action: "member.join",
-            target: { type: "member", id: "u-launcher", name: null },
-            detail: null,
-            source: "server",
-          },
-        ],
-        nextCursor: null,
-      });
-      await rm(launcherSeat);
-      await stubCommand(app, "list_team_members", [
+    await stubCommand(app, "list_team_activity", {
+      items: [
         {
-          userId: "ui-team-seat",
-          email: "seat@example.test",
-          role: "owner",
-          groupAccess: null,
+          id: 3,
+          at: new Date().toISOString(),
+          actor: {
+            userId: "u-admin",
+            email: "admin@example.test",
+            kind: "desktop",
+          },
+          action: "profile.update",
+          target: { type: "profile", id: profile.id, name: null },
+          detail: { fields: ["tags", "dns_server"] },
+          source: "client",
         },
         {
-          userId: "u-admin",
-          email: "admin@example.test",
-          role: "admin",
-          groupAccess: null,
+          id: 2,
+          at: new Date(Date.now() - 60_000).toISOString(),
+          actor: {
+            userId: "u-launcher",
+            email: "launcher@example.test",
+            kind: "desktop",
+          },
+          action: "profile.launch",
+          target: { type: "profile", id: profile.id, name: null },
+          detail: null,
+          source: "server",
         },
         {
-          userId: "u-launcher",
-          email: "launcher@example.test",
-          role: "launcher",
-          groupAccess: null,
+          id: 1,
+          at: new Date(Date.now() - 120_000).toISOString(),
+          actor: {
+            userId: "u-launcher",
+            email: "launcher@example.test",
+            kind: "web",
+          },
+          action: "member.join",
+          target: { type: "member", id: "u-launcher", name: null },
+          detail: null,
+          source: "server",
         },
-      ]);
-      await signIn("owner");
-      await closeWelcome();
-      await app.clickSelector(`[aria-label="${en.rail.account}"]`);
-      await app.clickText(en.account.tabs.teamActivity, { roles: ["tab"] });
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelectorAll('[data-testid="team-activity"] li').length === 3;`,
-          ),
-        { description: "the team's log" },
-      );
-      const rows = await app.execute(
-        `return [...document.querySelectorAll('[data-testid="team-activity"] li')].map((row) => row.innerText);`,
-      );
-      // An id in the log reads as the name this computer has for it.
-      assert.match(
-        rows[0],
-        new RegExp(
-          en.teamActivity.actions.profileUpdate.replace(
-            "{{target}}",
-            "Team Profile",
-          ),
-        ),
-      );
-      assert.match(rows[0], new RegExp(en.teamActivity.fields.dnsServer));
-      assert.match(rows[0], new RegExp(en.teamActivity.via.desktop));
-      assert.match(
-        rows[1],
-        new RegExp(
-          en.teamActivity.actions.profileLaunch.replace(
-            "{{target}}",
-            "Team Profile",
-          ),
-        ),
-      );
-      assert.match(rows[2], new RegExp(en.teamActivity.actions.memberJoin));
-      await app.capture("team-activity-log");
-
-      // A filter reads the log again, narrowed in the cloud.
-      await app.clickSelector('[data-testid="team-activity-member"]');
-      await app.clickText("launcher@example.test", { roles: ["option"] });
-      await app.waitFor(
-        async () =>
-          (await calls("list_team_activity")).some(
-            (payload) => payload?.filter?.actorUserId === "u-launcher",
-          ),
-        { description: "the log read for one member" },
-      );
-
-      // The export saves what the filters show.
-      await stubCommand(app, "plugin:dialog|save", "/tmp/team-activity.csv");
-      await stubCommand(app, "export_team_activity_csv", 3);
-      await app.clickSelector('[data-testid="team-activity-export"]');
-      await app.waitFor(
-        async () => (await calls("export_team_activity_csv")).length === 1,
-        { description: "the CSV export" },
-      );
-      const [exported] = await calls("export_team_activity_csv");
-      assert.equal(exported.path, "/tmp/team-activity.csv");
-      assert.equal(exported.filter.actorUserId, "u-launcher");
-
-      // Access by group: the owner limits the launcher to one group.
-      await app.clickText(en.account.tabs.teamAccess, { roles: ["tab"] });
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelectorAll('[data-testid="team-access"] li').length === 3;`,
-          ),
-        { description: "the team's members" },
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelectorAll('[data-member="ui-team-seat"] button').length;`,
-        ),
-        0,
-        "the owner is never limited",
-      );
-      await stubCommand(app, "set_team_member_access", {
+      ],
+      nextCursor: null,
+    });
+    await rm(launcherSeat);
+    await stubCommand(app, "list_team_members", [
+      {
+        userId: "ui-team-seat",
+        email: "seat@example.test",
+        role: "owner",
+        groupAccess: null,
+      },
+      {
+        userId: "u-admin",
+        email: "admin@example.test",
+        role: "admin",
+        groupAccess: null,
+      },
+      {
         userId: "u-launcher",
         email: "launcher@example.test",
         role: "launcher",
-        groupAccess: [group.id],
-      });
-      await app.clickSelector('[data-member="u-launcher"] button');
-      await app.clickSelector('label[for="access-some-u-launcher"]');
-      await app.clickSelector(`#access-u-launcher-${group.id}`);
-      await app.capture("team-access-editor");
-      await app.clickSelector('[data-testid="team-access-save"]');
-      await app.waitFor(
-        async () => (await calls("set_team_member_access")).length === 1,
-        { description: "the access sent to the cloud" },
-      );
-      const [access] = await calls("set_team_member_access");
-      assert.deepEqual(access, { userId: "u-launcher", groups: [group.id] });
-      await app.waitFor(
-        async () =>
-          (
-            await app.execute(
-              `return document.querySelector('[data-member="u-launcher"]')?.innerText ?? "";`,
-            )
-          ).includes(en.teamAccess.someGroups_one.replace("{{count}}", "1")),
-        { description: "the new access on the row" },
-      );
-      await dismissSurface(app);
-    },
-    { seedDownloadedBrowser: true },
-  );
+        groupAccess: null,
+      },
+    ]);
+    await signIn("owner");
+    await closeWelcome();
+    await app.clickSelector(`[aria-label="${en.rail.account}"]`);
+    await app.clickText(en.account.tabs.teamActivity, { roles: ["tab"] });
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelectorAll('[data-testid="team-activity"] li').length === 3;`,
+        ),
+      { description: "the team's log" },
+    );
+    const rows = await app.execute(
+      `return [...document.querySelectorAll('[data-testid="team-activity"] li')].map((row) => row.innerText);`,
+    );
+    // An id in the log reads as the name this computer has for it.
+    assert.match(
+      rows[0],
+      new RegExp(
+        en.teamActivity.actions.profileUpdate.replace(
+          "{{target}}",
+          "Team Profile",
+        ),
+      ),
+    );
+    assert.match(rows[0], new RegExp(en.teamActivity.fields.dnsServer));
+    assert.match(rows[0], new RegExp(en.teamActivity.via.desktop));
+    assert.match(
+      rows[1],
+      new RegExp(
+        en.teamActivity.actions.profileLaunch.replace(
+          "{{target}}",
+          "Team Profile",
+        ),
+      ),
+    );
+    assert.match(rows[2], new RegExp(en.teamActivity.actions.memberJoin));
+    await app.capture("team-activity-log");
+
+    // A filter reads the log again, narrowed in the cloud.
+    await app.clickSelector('[data-testid="team-activity-member"]');
+    await app.clickText("launcher@example.test", { roles: ["option"] });
+    await app.waitFor(
+      async () =>
+        (await calls("list_team_activity")).some(
+          (payload) => payload?.filter?.actorUserId === "u-launcher",
+        ),
+      { description: "the log read for one member" },
+    );
+
+    // The export saves what the filters show.
+    await stubCommand(app, "plugin:dialog|save", "/tmp/team-activity.csv");
+    await stubCommand(app, "export_team_activity_csv", 3);
+    await app.clickSelector('[data-testid="team-activity-export"]');
+    await app.waitFor(
+      async () => (await calls("export_team_activity_csv")).length === 1,
+      { description: "the CSV export" },
+    );
+    const [exported] = await calls("export_team_activity_csv");
+    assert.equal(exported.path, "/tmp/team-activity.csv");
+    assert.equal(exported.filter.actorUserId, "u-launcher");
+
+    // Access by group: the owner limits the launcher to one group.
+    await app.clickText(en.account.tabs.teamAccess, { roles: ["tab"] });
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelectorAll('[data-testid="team-access"] li').length === 3;`,
+        ),
+      { description: "the team's members" },
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelectorAll('[data-member="ui-team-seat"] button').length;`,
+      ),
+      0,
+      "the owner is never limited",
+    );
+    await stubCommand(app, "set_team_member_access", {
+      userId: "u-launcher",
+      email: "launcher@example.test",
+      role: "launcher",
+      groupAccess: [group.id],
+    });
+    await app.clickSelector('[data-member="u-launcher"] button');
+    await app.clickSelector('label[for="access-some-u-launcher"]');
+    await app.clickSelector(`#access-u-launcher-${group.id}`);
+    await app.capture("team-access-editor");
+    await app.clickSelector('[data-testid="team-access-save"]');
+    await app.waitFor(
+      async () => (await calls("set_team_member_access")).length === 1,
+      { description: "the access sent to the cloud" },
+    );
+    const [access] = await calls("set_team_member_access");
+    assert.deepEqual(access, { userId: "u-launcher", groups: [group.id] });
+    await app.waitFor(
+      async () =>
+        (
+          await app.execute(
+            `return document.querySelector('[data-member="u-launcher"]')?.innerText ?? "";`,
+          )
+        ).includes(en.teamAccess.someGroups_one.replace("{{count}}", "1")),
+      { description: "the new access on the row" },
+    );
+    await dismissSurface(app);
+  });
 });
 
 test("the agent page guides setup, then shows agents, requests, notes, take-overs and the pause live", async () => {
@@ -4611,8 +4597,6 @@ test("the agent page guides setup, then shows agents, requests, notes, take-over
             en.agent.tabs.conversation,
             en.agent.tabs.profiles,
             en.agent.tabs.activity,
-            en.agent.tabs.recipes,
-            en.agent.tabs.schedules,
           ],
         );
         assert.match(await painted("agent-quota"), /1[,.\s ]?760/);
@@ -4769,279 +4753,264 @@ async function distributionSummary(app) {
 }
 
 test("the distribute-proxies dialog opens from the action bar, counts the pairing, and answers every control", async () => {
-  await withApp(
-    "ui-proxy-distribution",
-    async (app) => {
-      for (const name of ["Fleet One", "Fleet Two", "Fleet Three"]) {
-        await createUiProfile(app, name);
-      }
-      for (const [index, name] of ["Exit One", "Exit Two"].entries()) {
-        await app.invoke("create_stored_proxy", {
-          name,
-          proxySettings: {
-            proxy_type: "http",
-            host: "127.0.0.1",
-            port: 9101 + index,
-            username: null,
-            password: null,
-          },
-        });
-      }
-      await app.waitForText("Fleet Three");
-
-      await app.clickSelector(`[aria-label="${en.common.aria.selectAll}"]`);
-      await app.clickText(en.tables.moreActions, { roles: ["button"] });
-      await app.clickText(en.profiles.actionBar.distributeProxies, {
-        roles: ["menuitem"],
+  await withApp("ui-proxy-distribution", async (app) => {
+    for (const name of ["Fleet One", "Fleet Two", "Fleet Three"]) {
+      await createUiProfile(app, name);
+    }
+    for (const [index, name] of ["Exit One", "Exit Two"].entries()) {
+      await app.invoke("create_stored_proxy", {
+        name,
+        proxySettings: {
+          proxy_type: "http",
+          host: "127.0.0.1",
+          port: 9101 + index,
+          username: null,
+          password: null,
+        },
       });
-      await app.waitForText(en.proxyDistribution.title);
+    }
+    await app.waitForText("Fleet Three");
 
-      // Two proxies for three profiles: the dialog has to say so up front, and
-      // it must never pretend the third profile is covered.
-      await app.waitFor(
-        async () => (await distributionSummary(app)).includes("2 of 3"),
-        { description: "distribution summary" },
-      );
-      const summary = await distributionSummary(app);
-      assert.match(summary, /2 of 3/);
-      // The remainder is never silently dropped: the one profile no proxy was
-      // left for is named. Which one depends on the table's order, so assert
-      // that exactly one of the three is named rather than pinning the sort.
-      const named = ["Fleet One", "Fleet Two", "Fleet Three"].filter((name) =>
-        summary.includes(name),
-      );
-      assert.deepEqual(
-        named.length,
-        1,
-        `the unpaired profile must be named exactly once, got: ${summary}`,
-      );
+    await app.clickSelector(`[aria-label="${en.common.aria.selectAll}"]`);
+    await app.clickText(en.tables.moreActions, { roles: ["button"] });
+    await app.clickText(en.profiles.actionBar.distributeProxies, {
+      roles: ["menuitem"],
+    });
+    await app.waitForText(en.proxyDistribution.title);
 
-      // Every control answers a click. Dropping the proxies empties the plan...
-      await app.clickSelector('[data-testid="distribute-toggle-proxies"]');
-      await app.waitFor(
-        async () => (await distributionSummary(app)).includes("0 of 3"),
-        { description: "summary after clearing the proxies" },
-      );
-      // ...and putting them back restores it.
-      await app.clickSelector('[data-testid="distribute-toggle-proxies"]');
-      await app.waitFor(
-        async () => (await distributionSummary(app)).includes("2 of 3"),
-        { description: "summary after reselecting the proxies" },
-      );
+    // Two proxies for three profiles: the dialog has to say so up front, and
+    // it must never pretend the third profile is covered.
+    await app.waitFor(
+      async () => (await distributionSummary(app)).includes("2 of 3"),
+      { description: "distribution summary" },
+    );
+    const summary = await distributionSummary(app);
+    assert.match(summary, /2 of 3/);
+    // The remainder is never silently dropped: the one profile no proxy was
+    // left for is named. Which one depends on the table's order, so assert
+    // that exactly one of the three is named rather than pinning the sort.
+    const named = ["Fleet One", "Fleet Two", "Fleet Three"].filter((name) =>
+      summary.includes(name),
+    );
+    assert.deepEqual(
+      named.length,
+      1,
+      `the unpaired profile must be named exactly once, got: ${summary}`,
+    );
 
-      const switchState = () =>
-        app.execute(
-          `return document.querySelector('[aria-label="${en.proxyDistribution.allowSharingLabel}"]')?.getAttribute("aria-checked") ?? null;`,
-        );
-      assert.equal(await switchState(), "false", "sharing is off by default");
-      await app.clickSelector(
-        `[aria-label="${en.proxyDistribution.allowSharingLabel}"]`,
-      );
-      await app.waitFor(async () => (await switchState()) === "true", {
-        description: "sharing switch turning on",
-      });
+    // Every control answers a click. Dropping the proxies empties the plan...
+    await app.clickSelector('[data-testid="distribute-toggle-proxies"]');
+    await app.waitFor(
+      async () => (await distributionSummary(app)).includes("0 of 3"),
+      { description: "summary after clearing the proxies" },
+    );
+    // ...and putting them back restores it.
+    await app.clickSelector('[data-testid="distribute-toggle-proxies"]');
+    await app.waitFor(
+      async () => (await distributionSummary(app)).includes("2 of 3"),
+      { description: "summary after reselecting the proxies" },
+    );
 
-      // Dropping every profile leaves nothing to do, and the primary action
-      // must not offer to do it.
-      await app.clickSelector('[data-testid="distribute-toggle-profiles"]');
-      await app.waitFor(
-        async () => (await distributionSummary(app)).includes("0 of 0"),
-        { description: "summary after clearing the profiles" },
+    const switchState = () =>
+      app.execute(
+        `return document.querySelector('[aria-label="${en.proxyDistribution.allowSharingLabel}"]')?.getAttribute("aria-checked") ?? null;`,
       );
-      assert.equal(
-        await app.execute(
-          `const nodes = [...document.querySelectorAll("button")];
+    assert.equal(await switchState(), "false", "sharing is off by default");
+    await app.clickSelector(
+      `[aria-label="${en.proxyDistribution.allowSharingLabel}"]`,
+    );
+    await app.waitFor(async () => (await switchState()) === "true", {
+      description: "sharing switch turning on",
+    });
+
+    // Dropping every profile leaves nothing to do, and the primary action
+    // must not offer to do it.
+    await app.clickSelector('[data-testid="distribute-toggle-profiles"]');
+    await app.waitFor(
+      async () => (await distributionSummary(app)).includes("0 of 0"),
+      { description: "summary after clearing the profiles" },
+    );
+    assert.equal(
+      await app.execute(
+        `const nodes = [...document.querySelectorAll("button")];
            const node = nodes.find((n) => (n.innerText ?? "").trim().includes(arguments[0]));
            return node ? node.disabled : null;`,
-          [en.proxyDistribution.distributeButton],
-        ),
-        true,
-        "an empty plan must not offer a Distribute button that does nothing",
-      );
+        [en.proxyDistribution.distributeButton],
+      ),
+      true,
+      "an empty plan must not offer a Distribute button that does nothing",
+    );
 
-      await dismissSurface(app);
-    },
-    { seedDownloadedBrowser: true },
-  );
+    await dismissSurface(app);
+  });
 });
 
 test("bulk edit opens from the action bar and changes only the ticked rows", async () => {
-  await withApp(
-    "ui-bulk-edit",
-    async (app) => {
-      for (const name of ["Batch One", "Batch Two"]) {
-        await createUiProfile(app, name);
-      }
-      await app.invoke("update_profile_note", {
-        profileId: (await app.invoke("list_browser_profiles"))[0].id,
-        note: "Keep me",
-      });
-      await app.waitForText("Batch Two");
+  await withApp("ui-bulk-edit", async (app) => {
+    for (const name of ["Batch One", "Batch Two"]) {
+      await createUiProfile(app, name);
+    }
+    await app.invoke("update_profile_note", {
+      profileId: (await app.invoke("list_browser_profiles"))[0].id,
+      note: "Keep me",
+    });
+    await app.waitForText("Batch Two");
 
-      await app.clickSelector(`[aria-label="${en.common.aria.selectAll}"]`);
-      await app.clickSelector(`[aria-label="${en.bulkEdit.action}"]`);
-      await app.waitForText(en.bulkEdit.title);
+    await app.clickSelector(`[aria-label="${en.common.aria.selectAll}"]`);
+    await app.clickSelector(`[aria-label="${en.bulkEdit.action}"]`);
+    await app.waitForText(en.bulkEdit.title);
 
-      const applyDisabled = () =>
-        app.execute(
-          `return document.querySelector('[data-slot="bulk-edit-apply"]')?.disabled ?? null;`,
-        );
-      assert.equal(
-        await applyDisabled(),
-        true,
-        "nothing ticked, nothing to apply",
+    const applyDisabled = () =>
+      app.execute(
+        `return document.querySelector('[data-slot="bulk-edit-apply"]')?.disabled ?? null;`,
       );
-      await app.waitForText(en.bulkEdit.apply_other.replace("{{count}}", "2"));
+    assert.equal(
+      await applyDisabled(),
+      true,
+      "nothing ticked, nothing to apply",
+    );
+    await app.waitForText(en.bulkEdit.apply_other.replace("{{count}}", "2"));
 
-      await app.clickSelector("#bulk-edit-tagsAdd");
-      await app.fillSelector('[data-field="tagsAdd"] input', "ui-bulk, shop");
-      assert.equal(await applyDisabled(), false);
-      await app.capture("bulk-edit-dialog");
-      await app.clickSelector('[data-slot="bulk-edit-apply"]');
+    await app.clickSelector("#bulk-edit-tagsAdd");
+    await app.fillSelector('[data-field="tagsAdd"] input', "ui-bulk, shop");
+    assert.equal(await applyDisabled(), false);
+    await app.capture("bulk-edit-dialog");
+    await app.clickSelector('[data-slot="bulk-edit-apply"]');
 
-      await app.waitFor(
-        async () =>
-          (await app.invoke("list_browser_profiles")).every(
-            (profile) =>
-              profile.tags?.includes("ui-bulk") &&
-              profile.tags.includes("shop"),
-          ),
-        { description: "tags on every selected profile" },
-      );
-      await app.waitFor(
-        async () => !(await app.visibleTextIncludes(en.bulkEdit.title)),
-        { description: "dialog closing after apply" },
-      );
-      const notes = (await app.invoke("list_browser_profiles")).map(
-        (profile) => profile.note ?? null,
-      );
-      assert.ok(notes.includes("Keep me"), "an unticked field stays as it is");
-    },
-    { seedDownloadedBrowser: true },
-  );
+    await app.waitFor(
+      async () =>
+        (await app.invoke("list_browser_profiles")).every(
+          (profile) =>
+            profile.tags?.includes("ui-bulk") && profile.tags.includes("shop"),
+        ),
+      { description: "tags on every selected profile" },
+    );
+    await app.waitFor(
+      async () => !(await app.visibleTextIncludes(en.bulkEdit.title)),
+      { description: "dialog closing after apply" },
+    );
+    const notes = (await app.invoke("list_browser_profiles")).map(
+      (profile) => profile.note ?? null,
+    );
+    assert.ok(notes.includes("Keep me"), "an unticked field stays as it is");
+  });
 });
 
 test("templates save from the create dialog and the inspector, and several profiles go to one batch", async () => {
-  await withApp(
-    "ui-templates",
-    async (app) => {
-      await stubCommand(app, "is_geoip_database_available", true);
-      const base = await createUiProfile(app, "Template Base");
-      await app.waitForText(base.name);
-      const templates = () => app.invoke("list_profile_templates");
+  await withApp("ui-templates", async (app) => {
+    await stubCommand(app, "is_geoip_database_available", true);
+    const base = await createUiProfile(app, "Template Base");
+    await app.waitForText(base.name);
+    const templates = () => app.invoke("list_profile_templates");
 
-      await openProfileCreation(app);
-      await app.fillSelector("#profile-name", "Batch");
-      await app.clickSelector('[data-slot="template-picker"]');
-      await app.waitForText(en.templates.empty);
-      await app.fillSelector('[data-slot="template-name"]', "Quick");
-      await app.clickSelector('[data-slot="template-save"]');
-      await app.waitFor(
-        async () => (await templates()).some((t) => t.name === "Quick"),
-        { description: "the template saved from the form" },
-      );
-      const [quick] = await templates();
-      assert.equal(quick.settings.name_prefix, "Batch");
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelector('[data-slot="template-picker"]')?.innerText.includes("Quick") ?? false;`,
-          ),
-        { description: "the saved template shown as applied" },
-      );
-
-      // The count moves nothing: every footer control keeps its place and
-      // size, and the dialog keeps its height.
-      const single = await createFooterLayout(app);
-      await app.clickSelector('[data-slot="profile-count-more"]');
-      await app.clickSelector('[data-slot="profile-count-more"]');
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelector('#profile-count')?.value === "3";`,
-          ),
-        { description: "three profiles" },
-      );
-      assert.deepEqual(await createFooterLayout(app), single);
-      // The names the batch gets show on the stepper, not in the form.
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelector('[data-slot="profile-count-hint"]')?.innerText.includes(arguments[0]) ?? false;`,
-            [en.templates.namesHint.replaceAll("{{name}}", "Batch")],
-          ),
-        { description: "the names hint on the stepper" },
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector('#enable-password')?.disabled ?? null;`,
+    await openProfileCreation(app);
+    await app.fillSelector("#profile-name", "Batch");
+    await app.clickSelector('[data-slot="template-picker"]');
+    await app.waitForText(en.templates.empty);
+    await app.fillSelector('[data-slot="template-name"]', "Quick");
+    await app.clickSelector('[data-slot="template-save"]');
+    await app.waitFor(
+      async () => (await templates()).some((t) => t.name === "Quick"),
+      { description: "the template saved from the form" },
+    );
+    const [quick] = await templates();
+    assert.equal(quick.settings.name_prefix, "Batch");
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelector('[data-slot="template-picker"]')?.innerText.includes("Quick") ?? false;`,
         ),
-        true,
-        "a password is for one profile only",
-      );
-      await app.capture("templates-create-many");
+      { description: "the saved template shown as applied" },
+    );
 
-      await stubCommand(app, "bulk_create_profiles", {
-        created: [{ id: "a" }, { id: "b" }, { id: "c" }],
-        error: null,
-        cancelled: false,
-      });
-      await app.clickSelector('[data-slot="profile-create-submit"]');
-      await app.waitFor(
-        () => app.execute(`return !document.querySelector('#profile-name');`),
-        { description: "the dialog closing after the batch" },
-      );
-      const [call] = await app.execute(
-        `return (window.__donutStubbedCalls ?? []).filter((c) => c.command === "bulk_create_profiles");`,
-      );
-      assert.equal(call.payload.count, 3);
-      assert.equal(call.payload.name, "Batch");
-      assert.equal(call.payload.settings.name_prefix, "Batch");
-      await app.waitForText(
-        en.templates.created_other.replace("{{count}}", "3"),
-      );
-
-      await openProfileCreation(app);
-      await app.clickSelector('[data-slot="template-picker"]');
-      await app.clickSelector('[data-slot="template-option"]');
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelector('#profile-name')?.value === "Batch";`,
-          ),
-        { description: "the template's name prefix filling an empty name" },
-      );
-      await app.clickSelector('[data-slot="template-picker"]');
-      // With the trash on, the template goes to the trash at once: no
-      // confirmation, and the toast offers Undo.
-      await app.clickSelector('[data-slot="template-delete"]');
-      await app.waitFor(async () => (await templates()).length === 0, {
-        description: "the template deleted from the picker",
-      });
-      await app.waitForText(en.trash.moved.replace("{{name}}", "Quick"));
-      assert.ok(
-        (await app.invoke("list_trashed_entities")).some(
-          (entry) => entry.kind === "template" && entry.id === quick.id,
+    // The count moves nothing: every footer control keeps its place and
+    // size, and the dialog keeps its height.
+    const single = await createFooterLayout(app);
+    await app.clickSelector('[data-slot="profile-count-more"]');
+    await app.clickSelector('[data-slot="profile-count-more"]');
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelector('#profile-count')?.value === "3";`,
         ),
-        "the template waits in the trash",
-      );
-      await dismissSurface(app);
-      await dismissSurface(app);
+      { description: "three profiles" },
+    );
+    assert.deepEqual(await createFooterLayout(app), single);
+    // The names the batch gets show on the stepper, not in the form.
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelector('[data-slot="profile-count-hint"]')?.innerText.includes(arguments[0]) ?? false;`,
+          [en.templates.namesHint.replaceAll("{{name}}", "Batch")],
+        ),
+      { description: "the names hint on the stepper" },
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('#enable-password')?.disabled ?? null;`,
+      ),
+      true,
+      "a password is for one profile only",
+    );
+    await app.capture("templates-create-many");
 
-      await app.clickSelector(
-        `[data-slot="profile-inspect-trigger"][data-profile-id="${base.id}"]`,
-      );
-      await app.clickSelector('[data-slot="profile-info-more"]');
-      await app.clickSelector('[data-slot="profile-info-save-template"]');
-      await app.waitForText(en.templates.saveFromProfileDescription);
-      await app.clickSelector('[data-slot="save-template-confirm"]');
-      await app.waitFor(
-        async () => (await templates()).some((t) => t.name === "Template Base"),
-        { description: "the template saved from the inspector" },
-      );
-    },
-    { seedDownloadedBrowser: true },
-  );
+    await stubCommand(app, "bulk_create_profiles", {
+      created: [{ id: "a" }, { id: "b" }, { id: "c" }],
+      error: null,
+      cancelled: false,
+    });
+    await app.clickSelector('[data-slot="profile-create-submit"]');
+    await app.waitFor(
+      () => app.execute(`return !document.querySelector('#profile-name');`),
+      { description: "the dialog closing after the batch" },
+    );
+    const [call] = await app.execute(
+      `return (window.__donutStubbedCalls ?? []).filter((c) => c.command === "bulk_create_profiles");`,
+    );
+    assert.equal(call.payload.count, 3);
+    assert.equal(call.payload.name, "Batch");
+    assert.equal(call.payload.settings.name_prefix, "Batch");
+    await app.waitForText(en.templates.created_other.replace("{{count}}", "3"));
+
+    await openProfileCreation(app);
+    await app.clickSelector('[data-slot="template-picker"]');
+    await app.clickSelector('[data-slot="template-option"]');
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelector('#profile-name')?.value === "Batch";`,
+        ),
+      { description: "the template's name prefix filling an empty name" },
+    );
+    await app.clickSelector('[data-slot="template-picker"]');
+    // With the trash on, the template goes to the trash at once: no
+    // confirmation, and the toast offers Undo.
+    await app.clickSelector('[data-slot="template-delete"]');
+    await app.waitFor(async () => (await templates()).length === 0, {
+      description: "the template deleted from the picker",
+    });
+    await app.waitForText(en.trash.moved.replace("{{name}}", "Quick"));
+    assert.ok(
+      (await app.invoke("list_trashed_entities")).some(
+        (entry) => entry.kind === "template" && entry.id === quick.id,
+      ),
+      "the template waits in the trash",
+    );
+    await dismissSurface(app);
+    await dismissSurface(app);
+
+    await app.clickSelector(
+      `[data-slot="profile-inspect-trigger"][data-profile-id="${base.id}"]`,
+    );
+    await app.clickSelector('[data-slot="profile-info-more"]');
+    await app.clickSelector('[data-slot="profile-info-save-template"]');
+    await app.waitForText(en.templates.saveFromProfileDescription);
+    await app.clickSelector('[data-slot="save-template-confirm"]');
+    await app.waitFor(
+      async () => (await templates()).some((t) => t.name === "Template Base"),
+      { description: "the template saved from the inspector" },
+    );
+  });
 });
 
 test("the trash page lists deleted entities by kind and restores one", async () => {
@@ -6705,7 +6674,6 @@ test("a freshly paid account is welcomed once and walked to its plan tips", asyn
           "cloudBackup",
           "cookieBot",
           "crossOs",
-          "synchronizer",
           "automation",
           "agent",
           "remoteControl",
@@ -6987,11 +6955,11 @@ test("the profile network section saves, refuses and clears a DNS server", async
   });
 });
 
-test("a Pro user's fingerprint tab shows the device, and says why when it cannot", async () => {
+test("a Pro user's fingerprint tab shows the device a migrated identity profile now stores", async () => {
   await withApp("ui-fingerprint-view", async (app) => {
     const created = await createUiProfile(app, "Identity Device");
-    // An identity-backed profile stores the identity, never the device, on a
-    // version that reads it from the browser.
+    // A profile saved before the move to Apostate keeps only an identity the
+    // closed engine used to expand. The next start gives it a device of its own.
     const file = path.join(
       app.dataRoot,
       "data",
@@ -7002,6 +6970,7 @@ test("a Pro user's fingerprint tab shows the device, and says why when it cannot
     const stored = JSON.parse(await readFile(file, "utf8"));
     stored.version = "154.0.8037.57";
     delete stored.wayfern_config.fingerprint;
+    delete stored.wayfern_config.engine;
     stored.wayfern_config.identity_id = "6f9619ff-8b86-4d01-b42d-00c04fc964ff";
     await writeFile(file, JSON.stringify(stored));
     await app.restart();
@@ -7029,51 +6998,27 @@ test("a Pro user's fingerprint tab shows the device, and says why when it cannot
       '[data-slot="profile-info-section"][data-section="fingerprint"]',
     );
 
-    // This suite has no browser build, so the read fails: the tab says so and
-    // keeps the fields shut instead of showing them empty.
-    const state = '[data-slot="fingerprint-device-state"]';
-    await app.waitFor(
-      () =>
-        app.execute(
-          `return document.querySelector(arguments[0])?.dataset.state === "failed";`,
-          [state],
-        ),
-      { description: "the failed device read is shown" },
-    );
-    assert.equal(
-      await app.execute(
-        `return document.querySelector("#user-agent").matches(":disabled");`,
-      ),
-      true,
-    );
-    await app.capture("fingerprint-view-failed");
-
-    // A read that works fills the fields with the device the profile presents.
-    const device = {
-      userAgent: "Mozilla/5.0 (Macintosh) E2E/1.0",
-      platform: "MacIntel",
-      hardwareConcurrency: 8,
-    };
-    await stubCommand(app, "get_profile_fingerprint", JSON.stringify(device));
-    await app.clickTextIn(state, en.common.buttons.retry, {
-      roles: ["button"],
-    });
     await app.waitFor(
       () =>
         app.execute(
           `const input = document.querySelector("#user-agent");
-           return input && !input.matches(":disabled") && input.value === arguments[0];`,
-          [device.userAgent],
+           return Boolean(input) && !input.matches(":disabled") && input.value.length > 0;`,
         ),
-      { description: "the device fills the fingerprint fields" },
+      { description: "the migrated profile's own device fills the fields" },
     );
     assert.equal(
       await app.execute(
-        `return Boolean(document.querySelector(arguments[0]));`,
-        [state],
+        `return Boolean(document.querySelector('[data-slot="fingerprint-device-state"]'));`,
       ),
       false,
+      "a local device needs no read from the browser, so nothing waits or fails",
     );
+    const [migrated] = (await app.invoke("list_browser_profiles")).filter(
+      (profile) => profile.id === created.id,
+    );
+    assert.equal(migrated.wayfern_config.engine, "apostate");
+    assert.equal(migrated.wayfern_config.identity_id ?? null, null);
+    assert.equal(typeof migrated.wayfern_config.fingerprint, "string");
     await app.capture("fingerprint-view-shown");
     await restoreStubs(app);
   });
@@ -7194,180 +7139,173 @@ test("Pro users can edit and save launch arguments in each profile", async () =>
         await restoreStubs(app);
       }
     },
-    { extraEnv: { WAYFERN_TEST_TOKEN: "e2e-local-launch-args" } },
+    { extraEnv: { DONUT_E2E_PAID_PLAN: "e2e-local-launch-args" } },
   );
 });
 
 test("the create dialog warns a free user who creates quickly, holds a capped plan at its hourly limit, and never offers more profiles than fit", async () => {
-  await withApp(
-    "ui-profile-hourly-limit",
-    async (app) => {
-      const createDisabled = () =>
-        app.execute(
-          `const button = document.querySelector('[data-slot="profile-create-submit"]');
+  await withApp("ui-profile-hourly-limit", async (app) => {
+    const createDisabled = () =>
+      app.execute(
+        `const button = document.querySelector('[data-slot="profile-create-submit"]');
          return button ? button.disabled : null;`,
-        );
-      const stepper = () =>
-        app.execute(
-          `return {
+      );
+    const stepper = () =>
+      app.execute(
+        `return {
              value: document.querySelector('#profile-count')?.value ?? null,
              more: document.querySelector('[data-slot="profile-count-more"]')?.disabled ?? null,
              hint: document.querySelector('[data-slot="profile-count-hint"]')?.innerText ?? "",
              stressed: document.querySelector('[data-slot="profile-count-hint"] [data-limit]')?.innerText ?? null,
            };`,
-        );
-      // Typing past the cap clamps to it as the digits arrive.
-      const typeCount = async (count, shown = count) => {
-        await app.clickSelector("#profile-count");
-        await app.fillSelector("#profile-count", String(count));
-        await app.waitFor(
-          async () => (await stepper()).value === String(shown),
-          {
-            description: `count ${count} shown as ${shown}`,
-          },
-        );
-      };
-      const closeDialog = async () => {
-        await app.clickTextIn('[role="dialog"]', en.common.buttons.cancel, {
-          roles: ["button"],
-        });
-        await app.waitFor(
-          () => app.execute(`return !document.querySelector('#profile-name');`),
-          { description: "create dialog closed" },
-        );
-      };
+      );
+    // Typing past the cap clamps to it as the digits arrive.
+    const typeCount = async (count, shown = count) => {
+      await app.clickSelector("#profile-count");
+      await app.fillSelector("#profile-count", String(count));
+      await app.waitFor(async () => (await stepper()).value === String(shown), {
+        description: `count ${count} shown as ${shown}`,
+      });
+    };
+    const closeDialog = async () => {
+      await app.clickTextIn('[role="dialog"]', en.common.buttons.cancel, {
+        roles: ["button"],
+      });
+      await app.waitFor(
+        () => app.execute(`return !document.querySelector('#profile-name');`),
+        { description: "create dialog closed" },
+      );
+    };
 
-      // Free: past the allowance the dialog warns, and one profile can
-      // still be created, but not a batch.
-      await stubCommand(app, "get_profile_creation_allowance", {
-        enforcement: "soft",
-        per_hour: 8,
-        used: 8,
-        retry_after_secs: 1_200,
-        remaining: 0,
-      });
-      await openProfileCreation(app);
-      await app.waitForText(en.createProfile.hourlyLimit.warningTitle);
-      await app.waitForText(en.createProfile.hourlyLimit.warning);
-      await app.fillSelector("#profile-name", "Quick profile");
-      assert.equal(await createDisabled(), false);
-      assert.equal((await stepper()).more, true, "no batch past the allowance");
-      await closeDialog();
+    // Free: past the allowance the dialog warns, and one profile can
+    // still be created, but not a batch.
+    await stubCommand(app, "get_profile_creation_allowance", {
+      enforcement: "soft",
+      per_hour: 8,
+      used: 8,
+      retry_after_secs: 1_200,
+      remaining: 0,
+    });
+    await openProfileCreation(app);
+    await app.waitForText(en.createProfile.hourlyLimit.warningTitle);
+    await app.waitForText(en.createProfile.hourlyLimit.warning);
+    await app.fillSelector("#profile-name", "Quick profile");
+    assert.equal(await createDisabled(), false);
+    assert.equal((await stepper()).more, true, "no batch past the allowance");
+    await closeDialog();
 
-      // Every browser seat taken: Create waits for a browser to close, and
-      // its tooltip says so without naming a number.
-      await stubCommand(app, "get_profile_creation_allowance", {
-        enforcement: "soft",
-        per_hour: 8,
-        used: 0,
-        retry_after_secs: null,
-        remaining: 8,
-        close_a_browser: true,
-      });
-      await openProfileCreation(app);
-      await app.fillSelector("#profile-name", "Seat profile");
-      await app.waitFor(async () => (await createDisabled()) === true, {
-        description: "Create disabled while no browser seat is free",
-      });
-      await app.execute(
-        `document.querySelector('[data-slot="profile-create-close-a-browser"]')
+    // Every browser seat taken: Create waits for a browser to close, and
+    // its tooltip says so without naming a number.
+    await stubCommand(app, "get_profile_creation_allowance", {
+      enforcement: "soft",
+      per_hour: 8,
+      used: 0,
+      retry_after_secs: null,
+      remaining: 8,
+      close_a_browser: true,
+    });
+    await openProfileCreation(app);
+    await app.fillSelector("#profile-name", "Seat profile");
+    await app.waitFor(async () => (await createDisabled()) === true, {
+      description: "Create disabled while no browser seat is free",
+    });
+    await app.execute(
+      `document.querySelector('[data-slot="profile-create-close-a-browser"]')
            .dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }));`,
-      );
-      await app.waitForText(en.backendErrors.tooManyBrowsersRunning);
-      assert.doesNotMatch(en.backendErrors.tooManyBrowsersRunning, /\d/);
-      await closeDialog();
+    );
+    await app.waitForText(en.backendErrors.tooManyBrowsersRunning);
+    assert.doesNotMatch(en.backendErrors.tooManyBrowsersRunning, /\d/);
+    await closeDialog();
 
-      // Solo at its cap: Create is disabled and the dialog says why and when.
-      await stubCommand(app, "get_profile_creation_allowance", {
-        enforcement: "hard",
-        per_hour: 10,
-        used: 10,
-        retry_after_secs: 1_200,
-        remaining: 0,
-      });
-      await openProfileCreation(app);
-      await app.fillSelector("#profile-name", "Capped profile");
-      await app.waitFor(async () => (await createDisabled()) === true, {
-        description: "Create disabled at the hourly cap",
-      });
-      await app.waitForText(
-        en.createProfile.hourlyLimit.reached
-          .replace("{{limit}}", "10")
-          .replace("{{minutes}}", "20"),
-      );
-      assert.equal(
-        await app.execute(
-          `return document.body.innerText.includes(arguments[0]);`,
-          [en.createProfile.hourlyLimit.warningTitle],
-        ),
-        false,
-        "a capped plan is refused, not warned",
-      );
-      assert.equal((await stepper()).more, true);
-      await closeDialog();
+    // Solo at its cap: Create is disabled and the dialog says why and when.
+    await stubCommand(app, "get_profile_creation_allowance", {
+      enforcement: "hard",
+      per_hour: 10,
+      used: 10,
+      retry_after_secs: 1_200,
+      remaining: 0,
+    });
+    await openProfileCreation(app);
+    await app.fillSelector("#profile-name", "Capped profile");
+    await app.waitFor(async () => (await createDisabled()) === true, {
+      description: "Create disabled at the hourly cap",
+    });
+    await app.waitForText(
+      en.createProfile.hourlyLimit.reached
+        .replace("{{limit}}", "10")
+        .replace("{{minutes}}", "20"),
+    );
+    assert.equal(
+      await app.execute(
+        `return document.body.innerText.includes(arguments[0]);`,
+        [en.createProfile.hourlyLimit.warningTitle],
+      ),
+      false,
+      "a capped plan is refused, not warned",
+    );
+    assert.equal((await stepper()).more, true);
+    await closeDialog();
 
-      // Solo with three left: the stepper stops at three and says why.
-      await stubCommand(app, "get_profile_creation_allowance", {
-        enforcement: "hard",
-        per_hour: 10,
-        used: 7,
-        retry_after_secs: null,
-        remaining: 3,
-      });
-      await openProfileCreation(app);
-      await app.fillSelector("#profile-name", "Three left");
-      for (let i = 0; i < 2; i += 1) {
-        await app.clickSelector('[data-slot="profile-count-more"]');
-      }
-      await app.waitFor(async () => (await stepper()).value === "3", {
-        description: "count at the allowance",
-      });
-      let state = await stepper();
-      assert.equal(state.more, true, "+ stops at the allowance");
-      await typeCount(9, 3);
-      state = await stepper();
-      assert.equal(
-        state.stressed,
-        en.templates.allowanceLeft_other.replace("{{count}}", "3"),
-      );
-      assert.equal(await createDisabled(), false);
-      await closeDialog();
+    // Solo with three left: the stepper stops at three and says why.
+    await stubCommand(app, "get_profile_creation_allowance", {
+      enforcement: "hard",
+      per_hour: 10,
+      used: 7,
+      retry_after_secs: null,
+      remaining: 3,
+    });
+    await openProfileCreation(app);
+    await app.fillSelector("#profile-name", "Three left");
+    for (let i = 0; i < 2; i += 1) {
+      await app.clickSelector('[data-slot="profile-count-more"]');
+    }
+    await app.waitFor(async () => (await stepper()).value === "3", {
+      description: "count at the allowance",
+    });
+    let state = await stepper();
+    assert.equal(state.more, true, "+ stops at the allowance");
+    await typeCount(9, 3);
+    state = await stepper();
+    assert.equal(
+      state.stressed,
+      en.templates.allowanceLeft_other.replace("{{count}}", "3"),
+    );
+    assert.equal(await createDisabled(), false);
+    await closeDialog();
 
-      // Pro: nothing in the footer moves from one profile to a hundred,
-      // and a hundred is the most one batch makes.
-      await stubCommand(app, "get_profile_creation_allowance", {
-        enforcement: "hard",
-        per_hour: 100,
-        used: 0,
-        retry_after_secs: null,
-        remaining: 100,
-      });
-      await openProfileCreation(app);
-      await app.fillSelector("#profile-name", "Many");
-      await app.waitFor(async () => (await createDisabled()) === false, {
-        description: "creation available",
-      });
-      const single = await createFooterLayout(app);
-      for (const count of [9, 10, 100]) {
-        await typeCount(count);
-        assert.deepEqual(
-          await createFooterLayout(app),
-          single,
-          `the footer at ${count} profiles`,
-        );
-      }
-      await typeCount(250, 100);
-      state = await stepper();
-      assert.equal(state.more, true, "+ stops at a hundred");
-      assert.equal(
-        state.stressed,
-        en.backendErrors.bulkCreateCountInvalid.replace("{{max}}", "100"),
+    // Pro: nothing in the footer moves from one profile to a hundred,
+    // and a hundred is the most one batch makes.
+    await stubCommand(app, "get_profile_creation_allowance", {
+      enforcement: "hard",
+      per_hour: 100,
+      used: 0,
+      retry_after_secs: null,
+      remaining: 100,
+    });
+    await openProfileCreation(app);
+    await app.fillSelector("#profile-name", "Many");
+    await app.waitFor(async () => (await createDisabled()) === false, {
+      description: "creation available",
+    });
+    const single = await createFooterLayout(app);
+    for (const count of [9, 10, 100]) {
+      await typeCount(count);
+      assert.deepEqual(
+        await createFooterLayout(app),
+        single,
+        `the footer at ${count} profiles`,
       );
-      await app.capture("profile-create-count-cap");
-      await closeDialog();
-    },
-    { seedDownloadedBrowser: true },
-  );
+    }
+    await typeCount(250, 100);
+    state = await stepper();
+    assert.equal(state.more, true, "+ stops at a hundred");
+    assert.equal(
+      state.stressed,
+      en.backendErrors.bulkCreateCountInvalid.replace("{{max}}", "100"),
+    );
+    await app.capture("profile-create-count-cap");
+    await closeDialog();
+  });
 });
 
 /**
@@ -8030,8 +7968,6 @@ test("without the agent entitlement nothing new renders and nothing is asked", a
       "agent-tab-conversation",
       "agent-tab-profiles",
       "agent-tab-activity",
-      "agent-tab-recipes",
-      "agent-tab-schedules",
     ]);
     assert.equal(shown.credits, false);
     assert.equal(shown.tasks, false);

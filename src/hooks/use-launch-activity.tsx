@@ -6,6 +6,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 export type LaunchStage =
   | "queued"
   | "preparing"
+  | "engine"
   | "network"
   | "extensions"
   | "starting"

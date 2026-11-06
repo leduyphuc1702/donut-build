@@ -26,6 +26,11 @@ bui = "bui"
 # German and French words in the tray menu labels (tray.rs).
 Alle = "Alle"
 cours = "cours"
+# French, Spanish and Italian cookie banner wording (warmup/consent.rs).
+accepte = "accepte"
+administrar = "administrar"
+essentiels = "essentiels"
+preferenze = "preferenze"
 
 [default.extend-identifiers]
 # Chrome Web Store extension name in the known-VPN list.

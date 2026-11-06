@@ -197,8 +197,7 @@ fn facts(
     .load_settings()
     .map(|s| s.disable_auto_updates)
     .unwrap_or(false);
-  let wayfern = crate::downloaded_browsers_registry::DownloadedBrowsersRegistry::instance()
-    .get_downloaded_versions("wayfern");
+  let engine = crate::apostate::installed_executable().is_some();
 
   let running = |p: &crate::profile::BrowserProfile| {
     p.process_id
@@ -215,7 +214,11 @@ fn facts(
     if auto_updates_disabled { "off" } else { "on" },
   );
   let _ = writeln!(out, "{}", account_line(account, sync));
-  let _ = writeln!(out, "wayfern_installed=[{}]", wayfern.join(" "));
+  let _ = writeln!(
+    out,
+    "engine=apostate version={} installed={engine}",
+    crate::apostate::VERSION
+  );
   let _ = writeln!(
     out,
     "profiles={} running={} ephemeral={} with_proxy={} with_vpn={} proxies={} vpns={} groups={}",

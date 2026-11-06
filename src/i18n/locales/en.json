@@ -95,9 +95,7 @@
       "arrowDown": "Down arrow",
       "tab": "Tab"
     },
-    "errors": {
-      "unknown": "Unknown error occurred"
-    },
+    "errors": {},
     "window": {
       "minimize": "Minimize",
       "maximize": "Maximize",
@@ -199,9 +197,6 @@
     },
     "advanced": {
       "title": "Advanced",
-      "clearCache": "Clear all version cache",
-      "clearCacheDescription": "Clear all cached browser version data and refresh all browser versions from their sources. This will force a fresh download of version information for all browsers.",
-      "clearCacheFailed": "Failed to clear cache",
       "copyLogs": "Copy logs",
       "openLogDir": "Open log folder",
       "copyLogsSuccess": "Logs copied to clipboard",
@@ -478,20 +473,10 @@
       "removePassword": "Remove Password"
     },
     "synchronizer": {
-      "launchWithSync": "Launch with Synchronizer",
       "stopLeader": "Stop this profile and all its followers",
       "stopFollower": "Following actions of {{leaderName}}",
       "desyncedTooltip": "Synchronization failed at {{url}}",
-      "paidFeature": "Synchronizer is a paid feature",
-      "wayfernOnly": "Only Wayfern profiles can be synchronized",
-      "selectFollowers": "Select Follower Profiles",
-      "selectFollowersDesc": "Choose profiles that will mirror the actions of the leader profile. Only stopped Wayfern profiles can be selected.",
       "leader": "Leader",
-      "follower": "Follower",
-      "startSession": "Start Sync Session",
-      "noFollowers": "Select at least one follower profile",
-      "flakyBadge": "FLAKY",
-      "flakyTooltip": "This profile has a different screen resolution than the leader. Page layouts may differ, causing clicks and interactions to hit the wrong elements.",
       "pauseMirroring": "Pause mirroring",
       "resumeMirroring": "Resume mirroring",
       "pausedNote": "The followers are not copying the leader. Anything done in the leader now stays there.",
@@ -594,7 +579,6 @@
     "antiDetect": {
       "title": "Anti-Detect Browser",
       "description": "Choose a browser with anti-detection capabilities",
-      "chromium": "Wayfern",
       "badge": "Anti-Detect Browser"
     },
     "regular": {
@@ -617,26 +601,11 @@
       "label": "Launch hook URL",
       "placeholder": "https://example.com/hooks/profile-launch"
     },
-    "version": {
-      "fetching": "Fetching available versions...",
-      "fetchError": "Failed to fetch browser versions. Please check your internet connection and try again.",
-      "needsDownload": "{{browser}} version ({{version}}) needs to be downloaded",
-      "available": "{{browser}} version ({{version}}) is available",
-      "downloading": "Downloading {{browser}} version ({{version}})...",
-      "latestNeedsDownload": "Latest version ({{version}}) needs to be downloaded",
-      "latestAvailable": "Latest version ({{version}}) is available",
-      "latestDownloading": "Downloading version ({{version}})...",
-      "upgradeAvailable": "A newer version ({{version}}) of {{browser}} is available."
-    },
     "chromiumLabel": "Chromium",
-    "chromiumSubtitle": "Powered by Wayfern",
-    "platformUnavailable": "{{browser}} is not available on your platform yet.",
     "passwordProtect": {
       "label": "Password protect this profile",
       "description": "Encrypts the on-disk profile data. Required to launch."
     },
-    "downloadingSubtitle": "Downloading…",
-    "browsersDownloading": "Browsers are still downloading. Profile creation will be available once a download finishes.",
     "advancedOptions": "Advanced options",
     "moreOptions": "More options",
     "hourlyLimit": {
@@ -646,6 +615,9 @@
     },
     "group": {
       "notFound": "No groups found."
+    },
+    "engine": {
+      "preparing": "The browser engine is still downloading. You can create the profile now; it opens as soon as the engine is ready."
     }
   },
   "deleteDialog": {
@@ -1079,7 +1051,6 @@
     "apiToggleFailed": "Failed to toggle API server",
     "apiStartFailed": "Failed to start API server",
     "tokenCopied": "Token copied",
-    "mcpAcceptTermsFirst": "(Accept Wayfern terms in Settings first)",
     "apiRunningOn": "Running on",
     "apiExampleRequest": "Example request",
     "examples": {
@@ -1195,38 +1166,6 @@
     "error": "Failed to import profile"
   },
   "config": {
-    "wayfern": {
-      "title": "Wayfern Configuration",
-      "fingerprint": {
-        "title": "Fingerprint",
-        "randomize": "Randomize on Launch",
-        "randomizeDescription": "Generate a new fingerprint each time the browser is launched.",
-        "platformPlaceholder": "e.g., Win32, MacIntel, Linux x86_64",
-        "timezoneOffsetPlaceholder": "e.g., 300 for EST (UTC-5)",
-        "webglRendererPlaceholder": "e.g., Intel(R) HD Graphics"
-      },
-      "os": {
-        "title": "Operating System",
-        "description": "The operating system to emulate for fingerprint generation.",
-        "windows": "Windows",
-        "macos": "macOS",
-        "linux": "Linux",
-        "android": "Android",
-        "ios": "iOS"
-      },
-      "screen": {
-        "title": "Screen Size",
-        "minWidth": "Min Width",
-        "maxWidth": "Max Width",
-        "minHeight": "Min Height",
-        "maxHeight": "Max Height"
-      },
-      "blocking": {
-        "title": "Blocking",
-        "webrtc": "Block WebRTC",
-        "webgl": "Block WebGL"
-      }
-    },
     "shared": {
       "browserBehavior": "Browser Behavior",
       "allowAddonsOpenTabs": "Allow browser addons to open new tabs automatically"
@@ -1249,7 +1188,7 @@
       "sourcePlaceholder": "Select a profile to copy cookies from",
       "running": "(running)",
       "targetProfiles": "Target Profiles ({{count}})",
-      "noOtherTargets": "No other Wayfern profiles selected",
+      "noOtherTargets": "No other profiles selected",
       "selectSourceFirst": "Select a source profile first",
       "selectionStatus": "({{selected}} of {{total}} selected)",
       "searchPlaceholder": "Search domains or cookies...",
@@ -1470,7 +1409,7 @@
     "renameProfileFailed": "Failed to rename profile: {{error}}",
     "killBrowserFailed": "Failed to kill browser: {{error}}",
     "deleteSelectedProfilesFailed": "Failed to delete selected profiles: {{error}}",
-    "cookieCopyUnsupportedBrowser": "Cookie copy only works with Wayfern profiles",
+    "cookieCopyUnsupportedBrowser": "Cookie copy only works with Apostate profiles",
     "updateSyncSettingsFailed": "Failed to update sync settings",
     "cloneProfileFailed": "Failed to clone profile: {{error}}",
     "loadSupportedBrowsersFailed": "Failed to load supported browsers",
@@ -1486,13 +1425,9 @@
     "themeNotFound": "Tokyo Night theme not found",
     "setProfilePasswordFailed": "Failed to set profile password: {{error}}"
   },
-  "browser": {
-    "wayfern": "Wayfern"
-  },
+  "browser": {},
   "fingerprint": {
-    "crossOsWarning": "Spoofing fingerprint for a different operating system is less reliable because it is impossible to perfectly mimic all underlying components. Use with caution.",
-    "crossOsApostateWarning": "This profile opens on the open-source Apostate engine, downloaded the first time it is needed. It needs a VPN or a proxy, because its connection must not start from this computer. On Apple silicon it presents a Windows-on-ARM laptop.",
-    "crossOsLimitations": "Cross-OS fingerprinting has limitations. System-level APIs may still reflect your actual operating system, and some features may have degraded performance.",
+    "crossOsApostateWarning": "This profile opens on the open-source Apostate engine, which Donut downloads by itself. It opens with no proxy or VPN, but without a WireGuard VPN route (or a proxy) the network layer (TCP/IP) still shows this computer's OS, and a site can compare it with the fingerprint. On Apple silicon it presents a Windows-on-ARM laptop.",
     "osLabel": "Operating system fingerprint",
     "selectOSPlaceholder": "Select operating system",
     "generateRandomOnLaunch": "Generate random fingerprint on every launch",
@@ -1764,7 +1699,7 @@
       "unlockedDescription": "Its data stays decrypted until you lock it."
     },
     "fingerprint": {
-      "notSupported": "Fingerprint editing is only available for Wayfern profiles.",
+      "notSupported": "Fingerprint editing is only available for Apostate profiles.",
       "lockedTitle": "Viewing & editing the fingerprint is a Pro feature",
       "lockedDescription": "Your device information is protected in every profile. Viewing and editing a profile's fingerprint requires an active paid plan.",
       "customValuesKept": "Your custom fingerprint values are kept. They apply when the account has an active Pro plan."
@@ -2320,16 +2255,6 @@
       "unavailable": "This profile can't open links right now."
     }
   },
-  "wayfernTerms": {
-    "title": "Wayfern Terms and Conditions",
-    "description": "Before using Donut Browser, you must read and agree to Wayfern's Terms and Conditions.",
-    "reviewLabel": "Please review the Terms and Conditions at:",
-    "agreeNotice": "By clicking \"I Accept\", you agree to be bound by these terms.",
-    "acceptButton": "I Accept",
-    "acceptSuccess": "Terms accepted successfully",
-    "acceptFailed": "Failed to accept terms",
-    "tryAgain": "Please try again"
-  },
   "commercialTrial": {
     "title": "Commercial Trial Expired",
     "description": "Your 2-week commercial trial period has ended.",
@@ -2521,43 +2446,13 @@
   },
   "browserDownload": {
     "toast": {
-      "fetchVersionsFailed": "Failed to fetch {{browser}} versions",
-      "foundNewVersions": "Found {{count}} new {{browser}} versions!",
-      "totalAvailableVersions": "Total available: {{count}} versions",
       "downloadFailed": "Failed to download {{browser}} {{version}}",
       "calculating": "calculating...",
-      "extractionFailed": "{{browser}} {{version}}: extraction failed",
-      "extractionFailedDescription": "The corrupt file was deleted. It will be re-downloaded on next attempt.",
       "extracting": "Extracting browser files... Please do not close the app.",
       "verifying": "Verifying browser files...",
-      "downloadingRolling": "Downloading rolling release build...",
       "geoipDownloading": "Downloading GeoIP database",
       "geoipDownloaded": "GeoIP database downloaded successfully!",
       "downloadFailedDescription": "The download could not be completed. Check your connection and try again."
-    }
-  },
-  "versionUpdater": {
-    "toast": {
-      "alreadyAvailable": "{{browser}} {{version}} already available",
-      "updatingProfiles": "Updating profile configurations...",
-      "updateCompleted": "{{browser}} update completed",
-      "singleProfileUpdated": "Profile \"{{name}}\" has been updated to version {{version}}. You can now launch your browsers with the latest version.",
-      "multipleProfilesUpdated": "{{count}} profiles have been updated to version {{version}}. You can now launch your browsers with the latest version.",
-      "versionAvailable": "Version {{version}} is now available. Running profiles will use the new version when restarted.",
-      "autoUpdateFailed": "Failed to auto-update {{browser}}",
-      "updateWithErrors": "Update completed with some errors",
-      "updateWithErrorsDescription": "{{newVersions}} new versions found, {{failedUpdates}} browsers failed to update",
-      "updateSuccess": "Browser versions updated successfully",
-      "updateSuccessDescription": "Found {{newVersions}} new versions across {{successfulUpdates}} browsers. Auto-downloads will start shortly.",
-      "upToDate": "No new browser versions found",
-      "upToDateDescription": "All browser versions are up to date",
-      "updateAllFailed": "Failed to update browser versions",
-      "updateStarted": "{{browser}} update started",
-      "updateStartedDescription": "Version {{version}} download will begin shortly. Browser launch is disabled until update completes.",
-      "downloadStarting": "Starting {{browser}} {{version}} download",
-      "downloadProgressBelow": "Download progress will be shown below...",
-      "autoDownloadStarted": "Downloading {{browser}} {{version}} automatically. Progress will be shown below.",
-      "lookingForUpdates": "Looking for updates for {{browser}}"
     }
   },
   "profilePassword": {
@@ -2664,17 +2559,12 @@
     "proxyNotWorking": "The selected proxy isn't working, so the profile wasn't created.",
     "proxyPaymentRequired": "The selected proxy requires payment (402) — its subscription may have expired — so the profile wasn't created.",
     "vpnNotWorking": "The selected VPN isn't working, so the profile wasn't created.",
-    "camoufoxImportDeprecated": "Importing this profile type is no longer supported. Please use Wayfern instead.",
     "updateChecksumsUnavailable": "The update {{version}} could not be verified because its checksum file could not be retrieved. The update was not installed; it will be retried later.",
     "updateChecksumMismatch": "The downloaded update file {{file}} failed checksum verification and was discarded. Please try again.",
-    "browserChecksumUnavailable": "{{browser}} {{version}} could not be verified because its checksum file could not be retrieved. The download was stopped; it will be retried later.",
-    "browserChecksumMismatch": "The downloaded {{browser}} {{version}} archive failed checksum verification and was discarded. Please try again.",
     "nameCannotBeEmpty": "Name cannot be empty",
-    "wayfernVersionNotAvailable": "Wayfern version {{requested}} is not available for download. The current version is {{current}}.",
     "profileNameExists": "A profile named \"{{name}}\" already exists",
     "importSourceNotFound": "The source path does not exist",
     "importNoItems": "Nothing selected to import",
-    "browserNotDownloaded": "No downloaded version of {{browser}} is available. Download it first, then retry the import.",
     "archiveExtractionFailed": "Failed to extract the archive: {{detail}}",
     "unsupportedArchiveFormat": "Unsupported archive format. Only ZIP archives are supported.",
     "clearOnCloseUnavailable": "Clear-on-close isn't available for ephemeral or password-protected profiles.",
@@ -2686,11 +2576,11 @@
     "fingerprintMatchFailed": "Couldn't match the fingerprint to the proxy.",
     "proxySidecarVersionMismatch": "Some Donut Browser files are from different versions. Reinstall the latest update; your profiles will stay safe.",
     "proxySidecarNotResponding": "The Donut proxy helper (donut-proxy) did not finish within {{seconds}} seconds. Security software may be holding it: allow donut-proxy in your antivirus, then try again.",
-    "wayfernNotResponding": "Wayfern started but did not answer within {{seconds}} seconds. Security software may be holding it, or it could not open its window. Allow Wayfern in your antivirus, then try again.",
+    "wayfernNotResponding": "The browser started but did not answer within {{seconds}} seconds. Security software may be holding it, or it could not open its window. Allow Apostate in your antivirus, then try again.",
     "updateProfilesRunning": "Stop all running profiles before installing the update.",
     "updatePreparationFailed": "Donut Browser could not safely stop a background network process. Restart your computer, then try the update again.",
     "portableUpdateFailed": "Donut Browser could not replace its files in the portable folder and kept the current version. Close programs that use files in that folder, then restart again.",
-    "wayfernTermsRequired": "Accept the Wayfern Terms and Conditions to use Wayfern.",
+    "wayfernTermsRequired": "The browser engine cannot start until its terms are accepted.",
     "apiPortUnavailable": "The API server could not find an available port.",
     "mcpAgentUnknown": "This MCP client is not supported.",
     "mcpAgentInstallFailed": "Could not add Donut Browser to the MCP client: {{detail}}",
@@ -2740,7 +2630,8 @@
     "profileLockedElsewhere": "This profile is in use on another device.",
     "profileLockUnavailable": "Could not check whether this profile is in use elsewhere. Check your connection and try again.",
     "fingerprintExitMismatch": "The proxy exit node doesn't match this profile's fingerprint.",
-    "fingerprintHostOsMismatch": "This profile claims {{claimed}}, but Donut is running on {{host}}. Launch it on a {{claimed}} machine or virtual machine.",
+    "fingerprintHostOsMismatch": "This profile claims {{claimed}} and Donut is running on {{host}}, but its proxy or VPN is not available. Without it the connection would start from this computer and show {{host}}. Fix or remove the proxy or VPN, then launch again.",
+    "fingerprintMobileUnsupported": "Donut no longer opens profiles that claim a phone or tablet (Android, iOS). Choose Windows, macOS or Linux.",
     "launchConsentExpired": "That confirmation is no longer valid. Try launching again.",
     "vpnWorkerStartFailed": "Couldn't start the VPN connection: {{detail}}",
     "exitProbeFailed": "Couldn't reach the proxy exit node to check its location.",
@@ -2758,7 +2649,7 @@
       "parameter": "The link contains an option Donut does not support.",
       "malformed": "The share link is invalid."
     },
-    "camoufoxRemoved": "Camoufox is no longer supported. Recreate this profile with Wayfern.",
+    "camoufoxRemoved": "Camoufox is no longer supported. Recreate this profile; it will run on the Apostate engine.",
     "noE2ePasswordSet": "No end-to-end encryption password is set. Set one before syncing encrypted data.",
     "importSourceNotChromium": "This folder is not a Chromium browser profile",
     "importSourceNotChromiumNamed": "{{family}} profiles cannot be imported; only Chromium-based browsers are supported",
@@ -2788,7 +2679,7 @@
     "profileImportUnsafeArchive": "This archive tries to write outside the profile folder, so it was refused.",
     "recordingAlreadyRunning": "A recording is already running. Stop it before starting another.",
     "profileNotRunning": "This profile's browser is not running. Start it first.",
-    "wayfern152Required": "Recording needs Wayfern 152 or newer. Update the browser for this profile.",
+    "wayfern152Required": "Recording is not available on the Apostate engine.",
     "recordingFailed": "The recording could not be started. {{detail}}",
     "mcpRemoteRequiresSignIn": "Sign in to your Donut account before enabling remote control.",
     "mcpRemoteUnauthorized": "Donut cloud refused this device's credentials. Sign out and sign in again.",
@@ -2971,7 +2862,7 @@
     "agentNotEntitled": "The agent is not available on this account.",
     "noCredits": "No credits are left for the agent.",
     "taskBudget": "The task reached its credit cap.",
-    "agentUnsupported": "This browser version cannot run the agent. Update Wayfern.",
+    "agentUnsupported": "The Apostate engine cannot run the agent.",
     "agentBusy": "This profile is already running a task.",
     "agentTokenRequired": "The agent could not sign in. Try again.",
     "agentEngineFailed": "The agent could not do that.",
@@ -3005,7 +2896,7 @@
     "pasteTypingFailed": "Typing failed: {{detail}}",
     "profileStillSyncing": "This profile is still syncing. Try again shortly.",
     "cloudApiUrlInvalid": "Enter an absolute http:// or https:// address.",
-    "cookieBotRequiresWayfern": "The local Cookie Bot can only drive Wayfern profiles, because it uses the browser's DevTools connection."
+    "cookieBotRequiresWayfern": "The local Cookie Bot can only drive Apostate profiles, because it uses the browser's DevTools connection."
   },
   "rail": {
     "profiles": "Profiles",
@@ -3265,7 +3156,7 @@
     "steps": {
       "createProfile": {
         "title": "Create your first profile",
-        "content": "Click here to create your first profile. Pick Wayfern as the browser — the recommended, fingerprint-protected Chromium."
+        "content": "Click here to create your first profile. Donut downloads its browser engine by itself, so you can start right away."
       },
       "dnsBlocking": {
         "title": "DNS blocking",
@@ -3296,25 +3187,6 @@
       "grant": "Allow access",
       "requesting": "Requesting…"
     },
-    "ready": {
-      "title": "Setting things up",
-      "descDownloading": "Downloading your first browser (Wayfern). This one-time setup runs in the background — hang tight.",
-      "descReady": "Your browser is ready. Let's create your first profile.",
-      "cta": "Create my first profile",
-      "downloading": "Downloading…",
-      "extracting": "Extracting…",
-      "stats": "{{downloaded}} of {{total}}",
-      "speed": "{{speed}}/s",
-      "timeLeft": "{{time}} left",
-      "descExtracting": "Extracting your browser. This one-time setup runs in the background — hang tight.",
-      "almostFinished": "Almost finished…",
-      "errorTitle": "Setup failed",
-      "errorDownload": "{{browser}} couldn't be downloaded. Check your connection and try again.",
-      "errorExtraction": "{{browser}} couldn't be extracted. Please try again.",
-      "errorGeneric": "Something went wrong while setting up {{browser}}. Please try again.",
-      "retry": "Try again",
-      "proxyHint": "If your network blocks Donut's servers, enter a proxy for Donut, then try again."
-    },
     "features": {
       "title": "Features",
       "items": {
@@ -3340,10 +3212,6 @@
     },
     "progress": "Setup progress"
   },
-  "wayfernBlocked": {
-    "title": "Not your primary device",
-    "description": "Browser automation and profiles for another operating system run only on your primary device. Sign out of Donut Browser on your other computers, then try again."
-  },
   "profileGenerationLimit": {
     "title": "Hourly profile limit reached",
     "description": "Your plan's hourly limit for new profiles is reached. Creation resumes as the hour rolls over, so your account is not blocked."
@@ -3355,9 +3223,7 @@
     "invalidFingerprintDescription": "The fingerprint configuration contains invalid JSON. Please check your advanced settings.",
     "saveFailed": "Failed to save configuration"
   },
-  "cookieCopy": {
-    "noOtherTargets": "No other Wayfern profiles selected"
-  },
+  "cookieCopy": {},
   "about": {
     "website": "Website",
     "licenses": "Licenses",
@@ -3645,7 +3511,14 @@
       "ownTimes": "A different time for each profile",
       "timeRandom": "Random per profile",
       "summaryOwnTimes_one": "Each profile runs {{count}} time a week at its own random time, up to {{minutes}} min each.",
-      "summaryOwnTimes_other": "Each profile runs {{count}} times a week at its own random time, up to {{minutes}} min each."
+      "summaryOwnTimes_other": "Each profile runs {{count}} times a week at its own random time, up to {{minutes}} min each.",
+      "sourceTopic": "Product topic",
+      "topicKeywordPlaceholder": "Keyword, e.g. iphone 15",
+      "topicKeywordLabel": "Product keyword",
+      "topicKeywordInvalid": "Use {{min}} to {{max}} characters.",
+      "topicHint": "Searches this keyword on Google, opens {{site}} results, reads listings and looks at photos, then keeps searching the variants {{site}} suggests.",
+      "topicLearned": "Variants learned so far: {{count}}",
+      "enterKeywordFirst": "Enter a keyword first"
     },
     "preset": {
       "light": "Light",
@@ -3670,7 +3543,7 @@
       "fixFailed": "Could not apply that fix.",
       "exitNodeHint": "Without a proxy or VPN the run leaves from the fleet's own datacenter address. Hours of traffic from a hosting network damages the profile's identity more than not warming it at all.",
       "reasonSyncPassword": "Sync encryption password is set",
-      "reasonLocalBrowser": "Local Cookie Bot needs a Wayfern profile",
+      "reasonLocalBrowser": "Local Cookie Bot needs an Apostate profile",
       "reasonEphemeral": "This profile is ephemeral, so its cookies would vanish when it closes"
     },
     "conflict": {
@@ -3744,7 +3617,8 @@
       "profileNotSynced": "The cloud copy is incomplete, so finish syncing this profile from a desktop",
       "profileOsMismatch": "The profile came from a different operating system than the host that ran it",
       "cancelledByUser": "Stopped by hand",
-      "unknown": "Unknown reason ({{code}})"
+      "unknown": "Unknown reason ({{code}})",
+      "siteChallenge": "The site asked to verify a human, so the run stopped"
     },
     "exitCheck": {
       "failed": "The last check ({{time}}) could not reach the proxy or VPN, so check it",
@@ -3825,17 +3699,6 @@
     "handoffLocalLocation": "This computer",
     "handoffSyncDetails": "Open sync details"
   },
-  "synchronizerPreview": {
-    "title": "Rehearse a click",
-    "description": "Preview how an action from the leader reaches your selected followers. This example does not start browsers.",
-    "send": "Send example click",
-    "empty": "Select a follower to try the preview.",
-    "ready": "Selected followers: {{count}}",
-    "sent": "Example click shown. Receiving followers: {{count}}",
-    "received": "Example click received",
-    "starting": "Launching profiles and connecting the synchronizer…",
-    "startError": "The synchronizer could not start. Your selection is saved. Check the profiles and try again."
-  },
   "isolationDemo": {
     "title": "One change. One profile.",
     "description": "Try these example profiles. Nothing here changes your real profiles.",
@@ -3897,6 +3760,7 @@
     "launch": {
       "queued": "Launch requested",
       "preparing": "Preparing profile",
+      "engine": "Preparing browser engine",
       "network": "Preparing network",
       "extensions": "Preparing extensions",
       "starting": "Starting browser",
@@ -4400,7 +4264,7 @@
       "confirmDelete": "Click again to delete",
       "emptyTitle": "What should the agent do?",
       "emptyBody": "It works in the browser of the profile you choose. You see each step, and you can step in at any time.",
-      "noProfiles": "Create a Wayfern profile first. The agent works in its browser.",
+      "noProfiles": "Create a profile first. The agent works in its browser.",
       "placeholderStart": "Ask the agent to do something",
       "placeholderFollowUp": "Write a follow-up",
       "placeholderSteer": "Steer the agent while it works",
@@ -4631,12 +4495,6 @@
         "title": "Keep 2FA codes with the profile",
         "body": "Add an account's 2FA key in the profile's info, and Donut shows the current code, ready to copy. The keys stay encrypted on this device.",
         "action": "Try a 2FA key"
-      },
-      "synchronizer": {
-        "label": "Synchronizer",
-        "title": "Drive many profiles at once",
-        "body": "Choose Launch with Synchronizer in a profile's menu and pick the followers. Every click and keystroke in the leader repeats in each follower.",
-        "action": "Open Profiles"
       }
     },
     "sections": {

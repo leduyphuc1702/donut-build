@@ -16,32 +16,26 @@ import {
   LuNetwork,
   LuShieldCheck,
   LuTerminal,
-  LuTriangleAlert,
   LuUsers,
 } from "react-icons/lu";
 import {
   IntroScene,
   LicenseScene,
   PermissionsScene,
-  SetupScene,
 } from "@/components/onboarding/scenes";
 import { ProfileIsolationDemo } from "@/components/profile-isolation-demo";
-import { AppProxyForm } from "@/components/settings/app-proxy-settings";
 import { SCENE_GRID_CLASS } from "@/components/tips/scene-primitives";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { StepDots } from "@/components/ui/step-dots";
 import { StepTransition } from "@/components/ui/step-transition";
-import { useBrowserSetup } from "@/hooks/use-browser-setup";
 import { useMotionAllowed } from "@/hooks/use-motion-allowed";
 import { usePermissions } from "@/hooks/use-permissions";
-import { translateBackendError } from "@/lib/backend-errors";
-import { getBrowserDisplayName } from "@/lib/browser-utils";
 import { MOTION_DURATION, MOTION_EASE_IN, MOTION_SPRING } from "@/lib/motion";
 import { getCurrentOS } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 
-type WelcomeStep = "intro" | "isolation" | "license" | "permissions" | "setup";
+type WelcomeStep = "intro" | "isolation" | "license" | "permissions";
 
 // Concrete features shown on the intro step.
 const FEATURES = [
@@ -54,71 +48,6 @@ const FEATURES = [
   { key: "welcome.features.items.setDefault", Icon: LuGlobe },
   { key: "welcome.features.items.openSource", Icon: LuGithub },
 ] as const;
-
-const BYTE_UNITS = ["byte", "kilobyte", "megabyte", "gigabyte"] as const;
-
-function formatBytes(bytes: number, locale: string): string {
-  const exponent = Math.min(
-    BYTE_UNITS.length - 1,
-    bytes > 0 ? Math.floor(Math.log(bytes) / Math.log(1024)) : 0,
-  );
-  const value = bytes / 1024 ** exponent;
-  return new Intl.NumberFormat(locale, {
-    style: "unit",
-    unit: BYTE_UNITS[exponent],
-    unitDisplay: "short",
-    maximumFractionDigits: exponent === 0 ? 0 : 1,
-  }).format(value);
-}
-
-function formatDuration(seconds: number, locale: string): string {
-  const total = Math.max(0, Math.round(seconds));
-  const formatUnit = (
-    value: number,
-    unit: "minute" | "second",
-    minimumIntegerDigits = 1,
-  ) =>
-    new Intl.NumberFormat(locale, {
-      style: "unit",
-      unit,
-      unitDisplay: "narrow",
-      minimumIntegerDigits,
-    }).format(value);
-
-  if (total < 60) return formatUnit(total, "second");
-  const minutes = Math.floor(total / 60);
-  const remainder = total % 60;
-  return `${formatUnit(minutes, "minute")} ${formatUnit(
-    remainder,
-    "second",
-    2,
-  )}`;
-}
-
-function SetupProgress({ value, label }: { value: number; label: string }) {
-  const normalizedValue = Math.min(100, Math.max(0, value));
-  const determined = normalizedValue > 0;
-
-  return (
-    <div
-      role="progressbar"
-      aria-label={label}
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={determined ? normalizedValue : undefined}
-      className="h-1.5 w-full overflow-hidden rounded-full bg-foreground/8"
-    >
-      {determined ? (
-        <div
-          className="h-full origin-left rounded-full bg-primary transition-transform duration-300 ease-[var(--ease-out)] motion-reduce:transition-none"
-          style={{ transform: `scaleX(${normalizedValue / 100})` }}
-        />
-      ) : (
-        <div className="h-full w-1/3 rounded-full bg-primary motion-safe:animate-progress-indeterminate motion-reduce:translate-x-0" />
-      )}
-    </div>
-  );
-}
 
 function StepHeading({
   title,
@@ -160,20 +89,12 @@ function StepHeading({
  */
 export function WelcomeDialog({
   isOpen,
-  needsSetup,
   onComplete,
 }: {
   isOpen: boolean;
-  /**
-   * Whether this user still needs the browser-download + profile-creation flow.
-   * False when they already have a profile — then the welcome and commercial-use
-   * steps still show, but "continue" finishes onboarding instead of proceeding
-   * to permissions/download.
-   */
-  needsSetup: boolean;
   onComplete: () => void;
 }) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const animateSteps = useMotionAllowed();
   const {
     requestPermission,
@@ -193,7 +114,6 @@ export function WelcomeDialog({
     "isolation",
     "license",
     ...(showPermissionsStep ? (["permissions"] as const) : []),
-    ...(needsSetup ? (["setup"] as const) : []),
   ];
   const currentStepIndex = Math.max(0, visibleSteps.indexOf(step));
   const go = (next: WelcomeStep) => {
@@ -204,12 +124,6 @@ export function WelcomeDialog({
     const previous = visibleSteps[currentStepIndex - 1];
     if (previous) go(previous);
   };
-  // Where the "skip" / "continue" affordances go: into the setup flow when a
-  // browser/profile is still needed, otherwise straight to completion.
-  const advanceToSetup = () => {
-    if (needsSetup) go("setup");
-    else onComplete();
-  };
   const [requesting, setRequesting] = useState(false);
 
   // Each step starts at its top, also when the one before was scrolled.
@@ -219,11 +133,6 @@ export function WelcomeDialog({
       .querySelector('[data-slot="welcome-dialog"]')
       ?.scrollTo({ top: 0 });
   }, [step]);
-
-  // Track the required browser's download + extraction the whole time the
-  // dialog is open, so progress is live by the time the user reaches setup.
-  const setup = useBrowserSetup("wayfern", isOpen);
-  const browserName = getBrowserDisplayName("wayfern");
 
   const requestPermissions = useCallback(async () => {
     setRequesting(true);
@@ -238,21 +147,20 @@ export function WelcomeDialog({
       console.error("Permission request failed:", err);
     } finally {
       setRequesting(false);
-      setDirection(1);
-      setStep("setup");
+      onComplete();
     }
-  }, [isCameraAccessGranted, isMicrophoneAccessGranted, requestPermission]);
+  }, [
+    isCameraAccessGranted,
+    isMicrophoneAccessGranted,
+    onComplete,
+    requestPermission,
+  ]);
 
   const acceptLicense = () => {
-    if (!needsSetup) {
-      onComplete();
-    } else if (
-      getCurrentOS() === "macos" &&
-      !(isInitialized && permissionsGranted)
-    ) {
+    if (getCurrentOS() === "macos" && !(isInitialized && permissionsGranted)) {
       go("permissions");
     } else {
-      go("setup");
+      onComplete();
     }
   };
 
@@ -263,15 +171,6 @@ export function WelcomeDialog({
       <LicenseScene />
     ) : step === "permissions" ? (
       <PermissionsScene />
-    ) : step === "setup" ? (
-      <SetupScene
-        phase={setup.phase}
-        progress={
-          setup.phase === "extracting"
-            ? setup.extractionPercent
-            : setup.downloadPercent
-        }
-      />
     ) : null;
 
   const skipButton = (
@@ -279,7 +178,7 @@ export function WelcomeDialog({
       variant="ghost"
       size="sm"
       className="text-muted-foreground hover:text-foreground"
-      onClick={advanceToSetup}
+      onClick={onComplete}
     >
       {t("welcome.skip")}
     </Button>
@@ -431,7 +330,7 @@ export function WelcomeDialog({
           size="sm"
           className="text-muted-foreground hover:text-foreground"
           disabled={requesting}
-          onClick={advanceToSetup}
+          onClick={onComplete}
         >
           {t("welcome.permissions.skip")}
         </Button>
@@ -453,145 +352,6 @@ export function WelcomeDialog({
             : t("welcome.permissions.grant")}
         </Button>
       );
-      break;
-
-    case "setup":
-      if (setup.phase === "error") {
-        body = (
-          <>
-            <StepHeading
-              tone="error"
-              title={
-                <>
-                  <LuTriangleAlert className="size-5 shrink-0" />
-                  {t("welcome.ready.errorTitle")}
-                </>
-              }
-              body={
-                setup.error?.stage === "downloading"
-                  ? t("welcome.ready.errorDownload", { browser: browserName })
-                  : setup.error?.stage === "extracting" ||
-                      setup.error?.stage === "verifying"
-                    ? t("welcome.ready.errorExtraction", {
-                        browser: browserName,
-                      })
-                    : t("welcome.ready.errorGeneric", { browser: browserName })
-              }
-            />
-            {setup.error?.detail && (
-              <p className="mx-auto max-w-[55ch] text-center text-sm/6 text-pretty text-foreground">
-                {translateBackendError(t, setup.error.detail)}
-              </p>
-            )}
-            {setup.error?.stage === "downloading" && (
-              <div className="mx-auto flex w-full max-w-md flex-col gap-2">
-                <p className="text-center text-xs text-pretty text-muted-foreground">
-                  {t("welcome.ready.proxyHint")}
-                </p>
-                <AppProxyForm />
-              </div>
-            )}
-          </>
-        );
-        // No escape hatch here: a browser must finish downloading before
-        // onboarding can complete, so the only action on failure is to retry.
-        trailing = (
-          <Button size="sm" onClick={() => setup.retry()}>
-            {t("welcome.ready.retry")}
-          </Button>
-        );
-        break;
-      }
-      body = (
-        <>
-          <StepHeading
-            title={t("welcome.ready.title")}
-            body={
-              setup.phase === "ready"
-                ? t("welcome.ready.descReady")
-                : setup.phase === "extracting"
-                  ? t("welcome.ready.descExtracting")
-                  : t("welcome.ready.descDownloading")
-            }
-          />
-          {setup.phase === "downloading" && (
-            <div className="mx-auto flex w-full max-w-xs flex-col gap-2">
-              <SetupProgress
-                value={setup.downloadPercent}
-                label={t("welcome.ready.downloading")}
-              />
-              <div className="flex items-center justify-between text-base/7 text-muted-foreground tabular-nums sm:text-sm/6">
-                <span className="inline-flex items-center gap-1.5">
-                  <LuLoaderCircle className="size-4 shrink-0 motion-safe:animate-spin" />
-                  {t("welcome.ready.downloading")}
-                </span>
-                <span>{setup.downloadPercent}%</span>
-              </div>
-              <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-0.5 text-sm text-muted-foreground tabular-nums">
-                <span>
-                  {setup.totalBytes != null
-                    ? t("welcome.ready.stats", {
-                        downloaded: formatBytes(
-                          setup.downloadedBytes,
-                          i18n.language,
-                        ),
-                        total: formatBytes(setup.totalBytes, i18n.language),
-                      })
-                    : formatBytes(setup.downloadedBytes, i18n.language)}
-                </span>
-                {setup.speedBytesPerSec > 0 && (
-                  <span>
-                    {t("welcome.ready.speed", {
-                      speed: formatBytes(setup.speedBytesPerSec, i18n.language),
-                    })}
-                  </span>
-                )}
-                {setup.etaSeconds != null &&
-                  Number.isFinite(setup.etaSeconds) &&
-                  setup.etaSeconds > 0 && (
-                    <span>
-                      {t("welcome.ready.timeLeft", {
-                        time: formatDuration(setup.etaSeconds, i18n.language),
-                      })}
-                    </span>
-                  )}
-              </div>
-            </div>
-          )}
-          {setup.phase === "extracting" && (
-            <div className="mx-auto flex w-full max-w-xs flex-col gap-2">
-              {setup.extractionOvertime ? (
-                <div className="flex items-center justify-center gap-1.5 text-base/7 text-muted-foreground tabular-nums sm:text-sm/6">
-                  <LuLoaderCircle className="size-4 shrink-0 motion-safe:animate-spin" />
-                  {t("welcome.ready.almostFinished")}
-                </div>
-              ) : (
-                <>
-                  <SetupProgress
-                    value={setup.extractionPercent}
-                    label={t("welcome.ready.extracting")}
-                  />
-                  <div className="flex items-center justify-between text-base/7 text-muted-foreground tabular-nums sm:text-sm/6">
-                    <span className="inline-flex items-center gap-1.5">
-                      <LuLoaderCircle className="size-4 shrink-0 motion-safe:animate-spin" />
-                      {t("welcome.ready.extracting")}
-                    </span>
-                    <span>{setup.extractionPercent}%</span>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-        </>
-      );
-      if (setup.phase === "ready") {
-        trailing = (
-          <Button size="sm" className="gap-1.5" onClick={onComplete}>
-            {t("welcome.ready.cta")}
-            <LuArrowRight className="size-4 shrink-0" />
-          </Button>
-        );
-      }
       break;
   }
 

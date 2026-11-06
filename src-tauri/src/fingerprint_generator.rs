@@ -12,21 +12,6 @@
 
 use serde_json::{json, Map, Value};
 
-/// Whether new profiles are generated here rather than by the closed engine.
-///
-/// A self-hosted account server is the signal: it has no way to mint the
-/// Wayfern token that custom fingerprints require. `DONUT_LOCAL_FINGERPRINTS`
-/// forces the local path for testing and for a cloud account that wants it.
-pub fn local_generation_enabled() -> bool {
-  if std::env::var("DONUT_LOCAL_FINGERPRINTS")
-    .ok()
-    .is_some_and(|value| matches!(value.trim(), "1" | "true" | "yes" | "on"))
-  {
-    return true;
-  }
-  crate::cloud_auth::cloud_api_base() != crate::cloud_auth::DEFAULT_CLOUD_API_URL
-}
-
 /// A device for `os`, stable for the same `seed` and browser major version.
 ///
 /// `location` is the exit's location, already resolved through the profile's
@@ -352,6 +337,10 @@ fn apple_chip_cores(renderer: &str) -> Option<&'static [u32]> {
     "M4" | "M5" => &[10],
     "M4 Pro" => &[12, 14],
     "M4 Max" => &[14, 16],
+    "M5 Pro" => &[15, 18],
+    "M5 Max" => &[18],
+    "M5 Ultra" => &[30, 36],
+    "M6" => &[10, 12],
     _ => return None,
   })
 }
@@ -816,6 +805,14 @@ mod tests {
     );
     assert_eq!(
       apple_chip_cores("ANGLE (Apple, ANGLE Metal Renderer: Apple M5 Max, Unspecified Version)"),
+      Some(&[18u32][..])
+    );
+    assert_eq!(
+      apple_chip_cores("ANGLE (Apple, ANGLE Metal Renderer: Apple M6, Unspecified Version)"),
+      Some(&[10u32, 12][..])
+    );
+    assert_eq!(
+      apple_chip_cores("ANGLE (Apple, ANGLE Metal Renderer: Apple M7, Unspecified Version)"),
       None
     );
   }

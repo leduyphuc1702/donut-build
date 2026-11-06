@@ -402,13 +402,6 @@ fn names_for(base: &str, count: u32, existing: &[String]) -> Vec<String> {
     .collect()
 }
 
-fn latest_wayfern_version() -> Option<String> {
-  let mut versions = crate::downloaded_browsers_registry::DownloadedBrowsersRegistry::instance()
-    .get_downloaded_versions("wayfern");
-  versions.sort_by(|a, b| crate::api_client::compare_versions(b, a));
-  versions.into_iter().next()
-}
-
 /// Make `count` profiles with these settings. Everything is checked first,
 /// each proxy once; then the profiles are made one by one until the count is
 /// reached, an error stops the run, or the person cancels it. What was made
@@ -440,10 +433,7 @@ pub async fn create_profiles(
 
   let settings = settings.checked().await?;
   let after = settings.after_creation().validated()?;
-  let version = latest_wayfern_version().ok_or_else(|| {
-    serde_json::json!({ "code": "BROWSER_NOT_DOWNLOADED", "params": { "browser": "Wayfern" } })
-      .to_string()
-  })?;
+  let version = crate::apostate::CHROMIUM.to_string();
   let os = settings
     .wayfern_config
     .as_ref()

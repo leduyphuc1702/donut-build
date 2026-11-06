@@ -95,9 +95,7 @@
       "arrowDown": "Flèche bas",
       "tab": "Tab"
     },
-    "errors": {
-      "unknown": "Une erreur inconnue est survenue"
-    },
+    "errors": {},
     "window": {
       "minimize": "Réduire",
       "maximize": "Agrandir",
@@ -199,9 +197,6 @@
     },
     "advanced": {
       "title": "Avancé",
-      "clearCache": "Effacer tout le cache des versions",
-      "clearCacheDescription": "Efface toutes les données de versions de navigateurs en cache et actualise toutes les versions depuis leurs sources. Cela forcera un nouveau téléchargement des informations de version pour tous les navigateurs.",
-      "clearCacheFailed": "Échec de la suppression du cache",
       "copyLogs": "Copier les journaux",
       "openLogDir": "Ouvrir le dossier des journaux",
       "copyLogsSuccess": "Journaux copiés dans le presse-papiers",
@@ -479,20 +474,10 @@
       "removePassword": "Supprimer le mot de passe"
     },
     "synchronizer": {
-      "launchWithSync": "Lancer avec le synchroniseur",
       "stopLeader": "Arrêter ce profil et tous ses suiveurs",
       "stopFollower": "Suit les actions de {{leaderName}}",
       "desyncedTooltip": "La synchronisation a échoué à {{url}}",
-      "paidFeature": "Le synchroniseur est une fonctionnalité payante",
-      "wayfernOnly": "Seuls les profils Wayfern peuvent être synchronisés",
-      "selectFollowers": "Sélectionner les profils suiveurs",
-      "selectFollowersDesc": "Choisissez les profils qui reproduiront les actions du profil leader. Seuls les profils Wayfern arrêtés peuvent être sélectionnés.",
       "leader": "Leader",
-      "follower": "Suiveur",
-      "startSession": "Démarrer la session de synchronisation",
-      "noFollowers": "Sélectionnez au moins un profil suiveur",
-      "flakyBadge": "FLAKY",
-      "flakyTooltip": "Ce profil a une résolution d'écran différente de celle du leader. La mise en page des pages peut différer, ce qui peut causer des clics et interactions erronés.",
       "pauseMirroring": "Suspendre la duplication",
       "resumeMirroring": "Reprendre la duplication",
       "pausedNote": "Les suiveurs ne copient plus le meneur. Ce que vous faites maintenant dans le meneur y reste.",
@@ -595,7 +580,6 @@
     "antiDetect": {
       "title": "Navigateur anti-détection",
       "description": "Choisissez un navigateur avec des capacités anti-détection",
-      "chromium": "Wayfern",
       "badge": "Navigateur anti-détection"
     },
     "regular": {
@@ -618,26 +602,11 @@
       "label": "URL du hook de lancement",
       "placeholder": "https://example.com/hooks/profile-launch"
     },
-    "version": {
-      "fetching": "Récupération des versions disponibles...",
-      "fetchError": "Échec de la récupération des versions du navigateur. Veuillez vérifier votre connexion Internet et réessayer.",
-      "needsDownload": "La version de {{browser}} ({{version}}) doit être téléchargée",
-      "available": "La version de {{browser}} ({{version}}) est disponible",
-      "downloading": "Téléchargement de la version de {{browser}} ({{version}})...",
-      "latestNeedsDownload": "La dernière version ({{version}}) doit être téléchargée",
-      "latestAvailable": "La dernière version ({{version}}) est disponible",
-      "latestDownloading": "Téléchargement de la version ({{version}})...",
-      "upgradeAvailable": "Une version plus récente ({{version}}) de {{browser}} est disponible."
-    },
     "chromiumLabel": "Chromium",
-    "chromiumSubtitle": "Propulsé par Wayfern",
-    "platformUnavailable": "{{browser}} n'est pas encore disponible sur votre plateforme.",
     "passwordProtect": {
       "label": "Protéger ce profil par mot de passe",
       "description": "Chiffre les données du profil sur disque. Requis au lancement."
     },
-    "downloadingSubtitle": "Téléchargement…",
-    "browsersDownloading": "Les navigateurs sont encore en cours de téléchargement. La création de profils sera disponible une fois un téléchargement terminé.",
     "advancedOptions": "Options avancées",
     "moreOptions": "Plus d'options",
     "hourlyLimit": {
@@ -647,6 +616,9 @@
     },
     "group": {
       "notFound": "Aucun groupe trouvé."
+    },
+    "engine": {
+      "preparing": "Le moteur du navigateur est encore en cours de téléchargement. Vous pouvez créer le profil dès maintenant ; il s'ouvrira dès que le moteur sera prêt."
     }
   },
   "deleteDialog": {
@@ -1088,7 +1060,6 @@
     "apiToggleFailed": "Échec du basculement du serveur API",
     "apiStartFailed": "Échec du démarrage du serveur API",
     "tokenCopied": "Jeton copié",
-    "mcpAcceptTermsFirst": "(Acceptez d'abord les conditions Wayfern dans les Paramètres)",
     "apiRunningOn": "En cours sur",
     "apiExampleRequest": "Exemple de requête",
     "examples": {
@@ -1204,38 +1175,6 @@
     "error": "Échec de l'importation du profil"
   },
   "config": {
-    "wayfern": {
-      "title": "Configuration Wayfern",
-      "fingerprint": {
-        "title": "Empreinte digitale",
-        "randomize": "Randomiser au lancement",
-        "randomizeDescription": "Génère une nouvelle empreinte digitale à chaque lancement du navigateur.",
-        "platformPlaceholder": "p. ex., Win32, MacIntel, Linux x86_64",
-        "timezoneOffsetPlaceholder": "p. ex., 300 pour EST (UTC-5)",
-        "webglRendererPlaceholder": "p. ex., Intel(R) HD Graphics"
-      },
-      "os": {
-        "title": "Système d'exploitation",
-        "description": "Le système d'exploitation à émuler pour la génération d'empreinte digitale.",
-        "windows": "Windows",
-        "macos": "macOS",
-        "linux": "Linux",
-        "android": "Android",
-        "ios": "iOS"
-      },
-      "screen": {
-        "title": "Taille d'écran",
-        "minWidth": "Largeur min",
-        "maxWidth": "Largeur max",
-        "minHeight": "Hauteur min",
-        "maxHeight": "Hauteur max"
-      },
-      "blocking": {
-        "title": "Blocage",
-        "webrtc": "Bloquer WebRTC",
-        "webgl": "Bloquer WebGL"
-      }
-    },
     "shared": {
       "browserBehavior": "Comportement du navigateur",
       "allowAddonsOpenTabs": "Autoriser les modules complémentaires à ouvrir automatiquement de nouveaux onglets"
@@ -1259,7 +1198,7 @@
       "sourcePlaceholder": "Sélectionnez un profil pour copier les cookies",
       "running": "(en cours)",
       "targetProfiles": "Profils cibles ({{count}})",
-      "noOtherTargets": "Aucun autre profil Wayfern sélectionné",
+      "noOtherTargets": "Aucun autre profil sélectionné",
       "selectSourceFirst": "Sélectionnez d'abord un profil source",
       "selectionStatus": "({{selected}} sur {{total}} sélectionnés)",
       "searchPlaceholder": "Rechercher des domaines ou cookies...",
@@ -1481,7 +1420,7 @@
     "renameProfileFailed": "Échec du renommage du profil : {{error}}",
     "killBrowserFailed": "Échec de l’arrêt du navigateur : {{error}}",
     "deleteSelectedProfilesFailed": "Échec de la suppression des profils sélectionnés : {{error}}",
-    "cookieCopyUnsupportedBrowser": "La copie de cookies ne fonctionne qu'avec les profils Wayfern",
+    "cookieCopyUnsupportedBrowser": "La copie de cookies ne fonctionne qu'avec les profils Apostate",
     "updateSyncSettingsFailed": "Échec de la mise à jour des paramètres de synchronisation",
     "cloneProfileFailed": "Échec du clonage du profil : {{error}}",
     "loadSupportedBrowsersFailed": "Échec du chargement des navigateurs pris en charge",
@@ -1497,13 +1436,9 @@
     "themeNotFound": "Thème Tokyo Night introuvable",
     "setProfilePasswordFailed": "Échec de la définition du mot de passe du profil : {{error}}"
   },
-  "browser": {
-    "wayfern": "Wayfern"
-  },
+  "browser": {},
   "fingerprint": {
-    "crossOsWarning": "L'usurpation d'empreinte pour un système d'exploitation différent est moins fiable car il est impossible d'imiter parfaitement tous les composants sous-jacents. À utiliser avec précaution.",
-    "crossOsApostateWarning": "Ce profil s'ouvre avec le moteur open source Apostate, téléchargé la première fois qu'il est nécessaire. Il faut un VPN ou un proxy, car sa connexion ne doit pas partir de cet ordinateur. Sur Apple silicon, il se présente comme un portable Windows sur ARM.",
-    "crossOsLimitations": "L'usurpation d'empreinte inter-OS a des limitations. Les APIs au niveau du système peuvent toujours refléter votre système d'exploitation réel et certaines fonctionnalités peuvent avoir des performances réduites.",
+    "crossOsApostateWarning": "Ce profil s'ouvre avec le moteur open source Apostate, que Donut télécharge lui-même. Il s'ouvre sans proxy ni VPN, mais sans route VPN WireGuard (ou sans proxy), la couche réseau (TCP/IP) montre toujours le système de cet ordinateur, et un site peut le comparer à l'empreinte. Sur Apple silicon, il se présente comme un portable Windows sur ARM.",
     "osLabel": "Empreinte du système d'exploitation",
     "selectOSPlaceholder": "Sélectionner le système d'exploitation",
     "generateRandomOnLaunch": "Générer une empreinte aléatoire à chaque lancement",
@@ -1775,7 +1710,7 @@
       "unlockedDescription": "Ses données restent déchiffrées jusqu'à ce que vous le verrouilliez."
     },
     "fingerprint": {
-      "notSupported": "L'édition des empreintes n'est disponible que pour les profils Wayfern.",
+      "notSupported": "L'édition des empreintes n'est disponible que pour les profils Apostate.",
       "lockedTitle": "Afficher et modifier l'empreinte est une fonctionnalité Pro",
       "lockedDescription": "Les informations de votre appareil sont protégées dans chaque profil. Afficher et modifier l'empreinte d'un profil nécessite un forfait payant actif.",
       "customValuesKept": "Vos valeurs d'empreinte personnalisées sont conservées. Elles s'appliquent quand le compte a un forfait Pro actif."
@@ -2339,16 +2274,6 @@
       "unavailable": "Ce profil ne peut pas ouvrir de liens pour le moment."
     }
   },
-  "wayfernTerms": {
-    "title": "Conditions générales de Wayfern",
-    "description": "Avant d'utiliser Donut Browser, vous devez lire et accepter les Conditions Générales de Wayfern.",
-    "reviewLabel": "Veuillez consulter les Conditions Générales sur :",
-    "agreeNotice": "En cliquant sur « J'accepte », vous acceptez ces conditions.",
-    "acceptButton": "J'accepte",
-    "acceptSuccess": "Conditions acceptées avec succès",
-    "acceptFailed": "Échec de l'acceptation des conditions",
-    "tryAgain": "Veuillez réessayer"
-  },
   "commercialTrial": {
     "title": "Période d'essai commerciale expirée",
     "description": "Votre période d'essai commercial de 2 semaines est terminée.",
@@ -2540,43 +2465,13 @@
   },
   "browserDownload": {
     "toast": {
-      "fetchVersionsFailed": "Échec de la récupération des versions de {{browser}}",
-      "foundNewVersions": "{{count}} nouvelles versions de {{browser}} trouvées !",
-      "totalAvailableVersions": "Total disponible : {{count}} versions",
       "downloadFailed": "Échec du téléchargement de {{browser}} {{version}}",
       "calculating": "calcul en cours...",
-      "extractionFailed": "{{browser}} {{version}} : échec de l’extraction",
-      "extractionFailedDescription": "Le fichier corrompu a été supprimé. Il sera retéléchargé lors de la prochaine tentative.",
       "extracting": "Extraction des fichiers du navigateur... Ne fermez pas l'application.",
       "verifying": "Vérification des fichiers du navigateur...",
-      "downloadingRolling": "Téléchargement de la version rolling release...",
       "geoipDownloading": "Téléchargement de la base de données GeoIP",
       "geoipDownloaded": "Base de données GeoIP téléchargée avec succès !",
       "downloadFailedDescription": "Le téléchargement n'a pas pu être terminé. Vérifiez votre connexion et réessayez."
-    }
-  },
-  "versionUpdater": {
-    "toast": {
-      "alreadyAvailable": "{{browser}} {{version}} déjà disponible",
-      "updatingProfiles": "Mise à jour des configurations de profil...",
-      "updateCompleted": "Mise à jour de {{browser}} terminée",
-      "singleProfileUpdated": "Le profil « {{name}} » a été mis à jour vers la version {{version}}. Vous pouvez maintenant lancer vos navigateurs avec la dernière version.",
-      "multipleProfilesUpdated": "{{count}} profils ont été mis à jour vers la version {{version}}. Vous pouvez maintenant lancer vos navigateurs avec la dernière version.",
-      "versionAvailable": "La version {{version}} est désormais disponible. Les profils en cours d’exécution utiliseront la nouvelle version au redémarrage.",
-      "autoUpdateFailed": "Échec de la mise à jour automatique de {{browser}}",
-      "updateWithErrors": "Mise à jour terminée avec des erreurs",
-      "updateWithErrorsDescription": "{{newVersions}} nouvelles versions trouvées, {{failedUpdates}} navigateurs n’ont pas pu être mis à jour",
-      "updateSuccess": "Versions de navigateur mises à jour avec succès",
-      "updateSuccessDescription": "{{newVersions}} nouvelles versions trouvées sur {{successfulUpdates}} navigateurs. Les téléchargements automatiques commenceront sous peu.",
-      "upToDate": "Aucune nouvelle version de navigateur trouvée",
-      "upToDateDescription": "Toutes les versions des navigateurs sont à jour",
-      "updateAllFailed": "Échec de la mise à jour des versions des navigateurs",
-      "updateStarted": "Mise à jour de {{browser}} démarrée",
-      "updateStartedDescription": "Le téléchargement de la version {{version}} va bientôt commencer. Le lancement du navigateur est désactivé jusqu'à la fin de la mise à jour.",
-      "downloadStarting": "Démarrage du téléchargement de {{browser}} {{version}}",
-      "downloadProgressBelow": "La progression du téléchargement sera affichée ci-dessous...",
-      "autoDownloadStarted": "Téléchargement automatique de {{browser}} {{version}}. La progression sera affichée ci-dessous.",
-      "lookingForUpdates": "Recherche de mises à jour pour {{browser}}"
     }
   },
   "profilePassword": {
@@ -2683,17 +2578,12 @@
     "proxyNotWorking": "Le proxy sélectionné ne fonctionne pas, le profil n'a donc pas été créé.",
     "proxyPaymentRequired": "Le proxy sélectionné requiert un paiement (402) — son abonnement a peut-être expiré — le profil n'a donc pas été créé.",
     "vpnNotWorking": "Le VPN sélectionné ne fonctionne pas, le profil n'a donc pas été créé.",
-    "camoufoxImportDeprecated": "L'importation de ce type de profil n'est plus prise en charge. Veuillez utiliser Wayfern à la place.",
     "updateChecksumsUnavailable": "La mise à jour {{version}} n'a pas pu être vérifiée car son fichier de sommes de contrôle n'a pas pu être récupéré. La mise à jour n'a pas été installée ; une nouvelle tentative aura lieu plus tard.",
     "updateChecksumMismatch": "Le fichier de mise à jour téléchargé {{file}} a échoué à la vérification de la somme de contrôle et a été supprimé. Veuillez réessayer.",
-    "browserChecksumUnavailable": "{{browser}} {{version}} n'a pas pu être vérifié car son fichier de sommes de contrôle n'a pas pu être récupéré. Le téléchargement a été interrompu ; une nouvelle tentative aura lieu plus tard.",
-    "browserChecksumMismatch": "L'archive {{browser}} {{version}} téléchargée a échoué à la vérification de la somme de contrôle et a été supprimée. Veuillez réessayer.",
     "nameCannotBeEmpty": "Le nom ne peut pas être vide",
-    "wayfernVersionNotAvailable": "La version {{requested}} de Wayfern n'est pas disponible au téléchargement. La version actuelle est {{current}}.",
     "profileNameExists": "Un profil nommé « {{name}} » existe déjà",
     "importSourceNotFound": "Le chemin source n'existe pas",
     "importNoItems": "Rien n'est sélectionné pour l'importation",
-    "browserNotDownloaded": "Aucune version téléchargée de {{browser}} n'est disponible. Téléchargez-la d'abord, puis réessayez l'importation.",
     "archiveExtractionFailed": "Échec de l'extraction de l'archive : {{detail}}",
     "unsupportedArchiveFormat": "Format d'archive non pris en charge. Seules les archives ZIP sont prises en charge.",
     "clearOnCloseUnavailable": "L'effacement à la fermeture n'est pas disponible pour les profils éphémères ou protégés par mot de passe.",
@@ -2705,11 +2595,11 @@
     "fingerprintMatchFailed": "Impossible d'aligner l'empreinte sur le proxy.",
     "proxySidecarVersionMismatch": "Certains fichiers de Donut Browser proviennent de versions différentes. Réinstallez la dernière mise à jour ; vos profils resteront intacts.",
     "proxySidecarNotResponding": "L'assistant proxy de Donut (donut-proxy) n'a pas terminé en {{seconds}} secondes. Un logiciel de sécurité le bloque peut-être : autorisez donut-proxy dans votre antivirus, puis réessayez.",
-    "wayfernNotResponding": "Wayfern a démarré mais n'a pas répondu en {{seconds}} secondes. Un logiciel de sécurité le bloque peut-être, ou il n'a pas pu ouvrir sa fenêtre. Autorisez Wayfern dans votre antivirus, puis réessayez.",
+    "wayfernNotResponding": "Le navigateur a démarré mais n'a pas répondu en {{seconds}} secondes. Un logiciel de sécurité le bloque peut-être, ou il n'a pas pu ouvrir sa fenêtre. Autorisez Apostate dans votre antivirus, puis réessayez.",
     "updateProfilesRunning": "Arrêtez tous les profils en cours d’exécution avant d’installer la mise à jour.",
     "updatePreparationFailed": "Donut Browser n’a pas pu arrêter en toute sécurité un processus réseau en arrière-plan. Redémarrez l’ordinateur, puis réessayez la mise à jour.",
     "portableUpdateFailed": "Donut Browser n’a pas pu remplacer ses fichiers dans le dossier portable et garde la version actuelle. Fermez les programmes qui utilisent des fichiers de ce dossier, puis redémarrez à nouveau.",
-    "wayfernTermsRequired": "Acceptez les conditions générales de Wayfern pour utiliser Wayfern.",
+    "wayfernTermsRequired": "Le moteur du navigateur ne peut pas démarrer tant que ses conditions n'ont pas été acceptées.",
     "apiPortUnavailable": "Le serveur API n’a trouvé aucun port disponible.",
     "mcpAgentUnknown": "Ce client MCP n’est pas pris en charge.",
     "mcpAgentInstallFailed": "Impossible d’ajouter Donut Browser au client MCP : {{detail}}",
@@ -2759,7 +2649,8 @@
     "profileLockedElsewhere": "Ce profil est utilisé sur un autre appareil.",
     "profileLockUnavailable": "Impossible de vérifier si ce profil est utilisé ailleurs. Vérifiez votre connexion et réessayez.",
     "fingerprintExitMismatch": "Le nœud de sortie du proxy ne correspond pas à l'empreinte de ce profil.",
-    "fingerprintHostOsMismatch": "Ce profil déclare {{claimed}}, mais Donut s’exécute sur {{host}}. Lancez-le sur une machine ou une machine virtuelle {{claimed}}.",
+    "fingerprintHostOsMismatch": "Ce profil déclare {{claimed}} et Donut s’exécute sur {{host}}, mais son proxy ou son VPN n’est pas disponible. Sans lui, la connexion partirait de cet ordinateur et afficherait {{host}}. Réparez ou retirez le proxy ou le VPN, puis relancez.",
+    "fingerprintMobileUnsupported": "Donut n’ouvre plus les profils qui déclarent un téléphone ou une tablette (Android, iOS). Choisissez Windows, macOS ou Linux.",
     "launchConsentExpired": "Cette confirmation n'est plus valide. Relancez le profil.",
     "vpnWorkerStartFailed": "Impossible de démarrer la connexion VPN : {{detail}}",
     "exitProbeFailed": "Impossible de joindre le nœud de sortie du proxy pour vérifier sa localisation.",
@@ -2777,7 +2668,7 @@
       "parameter": "Le lien contient une option que Donut ne prend pas en charge.",
       "malformed": "Le lien de partage n'est pas valide."
     },
-    "camoufoxRemoved": "Camoufox n'est plus pris en charge. Recréez ce profil avec Wayfern.",
+    "camoufoxRemoved": "Camoufox n'est plus pris en charge. Recréez ce profil ; il s'exécutera sur le moteur Apostate.",
     "noE2ePasswordSet": "Aucun mot de passe de chiffrement de bout en bout n'est défini. Définissez-en un avant de synchroniser des données chiffrées.",
     "importSourceNotChromium": "Ce dossier n'est pas un profil de navigateur Chromium",
     "importSourceNotChromiumNamed": "Les profils {{family}} ne peuvent pas être importés ; seuls les navigateurs basés sur Chromium sont pris en charge",
@@ -2807,7 +2698,7 @@
     "profileImportUnsafeArchive": "Cette archive tente d'écrire hors du dossier du profil, elle a donc été refusée.",
     "recordingAlreadyRunning": "Un enregistrement est déjà en cours. Arrêtez-le avant d'en commencer un autre.",
     "profileNotRunning": "Le navigateur de ce profil n'est pas lancé. Démarrez-le d'abord.",
-    "wayfern152Required": "L'enregistrement nécessite Wayfern 152 ou plus récent. Mettez à jour le navigateur de ce profil.",
+    "wayfern152Required": "L'enregistrement n'est pas disponible avec le moteur Apostate.",
     "recordingFailed": "L'enregistrement n'a pas pu démarrer. {{detail}}",
     "mcpRemoteRequiresSignIn": "Connectez-vous à votre compte Donut avant d'activer le contrôle à distance.",
     "mcpRemoteUnauthorized": "Donut cloud a refusé les identifiants de cet appareil. Déconnectez-vous puis reconnectez-vous.",
@@ -2991,7 +2882,7 @@
     "agentNotEntitled": "L’agent n’est pas disponible sur ce compte.",
     "noCredits": "Il ne reste plus de crédits pour l’agent.",
     "taskBudget": "La tâche a atteint son plafond de crédits.",
-    "agentUnsupported": "Cette version du navigateur ne peut pas exécuter l’agent. Mettez Wayfern à jour.",
+    "agentUnsupported": "Le moteur Apostate ne peut pas exécuter l'agent.",
     "agentBusy": "Ce profil exécute déjà une tâche.",
     "agentTokenRequired": "L’agent n’a pas pu se connecter. Réessayez.",
     "agentEngineFailed": "L’agent n’a pas pu faire cela.",
@@ -3025,7 +2916,7 @@
     "pasteTypingFailed": "Échec de la saisie : {{detail}}",
     "profileStillSyncing": "Ce profil est encore en cours de synchronisation. Réessayez dans un instant.",
     "cloudApiUrlInvalid": "Saisissez une adresse http:// ou https:// complète.",
-    "cookieBotRequiresWayfern": "Le Cookie Bot local ne peut piloter que des profils Wayfern, car il utilise la connexion DevTools du navigateur."
+    "cookieBotRequiresWayfern": "Le Cookie Bot local ne peut piloter que des profils Apostate, car il utilise la connexion DevTools du navigateur."
   },
   "rail": {
     "profiles": "Profils",
@@ -3285,7 +3176,7 @@
     "steps": {
       "createProfile": {
         "title": "Créez votre premier profil",
-        "content": "Cliquez ici pour créer votre premier profil. Choisissez Wayfern comme navigateur : le Chromium recommandé et protégé contre le fingerprinting."
+        "content": "Cliquez ici pour créer votre premier profil. Donut télécharge lui-même son moteur de navigateur, vous pouvez donc commencer tout de suite."
       },
       "dnsBlocking": {
         "title": "Blocage DNS",
@@ -3316,25 +3207,6 @@
       "grant": "Autoriser l'accès",
       "requesting": "Demande en cours…"
     },
-    "ready": {
-      "title": "Préparation en cours",
-      "descDownloading": "Téléchargement de votre premier navigateur (Wayfern). Cette configuration unique s'exécute en arrière-plan — patientez un instant.",
-      "descReady": "Votre navigateur est prêt. Créons votre premier profil.",
-      "cta": "Créer mon premier profil",
-      "downloading": "Téléchargement…",
-      "extracting": "Extraction…",
-      "stats": "{{downloaded}} sur {{total}}",
-      "speed": "{{speed}}/s",
-      "timeLeft": "{{time}} restant",
-      "descExtracting": "Extraction de votre navigateur. Cette configuration unique s'exécute en arrière-plan, patientez.",
-      "almostFinished": "Presque terminé…",
-      "errorTitle": "Échec de la configuration",
-      "errorDownload": "Impossible de télécharger {{browser}}. Vérifiez votre connexion et réessayez.",
-      "errorExtraction": "Impossible d'extraire {{browser}}. Veuillez réessayer.",
-      "errorGeneric": "Une erreur s'est produite lors de la configuration de {{browser}}. Veuillez réessayer.",
-      "retry": "Réessayer",
-      "proxyHint": "Si votre réseau bloque les serveurs de Donut, saisissez un proxy pour Donut, puis réessayez."
-    },
     "features": {
       "title": "Fonctionnalités",
       "items": {
@@ -3360,10 +3232,6 @@
     },
     "progress": "Progression de la configuration"
   },
-  "wayfernBlocked": {
-    "title": "Ce n'est pas votre appareil principal",
-    "description": "L'automatisation du navigateur et les profils d'un autre système d'exploitation ne fonctionnent que sur votre appareil principal. Déconnectez-vous de Donut Browser sur vos autres ordinateurs, puis réessayez."
-  },
   "profileGenerationLimit": {
     "title": "Limite horaire de profils atteinte",
     "description": "La limite horaire de nouveaux profils de votre offre est atteinte. La création reprend au fil de l'heure, votre compte n'est donc pas bloqué."
@@ -3375,9 +3243,7 @@
     "invalidFingerprintDescription": "La configuration d'empreinte contient du JSON invalide. Vérifiez vos paramètres avancés.",
     "saveFailed": "Échec de la sauvegarde de la configuration"
   },
-  "cookieCopy": {
-    "noOtherTargets": "Aucun autre profil Wayfern sélectionné"
-  },
+  "cookieCopy": {},
   "about": {
     "website": "Site web",
     "licenses": "Licences",
@@ -3681,7 +3547,14 @@
       "timeRandom": "Aléatoire par profil",
       "summaryOwnTimes_one": "Chaque profil s'exécute {{count}} fois par semaine à sa propre heure aléatoire, jusqu'à {{minutes}} min à chaque fois.",
       "summaryOwnTimes_other": "Chaque profil s'exécute {{count}} fois par semaine à sa propre heure aléatoire, jusqu'à {{minutes}} min à chaque fois.",
-      "summaryOwnTimes_many": "Chaque profil s'exécute {{count}} fois par semaine à sa propre heure aléatoire, jusqu'à {{minutes}} min à chaque fois."
+      "summaryOwnTimes_many": "Chaque profil s'exécute {{count}} fois par semaine à sa propre heure aléatoire, jusqu'à {{minutes}} min à chaque fois.",
+      "sourceTopic": "Thème produit",
+      "topicKeywordPlaceholder": "Mot-clé, ex. iphone 15",
+      "topicKeywordLabel": "Mot-clé du produit",
+      "topicKeywordInvalid": "Utilisez entre {{min}} et {{max}} caractères.",
+      "topicHint": "Recherche ce mot-clé sur Google, ouvre des résultats {{site}}, lit les annonces et regarde les photos, puis continue avec les variantes suggérées par {{site}}.",
+      "topicLearned": "Variantes apprises : {{count}}",
+      "enterKeywordFirst": "Saisissez d’abord un mot-clé"
     },
     "preset": {
       "light": "Légère",
@@ -3707,7 +3580,7 @@
       "fixFailed": "Impossible d'appliquer ce correctif.",
       "exitNodeHint": "Sans proxy ni VPN, l'exécution sort par l'adresse du centre de données de la flotte. Des heures de trafic depuis un réseau d'hébergement abîment l'identité du profil plus que de ne pas le chauffer du tout.",
       "reasonSyncPassword": "Mot de passe de chiffrement de synchronisation défini",
-      "reasonLocalBrowser": "Le Cookie Bot local nécessite un profil Wayfern",
+      "reasonLocalBrowser": "Le Cookie Bot local nécessite un profil Apostate",
       "reasonEphemeral": "Ce profil est éphémère : ses cookies disparaîtraient à sa fermeture"
     },
     "conflict": {
@@ -3782,7 +3655,8 @@
       "profileNotSynced": "La copie dans le cloud est incomplète ; terminez la synchronisation depuis un poste",
       "profileOsMismatch": "Le profil vient d'un autre système d'exploitation que l'hôte qui l'a exécuté",
       "cancelledByUser": "Arrêté à la main",
-      "unknown": "Raison inconnue ({{code}})"
+      "unknown": "Raison inconnue ({{code}})",
+      "siteChallenge": "Le site a demandé de vérifier un humain, l’exécution s’est arrêtée"
     },
     "exitCheck": {
       "failed": "La dernière vérification ({{time}}) n'a pas pu joindre le proxy ou le VPN. Vérifiez-le.",
@@ -3866,17 +3740,6 @@
     "handoffLocalLocation": "Cet ordinateur",
     "handoffSyncDetails": "Ouvrir les détails de synchronisation"
   },
-  "synchronizerPreview": {
-    "title": "Simuler un clic",
-    "description": "Découvrez comment une action du profil principal atteint les profils suiveurs sélectionnés. Cet exemple ne lance aucun navigateur.",
-    "send": "Envoyer un clic d’exemple",
-    "empty": "Sélectionnez un profil suiveur pour essayer l’aperçu.",
-    "ready": "Profils suiveurs sélectionnés : {{count}}",
-    "sent": "Clic d’exemple affiché. Profils suiveurs destinataires : {{count}}",
-    "received": "Clic d’exemple reçu",
-    "starting": "Lancement des profils et connexion du synchroniseur…",
-    "startError": "Le synchroniseur n’a pas pu démarrer. Votre sélection est conservée. Vérifiez les profils et réessayez."
-  },
   "isolationDemo": {
     "title": "Un changement. Un profil.",
     "description": "Essayez ces profils d’exemple. Rien ici ne modifie vos vrais profils.",
@@ -3938,6 +3801,7 @@
     "launch": {
       "queued": "Lancement demandé",
       "preparing": "Préparation du profil",
+      "engine": "Préparation du moteur du navigateur",
       "network": "Préparation du réseau",
       "extensions": "Préparation des extensions",
       "starting": "Démarrage du navigateur",
@@ -4452,7 +4316,7 @@
       "confirmDelete": "Cliquez à nouveau pour supprimer",
       "emptyTitle": "Que doit faire l’agent ?",
       "emptyBody": "Il travaille dans le navigateur du profil choisi. Vous voyez chaque étape et pouvez intervenir à tout moment.",
-      "noProfiles": "Créez d’abord un profil Wayfern. L’agent travaille dans son navigateur.",
+      "noProfiles": "Créez d'abord un profil. L'agent travaille dans son navigateur.",
       "placeholderStart": "Demandez quelque chose à l’agent",
       "placeholderFollowUp": "Écrire une suite",
       "placeholderSteer": "Guidez l’agent pendant qu’il travaille",
@@ -4684,12 +4548,6 @@
         "title": "Gardez les codes 2FA avec le profil",
         "body": "Ajoutez la clé 2FA d'un compte dans les infos du profil, et Donut affiche le code actuel, prêt à copier. Les clés restent chiffrées sur cet appareil.",
         "action": "Essayer une clé 2FA"
-      },
-      "synchronizer": {
-        "label": "Synchroniseur",
-        "title": "Piloter plusieurs profils à la fois",
-        "body": "Choisissez Lancer avec le synchroniseur dans le menu d'un profil, puis les suiveurs. Chaque clic et chaque frappe du meneur se répète dans chaque suiveur.",
-        "action": "Ouvrir Profils"
       }
     },
     "sections": {

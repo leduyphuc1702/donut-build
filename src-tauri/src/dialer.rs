@@ -530,6 +530,17 @@ mod tests {
 
   #[tokio::test]
   async fn a_real_unreachable_first_address_does_not_use_the_whole_limit() {
+    // Some networks (a router with a transparent proxy) answer every address,
+    // and there this one is not unreachable at all.
+    if tokio::time::timeout(
+      Duration::from_millis(500),
+      tokio::net::TcpStream::connect("10.255.255.1:9"),
+    )
+    .await
+    .is_ok_and(|connected| connected.is_ok())
+    {
+      return;
+    }
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let good = listener.local_addr().unwrap();
     let started = std::time::Instant::now();

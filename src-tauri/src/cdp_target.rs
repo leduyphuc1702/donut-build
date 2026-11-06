@@ -262,6 +262,12 @@ async fn local_cdp_port(profile: &BrowserProfile, patience: Patience) -> Option<
 pub async fn connect_local_browser(profile: &BrowserProfile) -> Option<CdpConnection> {
   profile.process_id?;
   let port = local_cdp_port(profile, Patience::Immediate).await?;
+  connect_browser_at(port).await
+}
+
+/// A BROWSER-level socket on the browser that listens for DevTools on `port`
+/// of this machine.
+pub async fn connect_browser_at(port: u16) -> Option<CdpConnection> {
   let version: Value = reqwest::Client::new()
     .get(format!("http://127.0.0.1:{port}/json/version"))
     .timeout(Duration::from_secs(3))

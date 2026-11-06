@@ -42,6 +42,9 @@ pub(super) fn build_args(input: &ArgsInput) -> Result<Vec<String>, String> {
     LEAK_FEATURES_SWITCH.to_string(),
     "--use-mock-keychain".to_string(),
     "--password-store=basic".to_string(),
+    // The browser's own errors, among them one that says it could not open the
+    // key that seals cookies, are read off stderr (`tap_browser_stderr`).
+    "--enable-logging=stderr".to_string(),
   ];
   if input.headless {
     args.push("--headless=new".to_string());
@@ -84,6 +87,31 @@ pub(super) fn build_args(input: &ArgsInput) -> Result<Vec<String>, String> {
       .map(|page| page.to_string()),
   );
   Ok(args)
+}
+
+/// Make the profile's stored cookies, logins and cards readable by the engine
+/// before it opens them (`profile_import::adopt_engine_key`). A failure is
+/// logged and the launch goes on: the profile opens either way.
+fn seal_secrets_for_engine(profile: &BrowserProfile, profile_path: &str) {
+  let started = std::time::Instant::now();
+  match crate::profile_import::adopt_engine_key(std::path::Path::new(profile_path)) {
+    Ok(Some(report)) => log::info!(
+      "Profile secrets sealed for Apostate profile={} cookies={} cookies_unreadable={} logins={} logins_unreadable={} payment_methods={} elapsed_ms={}",
+      profile.id,
+      report.cookies_migrated,
+      report.cookies_unrecoverable,
+      report.logins_migrated,
+      report.logins_unrecoverable,
+      report.payment_methods_migrated,
+      started.elapsed().as_millis()
+    ),
+    Ok(None) => {}
+    Err(error) => log::warn!(
+      "Profile secrets not sealed for Apostate profile={} err=\"{}\"",
+      profile.id,
+      crate::log_redaction::text(&error)
+    ),
+  }
 }
 
 /// The exit's location for this launch: what the profile stores, completed
@@ -147,7 +175,7 @@ fn languages_of(location: &serde_json::Map<String, serde_json::Value>) -> Vec<St
 
 impl WayfernManager {
   #[allow(clippy::too_many_arguments)]
-  pub(super) async fn launch_apostate(
+  pub(crate) async fn launch_apostate(
     &self,
     app_handle: &AppHandle,
     profile: &BrowserProfile,
@@ -192,6 +220,7 @@ impl WayfernManager {
       Some(p) => p,
       None => Self::find_free_port().await?,
     };
+    seal_secrets_for_engine(profile, profile_path);
     crate::cookie_health::log_before_launch(
       &profile.id.to_string(),
       std::path::Path::new(profile_path),
@@ -344,7 +373,6 @@ impl WayfernManager {
       profilePath: Some(profile_path.to_string()),
       url: url.map(|s| s.to_string()),
       cdp_port: Some(port),
-      stored_profile: None,
     })
   }
 }
@@ -493,6 +521,7 @@ mod tests {
     assert!(args.contains(&"--fingerprint-platform=windows".to_string()));
     assert!(args.contains(&"--fingerprint-noise".to_string()));
     assert!(args.contains(&"--use-mock-keychain".to_string()));
+    assert!(args.contains(&"--enable-logging=stderr".to_string()));
     assert!(args.iter().any(|a| a.starts_with("--proxy-pac-url=")));
     assert!(args.contains(&"--force-webrtc-ip-handling-policy=disable_non_proxied_udp".to_string()));
   }

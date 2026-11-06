@@ -1,6 +1,5 @@
-use crate::browser::{create_browser, BrowserType};
+use crate::browser::BrowserType;
 use crate::cloud_auth::CLOUD_AUTH;
-use crate::downloaded_browsers_registry::DownloadedBrowsersRegistry;
 use crate::events;
 use crate::file_stamp::FileStamp;
 use crate::profile::types::{get_host_os, is_host_os, BrowserProfile, SyncMode};
@@ -280,10 +279,6 @@ impl ProfileManager {
     crate::app_dirs::profiles_dir()
   }
 
-  pub fn get_binaries_dir(&self) -> PathBuf {
-    crate::app_dirs::binaries_dir()
-  }
-
   fn normalize_launch_hook(
     launch_hook: Option<String>,
   ) -> Result<Option<String>, Box<dyn std::error::Error>> {
@@ -309,7 +304,7 @@ impl ProfileManager {
     app_handle: &tauri::AppHandle,
     name: &str,
     browser: &str,
-    version: &str,
+    _version: &str,
     release_type: &str,
     proxy_id: Option<String>,
     vpn_id: Option<String>,
@@ -320,6 +315,9 @@ impl ProfileManager {
     dns_server: Option<String>,
     launch_hook: Option<String>,
   ) -> Result<BrowserProfile, Box<dyn std::error::Error>> {
+    // Whatever version a caller names, every profile runs the one engine
+    // Donut installs, and its Chromium is the profile's version.
+    let version = crate::apostate::CHROMIUM;
     if name.trim().is_empty() {
       return Err(
         serde_json::json!({ "code": "NAME_CANNOT_BE_EMPTY" })
@@ -397,10 +395,11 @@ impl ProfileManager {
     let final_wayfern_config = if browser == "wayfern" {
       let mut config = wayfern_config.unwrap_or_default();
 
-      // The engine follows the OS the profile claims and is decided once, here:
-      // a desktop OS other than this machine's runs on Apostate, everything
-      // else on Wayfern. A caller cannot name it.
-      config.engine = crate::apostate::engine_for_new_profile(config.os.as_deref());
+      // Every profile runs on Apostate, which presents desktop machines only.
+      crate::apostate::refuse_mobile(config.os.as_deref()).inspect_err(|_| {
+        let _ = std::fs::remove_dir_all(&profile_uuid_dir);
+      })?;
+      crate::apostate::stamp_engine(&mut config);
 
       // Always ensure executable_path is set to the user's binary location
       // Pass upstream proxy information to config for fingerprint generation
@@ -416,23 +415,6 @@ impl ProfileManager {
       // profile's routing. Provided fingerprints keep the old stamping
       // behavior; for generated ones this comes from the geolocation lookup.
       let mut geolocation_applied = true;
-
-      // A caller-supplied device on an identity-capable engine is a set of
-      // explicit field choices, not a complete device: the engine mints an
-      // identity and the choices become overrides. A locally generated device
-      // is already complete and has no identity to attach choices to, so it is
-      // stored as the payload and applied directly.
-      let local_generation =
-        config.uses_apostate() || crate::fingerprint_generator::local_generation_enabled();
-      let supplied_device =
-        if crate::wayfern_manager::supports_wayfern_152(version) && !local_generation {
-          config
-            .fingerprint
-            .take()
-            .and_then(|json| crate::wayfern_manager::WayfernManager::fingerprint_object(&json))
-        } else {
-          None
-        };
 
       // A stand-in for fingerprint generation and location resolution. It
       // carries the new profile's id so the generation's log lines name the
@@ -481,37 +463,32 @@ impl ProfileManager {
       };
 
       // A device the form generated was created before this profile's route
-      // existed, so it carries no location. With local generation it is the
-      // whole device, not a set of overrides, and the route's location is
-      // merged into it here.
-      if local_generation {
-        if let Some(supplied) = config.fingerprint.clone() {
-          // An empty or unreadable payload is not a device. Generating over it
-          // keeps a profile from launching on the host device; the same rule
-          // the identity path applies when it takes the payload apart.
-          if crate::wayfern_manager::WayfernManager::fingerprint_object(&supplied)
-            .is_some_and(|device| !device.is_empty())
-          {
-            let (merged, applied) =
-              crate::wayfern_manager::WayfernManager::localize_supplied_fingerprint(
-                &temp_profile,
-                &config,
-                &supplied,
-              )
-              .await;
-            config.location = crate::wayfern_manager::WayfernManager::fingerprint_object(&merged)
-              .and_then(|object| crate::wayfern_manager::WayfernManager::location_of(&object));
-            config.fingerprint = Some(merged);
-            geolocation_applied = applied;
-          } else {
-            config.fingerprint = None;
-          }
+      // existed, so it carries no location: the route's location is merged
+      // into it here.
+      if let Some(supplied) = config.fingerprint.clone() {
+        // An empty or unreadable payload is not a device. Generating over it
+        // keeps a profile from launching on the host device.
+        if crate::wayfern_manager::WayfernManager::fingerprint_object(&supplied)
+          .is_some_and(|device| !device.is_empty())
+        {
+          let (merged, applied) =
+            crate::wayfern_manager::WayfernManager::localize_supplied_fingerprint(
+              &temp_profile,
+              &config,
+              &supplied,
+            )
+            .await;
+          config.location = crate::wayfern_manager::WayfernManager::fingerprint_object(&merged)
+            .and_then(|object| crate::wayfern_manager::WayfernManager::location_of(&object));
+          config.fingerprint = Some(merged);
+          geolocation_applied = applied;
+        } else {
+          config.fingerprint = None;
         }
       }
 
-      // Generate a device if the profile has neither a legacy payload nor an
-      // identity.
-      if config.fingerprint.is_none() && config.identity_id.is_none() {
+      // Generate a device if the profile has none.
+      if config.fingerprint.is_none() {
         let recorded = match crate::profile_generation_limiter::record_profile_generation().await {
           crate::profile_generation_limiter::GenerationOutcome::Allowed(recorded) => recorded,
           crate::profile_generation_limiter::GenerationOutcome::Limited {
@@ -542,28 +519,13 @@ impl ProfileManager {
           .await
         {
           Ok(generated) => {
-            // An identity-backed profile stores the id and the location and
-            // never the device; a legacy browser stores the whole payload.
-            config.identity_id = generated.identity_id;
             config.location = generated.location;
-            config.identity_baseline = None;
-            config.fingerprint = if config.identity_id.is_some() {
-              None
-            } else {
-              Some(generated.fingerprint)
-            };
+            config.fingerprint = Some(generated.fingerprint);
             geolocation_applied = generated.geolocation_applied;
             fingerprint_source = "generated";
           }
           Err(e) => {
-            // Coded, not wrapped: re-`format!`ing the error here left a string
-            // no layer above could classify, so a refusal answered 400 with no
-            // trace of which rule refused.
-            let coded = crate::wayfern_manager::wayfern_failure(
-              &e.to_string(),
-              "WAYFERN_FINGERPRINT_GENERATION_FAILED",
-              config.os.as_deref(),
-            );
+            let coded = e.to_string();
             let _ = std::fs::remove_dir_all(&profile_uuid_dir);
             crate::profile_generation_limiter::forget_profile_generation(recorded);
             log::error!(
@@ -572,19 +534,6 @@ impl ProfileManager {
             );
             return Err(coded.into());
           }
-        }
-      }
-
-      if let Some(object) = supplied_device {
-        let overrides =
-          crate::wayfern_manager::WayfernManager::overrides_from_explicit_fingerprint(&object);
-        if !overrides.is_empty() {
-          config.identity_overrides = serde_json::to_string(&overrides).ok();
-        }
-        // A location the caller named wins over the one resolved for the exit;
-        // whatever it leaves out keeps the resolved value.
-        if let Some(location) = crate::wayfern_manager::WayfernManager::location_of(&object) {
-          config.location = Some(location);
         }
       }
 
@@ -616,13 +565,7 @@ impl ProfileManager {
       // Clear the proxy from config after fingerprint generation
       config.proxy = None;
 
-      // The engine is a download of its own. Start it now so the first launch
-      // does not wait for it; the launch fetches it if this did not finish.
-      if config.uses_apostate() {
-        tauri::async_runtime::spawn(async {
-          let _ = crate::apostate::ensure_installed().await;
-        });
-      }
+      crate::apostate::start_background_install();
 
       Some(config)
     } else {
@@ -1101,10 +1044,6 @@ impl ProfileManager {
   fn after_profiles_removed(&self, trashed: bool) {
     self.rebuild_tags();
 
-    if let Err(e) = DownloadedBrowsersRegistry::instance().cleanup_unused_binaries() {
-      log::warn!("Unused binary cleanup after profile delete failed err=\"{e}\"");
-    }
-
     if let Err(e) = events::emit_empty("profiles-changed") {
       log::warn!("Event emit failed event=profiles-changed err=\"{e}\"");
     }
@@ -1196,9 +1135,6 @@ impl ProfileManager {
     for id in purged_ids {
       self.forget_profile_side_state(id);
     }
-    if let Err(e) = DownloadedBrowsersRegistry::instance().cleanup_unused_binaries() {
-      log::warn!("Unused binary cleanup after trash purge failed err=\"{e}\"");
-    }
     if let Err(e) = events::emit_empty("trash-changed") {
       log::warn!("Event emit failed event=trash-changed err=\"{e}\"");
     }
@@ -1225,88 +1161,8 @@ impl ProfileManager {
       log::info!("Profile erased: deleted on another device profile={profile_id}");
     }
 
-    if let Err(e) = crate::downloaded_browsers_registry::DownloadedBrowsersRegistry::instance()
-      .cleanup_unused_binaries()
-    {
-      log::warn!("Unused binary cleanup after remote delete failed err=\"{e}\"");
-    }
-
     let _ = crate::events::emit_empty("profiles-changed");
     Ok(())
-  }
-
-  pub fn update_profile_version(
-    &self,
-    _app_handle: &tauri::AppHandle,
-    profile_id: &str,
-    version: &str,
-  ) -> Result<BrowserProfile, Box<dyn std::error::Error>> {
-    let mut profile = self.find_profile(profile_id)?;
-
-    // Check if the browser is currently running
-    if profile.process_id.is_some() {
-      return Err(
-        "Cannot update version while browser is running. Please stop the browser first.".into(),
-      );
-    }
-
-    // Verify the new version is downloaded
-    let browser_type = BrowserType::from_str(&profile.browser)
-      .map_err(|_| format!("Invalid browser type: {}", profile.browser))?;
-    let browser = create_browser(browser_type.clone());
-    let binaries_dir = self.get_binaries_dir();
-
-    if !browser.is_version_downloaded(version, &binaries_dir) {
-      return Err(format!("Browser version {version} is not downloaded").into());
-    }
-
-    // A move back to a version without the identity API cannot carry an
-    // identity-backed device with it, and leaving it in place is worse than
-    // dropping it: the older browser would splice it onto a freshly drawn
-    // device and persist the result, which then fails on every later launch.
-    // Clearing `fingerprint` makes the next launch generate a fresh one;
-    // `geo_proxy_signature` goes with it because it certifies location fields
-    // of a fingerprint that no longer exists.
-    //
-    // Do NOT refuse the version change: `consolidate_browser_versions` only
-    // reaches this direction once the newer binary is already gone from disk,
-    // so refusing would strand the profile pointing at a missing executable.
-    // Every other direction falls through untouched.
-    let target_speaks_identity_api = crate::wayfern_manager::supports_identity_api(version);
-    if let Some(cfg) = profile
-      .wayfern_config
-      .as_mut()
-      .filter(|c| c.identity_id.is_some() && !target_speaks_identity_api)
-    {
-      cfg.identity_id = None;
-      cfg.identity_baseline = None;
-      cfg.fingerprint = None;
-      cfg.geo_proxy_signature = None;
-      log::warn!(
-        "Fingerprint cleared: incompatible with new Wayfern version; regenerated on next launch profile={} from={} to={version}",
-        profile.id,
-        profile.version
-      );
-    }
-
-    // Update version
-    profile.version = version.to_string();
-
-    profile.release_type = "stable".to_string();
-
-    // Save the updated profile
-    self.save_profile(&profile)?;
-
-    // Emit profile update event
-    if let Err(e) = events::emit_empty("profiles-changed") {
-      log::warn!("Event emit failed event=profiles-changed err=\"{e}\"");
-    }
-
-    if profile.browser == "wayfern" {
-      crate::wayfern_identity_storage::request_conversion_pass();
-    }
-
-    Ok(profile)
   }
 
   pub fn assign_profiles_to_group(
@@ -2179,12 +2035,12 @@ impl ProfileManager {
 
   pub async fn check_browser_status(
     &self,
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     profile: &BrowserProfile,
   ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     // Handle Wayfern profiles using WayfernManager-based status checking
     if profile.browser == "wayfern" {
-      return self.check_wayfern_status(&app_handle, profile).await;
+      return self.check_wayfern_status(profile).await;
     }
 
     // For non-wayfern browsers, use the existing PID-based logic
@@ -2277,7 +2133,6 @@ impl ProfileManager {
       };
 
       let mut merged = latest_profile.clone();
-      let mut detected_stop = false;
 
       if let Some(pid) = found_pid {
         if merged.process_id != Some(pid) {
@@ -2311,15 +2166,6 @@ impl ProfileManager {
         if let Err(e) = self.save_profile(&merged) {
           log::warn!("Profile pid clear failed profile={} err=\"{e}\"", merged.id);
         }
-        detected_stop = true;
-      }
-
-      if detected_stop {
-        if let Some(updated) = crate::auto_updater::AutoUpdater::instance()
-          .update_profile_to_latest_installed(&app_handle, &merged)
-        {
-          merged = updated;
-        }
       }
 
       // Emit profile update event to frontend
@@ -2334,7 +2180,6 @@ impl ProfileManager {
   // Check Wayfern status using WayfernManager
   async fn check_wayfern_status(
     &self,
-    app_handle: &tauri::AppHandle,
     profile: &BrowserProfile,
   ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let manager = self.wayfern_manager;
@@ -2422,13 +2267,6 @@ impl ProfileManager {
             if let Err(e) = self.save_profile(&latest) {
               log::warn!("Profile pid clear failed profile={} err=\"{e}\"", latest.id);
             }
-
-            if let Some(updated) = crate::auto_updater::AutoUpdater::instance()
-              .update_profile_to_latest_installed(app_handle, &latest)
-            {
-              latest = updated;
-            }
-            crate::wayfern_identity_storage::request_conversion_pass();
 
             if let Err(e) = events::emit("profile-updated", &latest) {
               log::warn!("Event emit failed event=profile-updated err=\"{e}\"");
@@ -2748,23 +2586,6 @@ mod tests {
     assert!(
       profiles_dir.to_string_lossy().contains("profiles"),
       "Profiles dir should contain profiles"
-    );
-  }
-
-  #[test]
-  fn test_get_binaries_dir() {
-    let (manager, _temp_dir) = create_test_profile_manager();
-
-    let binaries_dir = manager.get_binaries_dir();
-    let path_str = binaries_dir.to_string_lossy();
-
-    assert!(
-      path_str.contains("DonutBrowser"),
-      "Binaries dir should contain DonutBrowser"
-    );
-    assert!(
-      path_str.contains("binaries"),
-      "Binaries dir should contain binaries"
     );
   }
 
@@ -3252,8 +3073,8 @@ pub async fn create_browser_profile_new(
   app_handle: tauri::AppHandle,
   name: String,
   browser_str: String,
-  version: String,
-  release_type: String,
+  version: Option<String>,
+  release_type: Option<String>,
   proxy_id: Option<String>,
   vpn_id: Option<String>,
   wayfern_config: Option<WayfernConfig>,
@@ -3285,8 +3106,8 @@ pub async fn create_browser_profile_new(
     app_handle,
     name,
     browser_type.as_str().to_string(),
-    version,
-    release_type,
+    version.unwrap_or_default(),
+    release_type.unwrap_or_else(|| "stable".to_string()),
     proxy_id,
     vpn_id,
     wayfern_config,

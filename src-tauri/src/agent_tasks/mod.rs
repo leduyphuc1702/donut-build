@@ -697,7 +697,12 @@ fn checked_profiles(profile_ids: Vec<String>) -> Result<Vec<String>, String> {
   if profile_ids.len() > batch::MAX_PROFILES {
     return Err(crate::backend_error("AGENT_TOO_MANY_PROFILES"));
   }
-  // The agent engine is Wayfern's own CDP domain.
+  // The agent engine is Wayfern's own CDP domain. The E2E mock engine drives
+  // no browser, so it has nothing to refuse.
+  #[cfg(feature = "e2e")]
+  if mock::active() {
+    return Ok(profile_ids);
+  }
   crate::apostate::refuse_wayfern_only_ids(&profile_ids)?;
   Ok(profile_ids)
 }
@@ -800,29 +805,11 @@ pub async fn get_agent_engine_status() -> EngineStatus {
       checked: true,
     };
   }
-  let Some(version) =
-    crate::auto_updater::AutoUpdater::instance().get_latest_installed_version("wayfern")
-  else {
-    return EngineStatus {
-      supported: false,
-      checked: true,
-    };
-  };
-  if let Some(supported) = engine::known_support(&version) {
-    return EngineStatus {
-      supported,
-      checked: true,
-    };
-  }
-  match engine::probe(&version).await {
-    Some(supported) => EngineStatus {
-      supported,
-      checked: true,
-    },
-    None => EngineStatus {
-      supported: false,
-      checked: false,
-    },
+  // The agent drives the browser through the Wayfern CDP domain, which the
+  // open-source engine does not have.
+  EngineStatus {
+    supported: false,
+    checked: true,
   }
 }
 

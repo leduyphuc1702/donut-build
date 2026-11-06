@@ -111,6 +111,44 @@ async function emit(app, event, payload) {
   await app.invoke("plugin:event|emit", { event, payload });
 }
 
+async function installPaidUserFixture(app) {
+  // Supplies a paid user's UI state without changing authentication or
+  // entitlement checks in the backend. Tauri defines invoke/ipc/postMessage as
+  // non-writable, so this wraps only the IPC fetch transport.
+  await app.execute(`
+    const originalFetch = window.fetch;
+    const response = (value) => new Response(JSON.stringify(value), {
+      status: 200, headers: { "content-type": "application/json", "Tauri-Response": "ok" }
+    });
+    window.fetch = function (input, init) {
+      let command = "";
+      try {
+        const url = new URL(typeof input === "string" ? input : input.url);
+        if ((url.protocol === "ipc:" && url.hostname === "localhost") ||
+          (["http:", "https:"].includes(url.protocol) && url.hostname === "ipc.localhost")) {
+          command = decodeURIComponent(url.pathname.split("/").pop() || "");
+        }
+      } catch {}
+      if (command === "cloud_get_user") return Promise.resolve(response({
+        logged_in_at: "2026-09-01T00:00:00Z",
+        user: {
+          id: "motion-ui-fixture", email: "motion@example.test", plan: "pro",
+          planPeriod: "monthly", subscriptionStatus: "active", profileLimit: 50,
+          cloudProfilesUsed: 0, proxyBandwidthLimitMb: 0, proxyBandwidthUsedMb: 0,
+          proxyBandwidthExtraMb: 0, isPrimaryDevice: true
+        }
+      }));
+      return originalFetch.apply(window, arguments);
+    };
+  `);
+  assert.equal(
+    (await app.invoke("cloud_get_user")).user?.id,
+    "motion-ui-fixture",
+    "scoped IPC fixture is active before opening paid UI",
+  );
+  await emit(app, "cloud-auth-changed", null);
+}
+
 async function assertContained(app, selector) {
   const bounds = await app.execute(
     `
@@ -274,118 +312,112 @@ async function assertPopupReadable(app, selector) {
 }
 
 test("paused CSS animations cannot retain dismissed selects or dropdowns", async () => {
-  await withApp(
-    "motion-popup-dismissal",
-    async (app) => {
-      await resize(app, 1100, 760);
-      await createProfile(app, "Motion popup Alpha");
-      await createProfile(app, "Motion popup Beta");
-      await app.clickSelector(`[aria-label="${en.rail.network}"]`);
-      await app.clickSelector(
-        `[aria-label="${en.proxies.management.newProxy}"]`,
-      );
-      await app.waitFor(
-        () =>
-          app.execute(`
+  await withApp("motion-popup-dismissal", async (app) => {
+    await resize(app, 1100, 760);
+    await createProfile(app, "Motion popup Alpha");
+    await createProfile(app, "Motion popup Beta");
+    await app.clickSelector(`[aria-label="${en.rail.network}"]`);
+    await app.clickSelector(`[aria-label="${en.proxies.management.newProxy}"]`);
+    await app.waitFor(
+      () =>
+        app.execute(`
             const trigger = document.querySelector('#proxy-type');
             if (!trigger || trigger.matches(':disabled')) return false;
             trigger.focus();
             return document.activeElement === trigger;
           `),
-        { description: "enabled proxy type select" },
-      );
-      await app.pressShortcut({ key: "\uE007" });
-      await assertPopupReadable(app, slot("select-content"));
+      { description: "enabled proxy type select" },
+    );
+    await app.pressShortcut({ key: "\uE007" });
+    await assertPopupReadable(app, slot("select-content"));
 
-      // Freeze CSS only after the first menu is fully open. A closed Radix
-      // Presence must not wait for animationend, which cannot arrive here.
-      await app.execute(`
+    // Freeze CSS only after the first menu is fully open. A closed Radix
+    // Presence must not wait for animationend, which cannot arrive here.
+    await app.execute(`
         const style = document.createElement("style");
         style.id = "donut-motion-paused-css";
         style.textContent = "*, *::before, *::after { animation-play-state: paused !important; }";
         document.head.append(style);
         window.__donutPausedSelect = document.querySelector('[data-slot="select-content"]');
       `);
-      try {
-        assert.equal(
-          await app.execute(
-            `return getComputedStyle(window.__donutPausedSelect).animationPlayState;`,
+    try {
+      assert.equal(
+        await app.execute(
+          `return getComputedStyle(window.__donutPausedSelect).animationPlayState;`,
+        ),
+        "paused",
+      );
+      await app.clickText(en.proxies.types.socks5, { roles: ["option"] });
+      await app.waitFor(
+        () =>
+          app.execute(
+            `return !window.__donutPausedSelect.isConnected && !document.querySelector('[data-slot="select-content"]');`,
           ),
-          "paused",
-        );
-        await app.clickText(en.proxies.types.socks5, { roles: ["option"] });
-        await app.waitFor(
-          () =>
-            app.execute(
-              `return !window.__donutPausedSelect.isConnected && !document.querySelector('[data-slot="select-content"]');`,
-            ),
-          {
-            timeoutMs: 2000,
-            description:
-              "selected menu to unmount without a CSS animationend event",
-          },
-        );
+        {
+          timeoutMs: 2000,
+          description:
+            "selected menu to unmount without a CSS animationend event",
+        },
+      );
 
-        // The next popup also opens under the paused clock: both its content
-        // and its pointer targets must be available at the initial frame.
-        await app.clickSelector("#proxy-type");
-        await assertPopupReadable(app, slot("select-content"));
-        await app.capture("paused-css-proxy-type-select");
-        await app.clickText(en.proxies.types.http, { roles: ["option"] });
-        await waitForSelector(app, slot("select-content"), false);
-        assert.equal(
-          await app.execute(
-            `return document.querySelector("#proxy-type")?.textContent.trim();`,
+      // The next popup also opens under the paused clock: both its content
+      // and its pointer targets must be available at the initial frame.
+      await app.clickSelector("#proxy-type");
+      await assertPopupReadable(app, slot("select-content"));
+      await app.capture("paused-css-proxy-type-select");
+      await app.clickText(en.proxies.types.http, { roles: ["option"] });
+      await waitForSelector(app, slot("select-content"), false);
+      assert.equal(
+        await app.execute(
+          `return document.querySelector("#proxy-type")?.textContent.trim();`,
+        ),
+        en.proxies.types.http,
+      );
+      await app.pressShortcut({ key: "\uE00C" });
+      await waitForSelector(app, "#proxy-type", false);
+      await app.clickSelector(`[aria-label="${en.rail.profiles}"]`);
+
+      const openSort = () =>
+        app.clickTextIn("thead", en.common.labels.name, {
+          roles: ["button"],
+        });
+      await openSort();
+      await assertPopupReadable(app, slot("dropdown-menu-content"));
+      await app.capture("paused-css-profile-sort");
+      await app.clickText(en.profiles.sort.nameDesc, {
+        roles: ["menuitem"],
+      });
+      await waitForSelector(app, slot("dropdown-menu-content"), false);
+      await app.waitFor(
+        () =>
+          app.execute(
+            `return document.querySelector('tr[data-profile-id]')?.textContent.includes("Motion popup Beta");`,
           ),
-          en.proxies.types.http,
-        );
-        await app.pressShortcut({ key: "\uE00C" });
-        await waitForSelector(app, "#proxy-type", false);
-        await app.clickSelector(`[aria-label="${en.rail.profiles}"]`);
+        { description: "pointer-selected descending profile order" },
+      );
+      await openSort();
+      await assertPopupReadable(app, slot("dropdown-menu-content"));
+      await app.clickText(en.profiles.sort.nameAsc, {
+        roles: ["menuitem"],
+      });
+      await waitForSelector(app, slot("dropdown-menu-content"), false);
 
-        const openSort = () =>
-          app.clickTextIn("thead", en.common.labels.name, {
-            roles: ["button"],
-          });
-        await openSort();
-        await assertPopupReadable(app, slot("dropdown-menu-content"));
-        await app.capture("paused-css-profile-sort");
-        await app.clickText(en.profiles.sort.nameDesc, {
-          roles: ["menuitem"],
-        });
-        await waitForSelector(app, slot("dropdown-menu-content"), false);
-        await app.waitFor(
-          () =>
-            app.execute(
-              `return document.querySelector('tr[data-profile-id]')?.textContent.includes("Motion popup Beta");`,
-            ),
-          { description: "pointer-selected descending profile order" },
-        );
-        await openSort();
-        await assertPopupReadable(app, slot("dropdown-menu-content"));
-        await app.clickText(en.profiles.sort.nameAsc, {
-          roles: ["menuitem"],
-        });
-        await waitForSelector(app, slot("dropdown-menu-content"), false);
-
-        await app.clickSelector(`[aria-label="${en.rail.more.label}"]`);
-        await assertPopupReadable(app, '[role="menu"]');
-        await app.clickText(en.rail.more.about, {
-          exact: false,
-          roles: ["menuitem"],
-        });
-        await waitForSelector(app, '[role="menu"]', false);
-        await assertPopupReadable(app, slot("about-diagnostics"));
-        await app.capture("paused-css-about");
-      } finally {
-        await app.execute(`
+      await app.clickSelector(`[aria-label="${en.rail.more.label}"]`);
+      await assertPopupReadable(app, '[role="menu"]');
+      await app.clickText(en.rail.more.about, {
+        exact: false,
+        roles: ["menuitem"],
+      });
+      await waitForSelector(app, '[role="menu"]', false);
+      await assertPopupReadable(app, slot("about-diagnostics"));
+      await app.capture("paused-css-about");
+    } finally {
+      await app.execute(`
           document.getElementById("donut-motion-paused-css")?.remove();
           delete window.__donutPausedSelect;
         `);
-      }
-    },
-    { seedDownloadedBrowser: true },
-  );
+    }
+  });
 });
 
 async function clickVisible(app, selector) {
@@ -497,269 +529,6 @@ async function groupAssignments(app) {
   );
 }
 
-async function installSynchronizerFixture(app) {
-  // This test supplies a paid user's UI state without changing authentication,
-  // entitlement checks, or synchronizer state in the backend. The only
-  // operation being simulated is the readiness promise of start_sync_session.
-  // Tauri defines invoke/ipc/postMessage as non-writable. Like the native folder
-  // picker fixture in ui.test.mjs, this wraps only their IPC fetch transport.
-  await app.execute(`
-    const fixture = { originalFetch: window.fetch, requests: [], pending: [] };
-    window.__donutMotionSynchronizer = fixture;
-    const response = (value, ok = true) => new Response(JSON.stringify(value), {
-      status: 200, headers: { "content-type": "application/json", "Tauri-Response": ok ? "ok" : "error" }
-    });
-    window.fetch = function (input, init) {
-      let command = "";
-      try {
-        const url = new URL(typeof input === "string" ? input : input.url);
-        if ((url.protocol === "ipc:" && url.hostname === "localhost") ||
-          (["http:", "https:"].includes(url.protocol) && url.hostname === "ipc.localhost")) {
-          command = decodeURIComponent(url.pathname.split("/").pop() || "");
-        }
-      } catch {}
-      if (command === "cloud_get_user") return Promise.resolve(response({
-        logged_in_at: "2026-09-01T00:00:00Z",
-        user: {
-          id: "motion-ui-fixture", email: "motion@example.test", plan: "pro",
-          planPeriod: "monthly", subscriptionStatus: "active", profileLimit: 50,
-          cloudProfilesUsed: 0, proxyBandwidthLimitMb: 0, proxyBandwidthUsedMb: 0,
-          proxyBandwidthExtraMb: 0, isPrimaryDevice: true
-        }
-      }));
-      if (command === "start_sync_session") {
-        fixture.requests.push(JSON.parse(init.body));
-        return new Promise((resolve) => fixture.pending.push({
-          resolve: (value) => resolve(response(value)),
-          // Reject at the Tauri response layer. Rejecting fetch itself would
-          // trigger its native-transport fallback and launch real browsers.
-          reject: (error) => resolve(response(error, false))
-        }));
-      }
-      return fixture.originalFetch.apply(window, arguments);
-    };
-  `);
-  assert.equal(
-    (await app.invoke("cloud_get_user")).user?.id,
-    "motion-ui-fixture",
-    "scoped IPC fixture is active before opening paid UI",
-  );
-  await emit(app, "cloud-auth-changed", null);
-}
-
-async function restoreSynchronizerFixture(app) {
-  await app.execute(`
-    const fixture = window.__donutMotionSynchronizer;
-    if (!fixture) return;
-    window.fetch = fixture.originalFetch;
-    for (const pending of fixture.pending) pending.reject("Motion fixture disposed");
-    delete window.__donutMotionSynchronizer;
-  `);
-  await emit(app, "cloud-auth-expired", null);
-}
-
-test("synchronizer rehearsal targets selected profiles and waits for actual command readiness", async () => {
-  await withApp(
-    "motion-synchronizer",
-    async (app) => {
-      await resize(app, 1080, 900);
-      const leader = await createProfile(app, "Motion rehearsal leader");
-      const first = await createProfile(app, "Motion rehearsal follower one");
-      const second = await createProfile(
-        app,
-        "Motion rehearsal follower with a longer profile name",
-      );
-      await installSynchronizerFixture(app);
-      const session = {
-        id: "motion-ui-rehearsal-session",
-        leader_profile_id: leader.id,
-        leader_profile_name: leader.name,
-        followers: [
-          {
-            profile_id: first.id,
-            profile_name: first.name,
-            failed_at_url: null,
-          },
-        ],
-      };
-      try {
-        await app.clickSelector(inspectTrigger(leader.id));
-        await app.clickSelector(
-          `${slot("profile-info-section")}[data-section="automation"]`,
-        );
-        await app.waitFor(
-          () =>
-            app.execute(
-              `return document.querySelector('[data-slot="profile-start-synchronizer"]')?.disabled === false;`,
-            ),
-          {
-            description:
-              "paid fixture can open the real synchronizer selection interface",
-          },
-        );
-        await app.clickSelector(slot("profile-start-synchronizer"));
-        await waitForSelector(app, slot("synchronizer-follower-dialog"));
-        const option = (id) =>
-          `${slot("synchronizer-follower-option")}[data-profile-id="${id}"]`;
-        const checkbox = (id) => `${option(id)} [role="checkbox"]`;
-        const checked = (id, value) =>
-          app.waitFor(
-            () =>
-              app.execute(
-                `return document.querySelector(arguments[0])?.getAttribute("aria-checked") === arguments[1];`,
-                [checkbox(id), String(value)],
-              ),
-            {
-              description: `${id} checkbox becomes ${value}`,
-            },
-          );
-        await app.clickSelector(`${option(first.id)} > span`);
-        await checked(first.id, true);
-        await app.clickSelector(checkbox(first.id));
-        await checked(first.id, false);
-        await app.execute(`document.querySelector(arguments[0]).focus();`, [
-          checkbox(first.id),
-        ]);
-        await activateFocusedByKeyboard(app, "\uE00D");
-        await checked(first.id, true);
-        await app.clickSelector(`${option(second.id)} > span`);
-        await checked(second.id, true);
-        await app.clickSelector(slot("synchronizer-preview-send"));
-        const received = () =>
-          app.execute(
-            `return [...document.querySelectorAll('[data-slot="synchronizer-preview-follower"][data-received="true"]')].map((node) => node.dataset.profileId).sort();`,
-          );
-        await app.waitFor(
-          async () =>
-            JSON.stringify(await received()) ===
-            JSON.stringify([first.id, second.id].sort()),
-          {
-            description:
-              "example click reaches exactly the two selected real profile names",
-          },
-        );
-        assert.equal(
-          await app.execute(
-            `return window.__donutMotionSynchronizer.requests.length;`,
-          ),
-          0,
-          "rehearsal never starts browsers",
-        );
-        await app.capture("synchronizer-rehearsal-wide");
-        await app.clickSelector(checkbox(second.id));
-        await checked(second.id, false);
-        assert.deepEqual(
-          await received(),
-          [],
-          "changing selection resets the previous rehearsal result",
-        );
-        await app.execute(
-          `document.querySelector('[data-slot="synchronizer-preview-send"]').focus();`,
-        );
-        await activateFocusedByKeyboard(app);
-        await app.waitFor(
-          async () =>
-            JSON.stringify(await received()) === JSON.stringify([first.id]),
-          {
-            description:
-              "keyboard rehearsal acknowledges only the selected follower",
-          },
-        );
-        assert.equal(
-          await app.execute(
-            `return document.querySelectorAll('[data-slot="synchronizer-rehearsal"] path[stroke-width="2.5"]').length;`,
-          ),
-          0,
-          "keyboard preview is static",
-        );
-        await resize(app, 640, 700);
-        await assertContained(app, '[role="dialog"]');
-        await app.capture("synchronizer-rehearsal-narrow");
-
-        await app.clickSelector(slot("synchronizer-start"));
-        await waitForSelector(app, slot("synchronizer-starting"));
-        assert.deepEqual(
-          await app.execute(
-            `return window.__donutMotionSynchronizer.requests;`,
-          ),
-          [
-            {
-              leaderProfileId: leader.id,
-              followerProfileIds: [first.id],
-            },
-          ],
-        );
-        await emit(app, "sync-session-changed", session);
-        await waitForSelector(app, slot("synchronizer-starting"));
-        assert.equal(
-          await app.execute(
-            `return document.querySelector('[data-slot="synchronizer-start"]')?.disabled;`,
-          ),
-          true,
-        );
-        await assert.rejects(
-          app.session.click(
-            await app.session.findCss(slot("synchronizer-start")),
-          ),
-          /element does not receive pointer events/,
-        );
-        await app.pressShortcut({ key: "Escape" });
-        assert.equal(
-          await app.execute(
-            `return window.__donutMotionSynchronizer.requests.length;`,
-          ),
-          1,
-          "pending startup cannot be duplicated",
-        );
-        await waitForSelector(app, slot("synchronizer-follower-dialog"));
-        await app.capture("synchronizer-awaiting-readiness");
-        await app.execute(
-          `window.__donutMotionSynchronizer.pending.shift().reject(JSON.stringify({ code: "PROFILE_RUNNING" }));`,
-        );
-        await waitForSelector(app, slot("synchronizer-start-error"));
-        await checked(first.id, true);
-        await checked(second.id, false);
-        assert.equal(
-          await app.execute(
-            `return document.querySelector('[data-slot="synchronizer-start"]')?.disabled;`,
-          ),
-          false,
-          "failed startup can be retried",
-        );
-        await app.capture("synchronizer-retry");
-        await emit(app, "sync-session-ended", session.id);
-        await app.clickSelector(slot("synchronizer-start"));
-        await waitForSelector(app, slot("synchronizer-starting"));
-        assert.equal(
-          await app.execute(
-            `return window.__donutMotionSynchronizer.requests.length;`,
-          ),
-          2,
-        );
-        await app.execute(
-          `window.__donutMotionSynchronizer.pending.shift().resolve(arguments[0]);`,
-          [session],
-        );
-        await waitForSelector(app, slot("synchronizer-follower-dialog"), false);
-        assert.deepEqual(
-          await app.invoke("get_sync_sessions"),
-          [],
-          "the readiness fixture never creates a backend session",
-        );
-        const profiles = await app.invoke("list_browser_profiles");
-        assert.ok(
-          profiles.every((profile) => profile.process_id == null),
-          "rehearsal and simulated readiness launch no browser processes",
-        );
-      } finally {
-        await emit(app, "sync-session-ended", session.id);
-        await restoreSynchronizerFixture(app);
-      }
-    },
-    { seedDownloadedBrowser: true },
-  );
-});
-
 async function freezeAnimations(app) {
   // Motion captures requestAnimationFrame at module initialization, so replacing
   // the global afterward does not stall its engine. Its JS batcher reads
@@ -813,55 +582,52 @@ async function resumeAnimations(app) {
 }
 
 test("profile inspector, group gestures, and remote handoff preserve context", async () => {
-  await withApp(
-    "motion-workspace",
-    async (app) => {
-      await resize(app, 1480, 900);
+  await withApp("motion-workspace", async (app) => {
+    await resize(app, 1480, 900);
 
-      const group = await app.invoke("create_profile_group", {
-        name: "Motion research group",
-      });
-      const proxy = await app.invoke("create_stored_proxy", {
-        name: "Motion inspector proxy",
-        proxySettings: {
-          proxy_type: "http",
-          host: "127.0.0.1",
-          port: 9,
-          username: null,
-          password: null,
-        },
-      });
-      for (let index = 0; index < 36; index += 1) {
-        await createProfile(
-          app,
-          `Motion profile ${String(index + 1).padStart(2, "0")}`,
-        );
-      }
-      await app.waitFor(
-        async () => (await app.invoke("list_browser_profiles")).length === 36,
-        { description: "all motion fixture profiles" },
+    const group = await app.invoke("create_profile_group", {
+      name: "Motion research group",
+    });
+    const proxy = await app.invoke("create_stored_proxy", {
+      name: "Motion inspector proxy",
+      proxySettings: {
+        proxy_type: "http",
+        host: "127.0.0.1",
+        port: 9,
+        username: null,
+        password: null,
+      },
+    });
+    for (let index = 0; index < 36; index += 1) {
+      await createProfile(
+        app,
+        `Motion profile ${String(index + 1).padStart(2, "0")}`,
       );
-      await waitForSelector(app, slot("profile-inspect-trigger"));
-      await app.execute(
-        `document.querySelector(arguments[0]).scrollTop = 250;`,
-        [tableScroll],
+    }
+    await app.waitFor(
+      async () => (await app.invoke("list_browser_profiles")).length === 36,
+      { description: "all motion fixture profiles" },
+    );
+    await waitForSelector(app, slot("profile-inspect-trigger"));
+    await app.execute(`document.querySelector(arguments[0]).scrollTop = 250;`, [
+      tableScroll,
+    ]);
+    const [first, second] = await visibleProfileIds(app, 2);
+    await toggleProfile(app, first);
+    const scrollBefore = await app.execute(
+      `return document.querySelector(arguments[0]).scrollTop;`,
+      [tableScroll],
+    );
+    assert.ok(scrollBefore > 0);
+    try {
+      await freezeAnimations(app);
+      await clickVisible(app, inspectTrigger(first));
+      await waitForSelector(
+        app,
+        `${slot("profile-inspector")}[data-profile-id="${first}"]`,
       );
-      const [first, second] = await visibleProfileIds(app, 2);
-      await toggleProfile(app, first);
-      const scrollBefore = await app.execute(
-        `return document.querySelector(arguments[0]).scrollTop;`,
-        [tableScroll],
-      );
-      assert.ok(scrollBefore > 0);
-      try {
-        await freezeAnimations(app);
-        await clickVisible(app, inspectTrigger(first));
-        await waitForSelector(
-          app,
-          `${slot("profile-inspector")}[data-profile-id="${first}"]`,
-        );
-        assert.equal(
-          await app.execute(`
+      assert.equal(
+        await app.execute(`
           const content = document.querySelector('[data-slot="profile-info-content"]');
           const control = document.querySelector('[data-slot="profile-info-section"][data-section="network"]');
           return [content, control].every((element) => {
@@ -873,133 +639,133 @@ test("profile inspector, group gestures, and remote handoff preserve context", a
             return true;
           });
         `),
-          true,
-          "inspector text and controls remain visible with the animation clock frozen at its initial frame",
-        );
-        assert.equal(
-          await app.execute(
-            `return performance.now() === window.__donutFrozenMotion.now && window.__donutFrozenMotion.animations.every(({ animation }) => animation.playState !== "running" && (animation.currentTime === null || animation.currentTime === 0));`,
-          ),
-          true,
-          "both JavaScript and newly created native animations remain frozen",
-        );
-        await app.capture("profile-inspector-animation-frozen");
-      } finally {
-        await resumeAnimations(app);
-      }
+        true,
+        "inspector text and controls remain visible with the animation clock frozen at its initial frame",
+      );
       assert.equal(
         await app.execute(
-          `return document.querySelector('[data-slot="dialog-overlay"]') === null;`,
+          `return performance.now() === window.__donutFrozenMotion.now && window.__donutFrozenMotion.animations.every(({ animation }) => animation.playState !== "running" && (animation.currentTime === null || animation.currentTime === 0));`,
         ),
         true,
-        "wide inspector is nonmodal",
+        "both JavaScript and newly created native animations remain frozen",
       );
-      await app.clickSelector(
-        `${slot("profile-info-section")}[data-section="network"]`,
-      );
-      await clickVisible(app, inspectTrigger(second));
-      await waitForSelector(
-        app,
-        `${slot("profile-info-content")}[data-profile-id="${second}"][data-section="network"]`,
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector(arguments[0]).scrollTop;`,
-          [tableScroll],
-        ),
-        scrollBefore,
-        "profile switching preserves table scroll",
-      );
-      assert.equal(
-        await app.execute(
-          `return document.querySelector(arguments[0])?.getAttribute("data-state");`,
-          [profileRow(first)],
-        ),
-        "selected",
-        "profile switching preserves selection",
-      );
-      await app.capture("profile-inspector-wide");
-      await app.pressShortcut({ key: "Escape" });
-      await waitForSelector(app, slot("profile-inspector"), false);
-      assert.equal(
-        await app.execute(`return document.activeElement?.dataset.profileId;`),
-        second,
-        "Escape restores the last inspection trigger",
-      );
+      await app.capture("profile-inspector-animation-frozen");
+    } finally {
+      await resumeAnimations(app);
+    }
+    assert.equal(
+      await app.execute(
+        `return document.querySelector('[data-slot="dialog-overlay"]') === null;`,
+      ),
+      true,
+      "wide inspector is nonmodal",
+    );
+    await app.clickSelector(
+      `${slot("profile-info-section")}[data-section="network"]`,
+    );
+    await clickVisible(app, inspectTrigger(second));
+    await waitForSelector(
+      app,
+      `${slot("profile-info-content")}[data-profile-id="${second}"][data-section="network"]`,
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector(arguments[0]).scrollTop;`,
+        [tableScroll],
+      ),
+      scrollBefore,
+      "profile switching preserves table scroll",
+    );
+    assert.equal(
+      await app.execute(
+        `return document.querySelector(arguments[0])?.getAttribute("data-state");`,
+        [profileRow(first)],
+      ),
+      "selected",
+      "profile switching preserves selection",
+    );
+    await app.capture("profile-inspector-wide");
+    await app.pressShortcut({ key: "Escape" });
+    await waitForSelector(app, slot("profile-inspector"), false);
+    assert.equal(
+      await app.execute(`return document.activeElement?.dataset.profileId;`),
+      second,
+      "Escape restores the last inspection trigger",
+    );
 
-      await activateFocusedByKeyboard(app);
-      await waitForSelector(app, slot("profile-inspector"));
-      await app.clickSelector(
-        `${slot("profile-info-section")}[data-section="network"]`,
-      );
-      await app.clickSelector(
-        `${slot("profile-info-content")}[data-section="network"] [role="combobox"]`,
-      );
-      await app.waitFor(
-        () =>
-          app.execute(`
+    await activateFocusedByKeyboard(app);
+    await waitForSelector(app, slot("profile-inspector"));
+    await app.clickSelector(
+      `${slot("profile-info-section")}[data-section="network"]`,
+    );
+    await app.clickSelector(
+      `${slot("profile-info-content")}[data-section="network"] [role="combobox"]`,
+    );
+    await app.waitFor(
+      () =>
+        app.execute(`
           const popup = document.querySelector('[data-slot="select-content"]');
           return popup?.contains(document.activeElement) && !popup.closest('[aria-hidden="true"]');
         `),
-        {
-          description: "focused, accessibility-visible inspector proxy picker",
-        },
-      );
-      // Radix Select intentionally closes on window.resize. Its ownership
-      // cleanup must restore the inspector's accessibility exposure.
-      await resize(app, 720, 600);
-      await waitForSelector(app, slot("profile-inspector"), false);
-      await waitForSelector(app, slot("select-content"), false);
-      const inspectorAccessible = () =>
-        app.execute(`
+      {
+        description: "focused, accessibility-visible inspector proxy picker",
+      },
+    );
+    // Radix Select intentionally closes on window.resize. Its ownership
+    // cleanup must restore the inspector's accessibility exposure.
+    await resize(app, 720, 600);
+    await waitForSelector(app, slot("profile-inspector"), false);
+    await waitForSelector(app, slot("select-content"), false);
+    const inspectorAccessible = () =>
+      app.execute(`
         const content = document.querySelector('[data-slot="profile-info-content"]');
         return content && !content.closest('[aria-hidden="true"]');
       `);
-      await app.waitFor(inspectorAccessible, {
-        description: "inspector is accessible after Select closes on resize",
-      });
-      await app.clickSelector(
-        `${slot("profile-info-content")}[data-section="network"] [role="combobox"]`,
-      );
-      await app.clickText(proxy.name, { roles: ["option"] });
-      await waitForSelector(app, slot("select-content"), false);
-      await app.waitFor(
-        async () =>
-          (await app.invoke("list_browser_profiles")).find(
-            (profile) => profile.id === second,
-          )?.proxy_id === proxy.id,
-        { description: "real pointer selection persists the proxy assignment" },
-      );
-      // The proxy is an inert local fixture. Selecting it neither starts a
-      // browser nor claims the endpoint is reachable.
-      await resize(app, 1480, 900);
-      await waitForSelector(app, slot("profile-inspector"));
-      await app.clickSelector(
-        `${slot("profile-info-section")}[data-section="overview"]`,
-      );
-      const colorTrigger = `[aria-label="${en.profileInfo.fields.windowColor}"]`;
-      await app.clickSelector(colorTrigger);
-      await assertPopupReadable(app, slot("popover-content"));
-      await app.clickSelector(`${slot("popover-content")} input`);
-      const colorBefore = await app.execute(`
+    await app.waitFor(inspectorAccessible, {
+      description: "inspector is accessible after Select closes on resize",
+    });
+    await app.clickSelector(
+      `${slot("profile-info-content")}[data-section="network"] [role="combobox"]`,
+    );
+    await app.clickText(proxy.name, { roles: ["option"] });
+    await waitForSelector(app, slot("select-content"), false);
+    await app.waitFor(
+      async () =>
+        (await app.invoke("list_browser_profiles")).find(
+          (profile) => profile.id === second,
+        )?.proxy_id === proxy.id,
+      { description: "real pointer selection persists the proxy assignment" },
+    );
+    // The proxy is an inert local fixture. Selecting it neither starts a
+    // browser nor claims the endpoint is reachable.
+    await resize(app, 1480, 900);
+    await waitForSelector(app, slot("profile-inspector"));
+    await app.clickSelector(
+      `${slot("profile-info-section")}[data-section="overview"]`,
+    );
+    const colorTrigger = `[aria-label="${en.profileInfo.fields.windowColor}"]`;
+    await app.clickSelector(colorTrigger);
+    await assertPopupReadable(app, slot("popover-content"));
+    await app.clickSelector(`${slot("popover-content")} input`);
+    const colorBefore = await app.execute(`
         const popup = document.querySelector('[data-slot="popover-content"]');
         window.__donutMotionOwnedPopup = { popup, focused: document.activeElement };
         return popup.querySelector('input').value;
       `);
-      assert.equal(
-        await app.execute(
-          `return document.querySelector(arguments[0]).getAttribute('aria-controls') === window.__donutMotionOwnedPopup.popup.id;`,
-          [colorTrigger],
-        ),
-        true,
-        "the color trigger identifies its actual owned portal",
-      );
-      try {
-        await resize(app, 720, 600);
-        await waitForSelector(app, slot("profile-inspector"), false);
-        await assertPopupReadable(app, slot("popover-content"));
-        assert.deepEqual(
-          await app.execute(`
+    assert.equal(
+      await app.execute(
+        `return document.querySelector(arguments[0]).getAttribute('aria-controls') === window.__donutMotionOwnedPopup.popup.id;`,
+        [colorTrigger],
+      ),
+      true,
+      "the color trigger identifies its actual owned portal",
+    );
+    try {
+      await resize(app, 720, 600);
+      await waitForSelector(app, slot("profile-inspector"), false);
+      await assertPopupReadable(app, slot("popover-content"));
+      assert.deepEqual(
+        await app.execute(`
           const popup = document.querySelector('[data-slot="popover-content"]');
           return {
             samePopup: popup === window.__donutMotionOwnedPopup.popup,
@@ -1008,304 +774,289 @@ test("profile inspector, group gestures, and remote handoff preserve context", a
             accessible: Boolean(popup && !popup.closest('[aria-hidden="true"]'))
           };
         `),
+        {
+          samePopup: true,
+          sameFocus: true,
+          focusInside: true,
+          accessible: true,
+        },
+        "wide-to-narrow resize preserves the owned portal, focus, and accessibility exposure",
+      );
+      await app.capture("profile-inspector-owned-popup-narrow");
+      const colorPoint = await pointIn(app, `${slot("popover-content")} .h-32`);
+      try {
+        await pointerActions(app, [
           {
-            samePopup: true,
-            sameFocus: true,
-            focusInside: true,
-            accessible: true,
+            type: "pointerMove",
+            x: colorPoint.x,
+            y: colorPoint.y,
+            origin: "viewport",
           },
-          "wide-to-narrow resize preserves the owned portal, focus, and accessibility exposure",
-        );
-        await app.capture("profile-inspector-owned-popup-narrow");
-        const colorPoint = await pointIn(
-          app,
-          `${slot("popover-content")} .h-32`,
-        );
-        try {
-          await pointerActions(app, [
-            {
-              type: "pointerMove",
-              x: colorPoint.x,
-              y: colorPoint.y,
-              origin: "viewport",
-            },
-            { type: "pointerDown", button: 0 },
-            {
-              type: "pointerMove",
-              x: colorPoint.x + 20,
-              y: colorPoint.y + 10,
-              duration: 120,
-              origin: "viewport",
-            },
-            { type: "pointerUp", button: 0 },
-          ]);
-        } finally {
-          await app.session.command("DELETE", "/actions");
-        }
-        await app.waitFor(
-          () =>
-            app.execute(
-              `return document.querySelector('[data-slot="popover-content"] input').value !== arguments[0];`,
-              [colorBefore],
-            ),
+          { type: "pointerDown", button: 0 },
           {
-            description:
-              "resized color popup responds to real pointer selection",
+            type: "pointerMove",
+            x: colorPoint.x + 20,
+            y: colorPoint.y + 10,
+            duration: 120,
+            origin: "viewport",
           },
-        );
-        // The picker renders its HSL input separately from its effect-driven
-        // onColorChange, and each step of the drag reaches the swatch a few
-        // renders later, so the first new swatch color is not yet the final
-        // selection.
-        await app.waitFor(
-          () =>
-            app.execute(
-              `
+          { type: "pointerUp", button: 0 },
+        ]);
+      } finally {
+        await app.session.command("DELETE", "/actions");
+      }
+      await app.waitFor(
+        () =>
+          app.execute(
+            `return document.querySelector('[data-slot="popover-content"] input').value !== arguments[0];`,
+            [colorBefore],
+          ),
+        {
+          description: "resized color popup responds to real pointer selection",
+        },
+      );
+      // The picker renders its HSL input separately from its effect-driven
+      // onColorChange, and each step of the drag reaches the swatch a few
+      // renders later, so the first new swatch color is not yet the final
+      // selection.
+      await app.waitFor(
+        () =>
+          app.execute(
+            `
               const color = getComputedStyle(document.querySelector(arguments[0])).backgroundColor;
               const before = document.createElement('span').style;
               before.backgroundColor = arguments[1];
               return color !== before.backgroundColor;
             `,
-              [colorTrigger, colorBefore],
-            ),
-          {
-            description: "selected color reaches the controlled profile swatch",
-          },
-        );
-        await app.clickSelector(colorTrigger);
-        await waitForSelector(app, slot("popover-content"), false);
-        // With the picker gone, the swatch shows the color committed on close.
-        const chosenColor = Color(
-          await app.execute(
-            "return getComputedStyle(document.querySelector(arguments[0])).backgroundColor;",
-            [colorTrigger],
-          ),
-        ).hex();
-        assert.notEqual(
-          chosenColor.toLowerCase(),
-          Color(colorBefore).hex().toLowerCase(),
-          "the swatch keeps the selected color after the popup closes",
-        );
-        await app.waitFor(
-          async () =>
-            (await app.invoke("list_browser_profiles"))
-              .find((profile) => profile.id === second)
-              ?.window_color?.toLowerCase() === chosenColor.toLowerCase(),
-          {
-            description:
-              "closing the color popup persists its real selected color",
-          },
-        );
-        await app.waitFor(inspectorAccessible, {
-          description:
-            "inspector remains accessible after its owned popup closes",
-        });
-      } finally {
-        await app.execute(`delete window.__donutMotionOwnedPopup;`);
-      }
-      await resize(app, 1480, 900);
-      await waitForSelector(app, slot("profile-inspector"));
-      await app.clickSelector(
-        `${slot("profile-info-section")}[data-section="automation"]`,
-      );
-      const draft = "https://example.com/inspector-draft";
-      await app.fillSelector(slot("profile-launch-hook-input"), draft);
-      await app.execute(
-        `window.__donutMotionDraftInput = document.querySelector('[data-slot="profile-launch-hook-input"]');`,
-      );
-      await resize(app, 720, 600);
-      await waitForSelector(app, slot("profile-inspector"), false);
-      await waitForSelector(
-        app,
-        `${slot("profile-info-content")}[data-profile-id="${second}"][data-section="automation"]`,
-      );
-      assert.deepEqual(
-        await app.execute(`
-        const input = document.querySelector('[data-slot="profile-launch-hook-input"]');
-        return { value: input?.value, sameNode: input === window.__donutMotionDraftInput };
-      `),
-        { value: draft, sameNode: true },
-        "wide-to-narrow transition preserves the actual unsaved editor",
-      );
-      await assertContained(app, '[role="dialog"]');
-      await app.capture("profile-inspector-narrow");
-      assert.equal(
-        await app.execute(
-          `return document.activeElement === document.querySelector('[data-slot="profile-launch-hook-input"]');`,
-        ),
-        true,
-        "resizing keeps focus in the unsaved editor",
-      );
-      for (let index = 0; index < 14; index += 1) {
-        await tabForward(app);
-        assert.equal(
-          await app.execute(
-            `return document.querySelector('[role="dialog"]')?.contains(document.activeElement);`,
-          ),
-          true,
-          "compact inspector traps keyboard focus inside the modal",
-        );
-      }
-      await resize(app, 1480, 900);
-      await waitForSelector(app, slot("profile-inspector"));
-      assert.deepEqual(
-        await app.execute(`
-        const input = document.querySelector('[data-slot="profile-launch-hook-input"]');
-        return { value: input?.value, sameNode: input === window.__donutMotionDraftInput };
-      `),
-        { value: draft, sameNode: true },
-        "narrow-to-wide transition also preserves the unsaved editor",
-      );
-      await app.execute(`delete window.__donutMotionDraftInput;`);
-      await resize(app, 720, 600);
-      await waitForSelector(app, slot("profile-inspector"), false);
-      await app.pressShortcut({ key: "Escape" });
-      // The unsaved launch hook asks before the panel closes.
-      await waitForSelector(app, slot("leave-prompt-discard"));
-      await app.clickSelector(slot("leave-prompt-discard"));
-      await waitForSelector(app, slot("profile-info-content"), false);
-      await app.pressShortcut({ key: "k", ...modifier });
-      await waitForSelector(app, "[cmdk-input]");
-      await app.session.sendKeys(
-        await app.session.findCss("[cmdk-input]"),
-        en.rail.settings,
-      );
-      assert.equal(await app.visibleTextIncludes(en.rail.settings), true);
-      await app.pressShortcut({ key: "Escape" });
-      await waitForSelector(app, "[cmdk-input]", false);
-
-      await resize(app, 1480, 900);
-      await app.execute(`document.querySelector(arguments[0]).scrollTop = 0;`, [
-        tableScroll,
-      ]);
-      // Clear any earlier selection through the actual table checkbox.
-      const selected = await app.execute(
-        `return [...document.querySelectorAll('tr[data-state="selected"]')].map((row) => row.dataset.profileId);`,
-      );
-      if (selected.includes(first)) await toggleProfile(app, first);
-      else {
-        // The selected profile may be virtualized outside the top of the table.
-        await app.clickSelector(`[aria-label="${en.common.aria.selectAll}"]`);
-        await app.clickSelector(`[aria-label="${en.common.aria.selectAll}"]`);
-      }
-      const [moveFirst, moveSecond, cancelId] = await visibleProfileIds(app);
-      await toggleProfile(app, moveFirst);
-      await toggleProfile(app, moveSecond);
-      try {
-        await beginDrag(app, moveFirst);
-        const target = await pointIn(
-          app,
-          `[data-profile-group-drop="${group.id}"]`,
-        );
-        await pointerActions(app, [
-          {
-            type: "pointerMove",
-            x: target.x,
-            y: target.y,
-            duration: 180,
-            origin: "viewport",
-          },
-        ]);
-        await waitForSelector(
-          app,
-          `[data-profile-group-drop="${group.id}"][data-drop-state="target"]`,
-        );
-        await app.capture("profile-group-drag");
-        await pointerActions(app, [{ type: "pointerUp", button: 0 }]);
-        await app.waitFor(
-          async () => {
-            const assignments = await groupAssignments(app);
-            return (
-              assignments[moveFirst] === group.id &&
-              assignments[moveSecond] === group.id
-            );
-          },
-          {
-            description:
-              "both selected profiles persisted into the drop target group",
-          },
-        );
-      } finally {
-        await app.session.command("DELETE", "/actions");
-      }
-      await waitForSelector(app, slot("profile-drag-preview"), false);
-
-      const beforeCancel = await groupAssignments(app);
-      try {
-        await beginDrag(app, cancelId);
-        await app.pressShortcut({ key: "Escape" });
-      } finally {
-        await app.session.command("DELETE", "/actions");
-      }
-      await waitForSelector(app, slot("profile-drag-preview"), false);
-      assert.deepEqual(
-        await groupAssignments(app),
-        beforeCancel,
-        "Escape never writes a group assignment",
-      );
-      await app.execute(`document.querySelector(arguments[0]).focus();`, [
-        dragHandle(cancelId),
-      ]);
-      await activateFocusedByKeyboard(app);
-      await app.waitForText(en.groupAssignment.title);
-      await app.pressShortcut({ key: "Escape" });
-      await waitForSelector(app, '[role="dialog"]', false);
-
-      await clickVisible(app, inspectTrigger(cancelId));
-      await app.clickSelector(
-        `${slot("profile-info-section")}[data-section="overview"]`,
-      );
-      const handoff = `${slot("profile-handoff-detail")}[data-profile-id="${cancelId}"]`;
-      // These are frontend event-contract checks. No remote browser or real
-      // sync transfer is started, and no networking success is inferred.
-      await emit(app, "remote-handoff-changed", { [cancelId]: "running" });
-      await waitForSelector(app, `${handoff}[data-handoff-state="running"]`);
-      await emit(app, "remote-handoff-changed", {});
-      await waitForSelector(app, handoff, false);
-      await emit(app, "remote-handoff-changed", { [cancelId]: "pending_sync" });
-      await waitForSelector(
-        app,
-        `${handoff}[data-handoff-state="pending_sync"]`,
-      );
-      await emit(app, "profile-sync-status", {
-        profile_id: cancelId,
-        status: "error",
-        error: "Motion fixture sync failure",
-      });
-      await app.waitFor(
-        () =>
-          app.execute(
-            `return document.querySelector(arguments[0])?.textContent.includes(arguments[1]);`,
-            [handoff, en.profileMotion.handoffError],
+            [colorTrigger, colorBefore],
           ),
         {
-          description:
-            "failed return keeps its pending state and explains the error",
+          description: "selected color reaches the controlled profile swatch",
         },
       );
+      await app.clickSelector(colorTrigger);
+      await waitForSelector(app, slot("popover-content"), false);
+      // With the picker gone, the swatch shows the color committed on close.
+      const chosenColor = Color(
+        await app.execute(
+          "return getComputedStyle(document.querySelector(arguments[0])).backgroundColor;",
+          [colorTrigger],
+        ),
+      ).hex();
+      assert.notEqual(
+        chosenColor.toLowerCase(),
+        Color(colorBefore).hex().toLowerCase(),
+        "the swatch keeps the selected color after the popup closes",
+      );
+      await app.waitFor(
+        async () =>
+          (await app.invoke("list_browser_profiles"))
+            .find((profile) => profile.id === second)
+            ?.window_color?.toLowerCase() === chosenColor.toLowerCase(),
+        {
+          description:
+            "closing the color popup persists its real selected color",
+        },
+      );
+      await app.waitFor(inspectorAccessible, {
+        description:
+          "inspector remains accessible after its owned popup closes",
+      });
+    } finally {
+      await app.execute(`delete window.__donutMotionOwnedPopup;`);
+    }
+    await resize(app, 1480, 900);
+    await waitForSelector(app, slot("profile-inspector"));
+    await app.clickSelector(
+      `${slot("profile-info-section")}[data-section="automation"]`,
+    );
+    const draft = "https://example.com/inspector-draft";
+    await app.fillSelector(slot("profile-launch-hook-input"), draft);
+    await app.execute(
+      `window.__donutMotionDraftInput = document.querySelector('[data-slot="profile-launch-hook-input"]');`,
+    );
+    await resize(app, 720, 600);
+    await waitForSelector(app, slot("profile-inspector"), false);
+    await waitForSelector(
+      app,
+      `${slot("profile-info-content")}[data-profile-id="${second}"][data-section="automation"]`,
+    );
+    assert.deepEqual(
+      await app.execute(`
+        const input = document.querySelector('[data-slot="profile-launch-hook-input"]');
+        return { value: input?.value, sameNode: input === window.__donutMotionDraftInput };
+      `),
+      { value: draft, sameNode: true },
+      "wide-to-narrow transition preserves the actual unsaved editor",
+    );
+    await assertContained(app, '[role="dialog"]');
+    await app.capture("profile-inspector-narrow");
+    assert.equal(
+      await app.execute(
+        `return document.activeElement === document.querySelector('[data-slot="profile-launch-hook-input"]');`,
+      ),
+      true,
+      "resizing keeps focus in the unsaved editor",
+    );
+    for (let index = 0; index < 14; index += 1) {
+      await tabForward(app);
+      assert.equal(
+        await app.execute(
+          `return document.querySelector('[role="dialog"]')?.contains(document.activeElement);`,
+        ),
+        true,
+        "compact inspector traps keyboard focus inside the modal",
+      );
+    }
+    await resize(app, 1480, 900);
+    await waitForSelector(app, slot("profile-inspector"));
+    assert.deepEqual(
+      await app.execute(`
+        const input = document.querySelector('[data-slot="profile-launch-hook-input"]');
+        return { value: input?.value, sameNode: input === window.__donutMotionDraftInput };
+      `),
+      { value: draft, sameNode: true },
+      "narrow-to-wide transition also preserves the unsaved editor",
+    );
+    await app.execute(`delete window.__donutMotionDraftInput;`);
+    await resize(app, 720, 600);
+    await waitForSelector(app, slot("profile-inspector"), false);
+    await app.pressShortcut({ key: "Escape" });
+    // The unsaved launch hook asks before the panel closes.
+    await waitForSelector(app, slot("leave-prompt-discard"));
+    await app.clickSelector(slot("leave-prompt-discard"));
+    await waitForSelector(app, slot("profile-info-content"), false);
+    await app.pressShortcut({ key: "k", ...modifier });
+    await waitForSelector(app, "[cmdk-input]");
+    await app.session.sendKeys(
+      await app.session.findCss("[cmdk-input]"),
+      en.rail.settings,
+    );
+    assert.equal(await app.visibleTextIncludes(en.rail.settings), true);
+    await app.pressShortcut({ key: "Escape" });
+    await waitForSelector(app, "[cmdk-input]", false);
+
+    await resize(app, 1480, 900);
+    await app.execute(`document.querySelector(arguments[0]).scrollTop = 0;`, [
+      tableScroll,
+    ]);
+    // Clear any earlier selection through the actual table checkbox.
+    const selected = await app.execute(
+      `return [...document.querySelectorAll('tr[data-state="selected"]')].map((row) => row.dataset.profileId);`,
+    );
+    if (selected.includes(first)) await toggleProfile(app, first);
+    else {
+      // The selected profile may be virtualized outside the top of the table.
+      await app.clickSelector(`[aria-label="${en.common.aria.selectAll}"]`);
+      await app.clickSelector(`[aria-label="${en.common.aria.selectAll}"]`);
+    }
+    const [moveFirst, moveSecond, cancelId] = await visibleProfileIds(app);
+    await toggleProfile(app, moveFirst);
+    await toggleProfile(app, moveSecond);
+    try {
+      await beginDrag(app, moveFirst);
+      const target = await pointIn(
+        app,
+        `[data-profile-group-drop="${group.id}"]`,
+      );
+      await pointerActions(app, [
+        {
+          type: "pointerMove",
+          x: target.x,
+          y: target.y,
+          duration: 180,
+          origin: "viewport",
+        },
+      ]);
       await waitForSelector(
         app,
-        `${handoff}[data-handoff-state="pending_sync"]`,
+        `[data-profile-group-drop="${group.id}"][data-drop-state="target"]`,
       );
-      await app.capture("profile-handoff-retry");
-      await emit(app, "profile-sync-status", {
-        profile_id: cancelId,
-        status: "synced",
-      });
-      await waitForSelector(
-        app,
-        `${handoff}[data-handoff-state="pending_sync"]`,
+      await app.capture("profile-group-drag");
+      await pointerActions(app, [{ type: "pointerUp", button: 0 }]);
+      await app.waitFor(
+        async () => {
+          const assignments = await groupAssignments(app);
+          return (
+            assignments[moveFirst] === group.id &&
+            assignments[moveSecond] === group.id
+          );
+        },
+        {
+          description:
+            "both selected profiles persisted into the drop target group",
+        },
       );
-      await emit(app, "remote-handoff-changed", {});
-      await waitForSelector(app, `${handoff}[data-handoff-state="returned"]`);
-      await app.capture("profile-handoff-returned");
-      await app.clickTextIn(handoff, en.common.buttons.close, {
-        roles: ["button"],
-      });
-      await waitForSelector(app, handoff, false);
-    },
-    { seedDownloadedBrowser: true },
-  );
+    } finally {
+      await app.session.command("DELETE", "/actions");
+    }
+    await waitForSelector(app, slot("profile-drag-preview"), false);
+
+    const beforeCancel = await groupAssignments(app);
+    try {
+      await beginDrag(app, cancelId);
+      await app.pressShortcut({ key: "Escape" });
+    } finally {
+      await app.session.command("DELETE", "/actions");
+    }
+    await waitForSelector(app, slot("profile-drag-preview"), false);
+    assert.deepEqual(
+      await groupAssignments(app),
+      beforeCancel,
+      "Escape never writes a group assignment",
+    );
+    await app.execute(`document.querySelector(arguments[0]).focus();`, [
+      dragHandle(cancelId),
+    ]);
+    await activateFocusedByKeyboard(app);
+    await app.waitForText(en.groupAssignment.title);
+    await app.pressShortcut({ key: "Escape" });
+    await waitForSelector(app, '[role="dialog"]', false);
+
+    await clickVisible(app, inspectTrigger(cancelId));
+    await app.clickSelector(
+      `${slot("profile-info-section")}[data-section="overview"]`,
+    );
+    const handoff = `${slot("profile-handoff-detail")}[data-profile-id="${cancelId}"]`;
+    // These are frontend event-contract checks. No remote browser or real
+    // sync transfer is started, and no networking success is inferred.
+    await emit(app, "remote-handoff-changed", { [cancelId]: "running" });
+    await waitForSelector(app, `${handoff}[data-handoff-state="running"]`);
+    await emit(app, "remote-handoff-changed", {});
+    await waitForSelector(app, handoff, false);
+    await emit(app, "remote-handoff-changed", { [cancelId]: "pending_sync" });
+    await waitForSelector(app, `${handoff}[data-handoff-state="pending_sync"]`);
+    await emit(app, "profile-sync-status", {
+      profile_id: cancelId,
+      status: "error",
+      error: "Motion fixture sync failure",
+    });
+    await app.waitFor(
+      () =>
+        app.execute(
+          `return document.querySelector(arguments[0])?.textContent.includes(arguments[1]);`,
+          [handoff, en.profileMotion.handoffError],
+        ),
+      {
+        description:
+          "failed return keeps its pending state and explains the error",
+      },
+    );
+    await waitForSelector(app, `${handoff}[data-handoff-state="pending_sync"]`);
+    await app.capture("profile-handoff-retry");
+    await emit(app, "profile-sync-status", {
+      profile_id: cancelId,
+      status: "synced",
+    });
+    await waitForSelector(app, `${handoff}[data-handoff-state="pending_sync"]`);
+    await emit(app, "remote-handoff-changed", {});
+    await waitForSelector(app, `${handoff}[data-handoff-state="returned"]`);
+    await app.capture("profile-handoff-returned");
+    await app.clickTextIn(handoff, en.common.buttons.close, {
+      roles: ["button"],
+    });
+    await waitForSelector(app, handoff, false);
+  });
 });
 
 test("settings save a RAM-only edit, preserve location, and expose review and discard", async () => {
@@ -1677,7 +1428,7 @@ test("schedule displays every timezone and slot, and skipped run details work by
     // After the schedule stubs, not before: the fixture signs in a paid user,
     // and the app fetches the schedules the moment it sees one. On a slow
     // start that fetch reached the backend before the stubs were in place.
-    await installSynchronizerFixture(app);
+    await installPaidUserFixture(app);
     await app.pressShortcut({ ...modifier, key: "b" });
     await waitForSelector(app, slot("cookie-bot-usage-chart"));
     assert.equal(
@@ -1753,7 +1504,7 @@ test("schedule displays every timezone and slot, and skipped run details work by
       "true",
     );
     await app.capture("skipped-run-details");
-    await restoreSynchronizerFixture(app);
+    await emit(app, "cloud-auth-expired", null);
   });
 });
 
@@ -1785,7 +1536,7 @@ test("a new enrolment starts at a random time that the dice can change", async (
       [profile],
     );
     await emit(app, "profiles-changed", null);
-    await installSynchronizerFixture(app);
+    await installPaidUserFixture(app);
     await app.pressShortcut({ ...modifier, key: "b" });
     await app.clickText(en.cookieBot.empty.cta);
     await app.clickSelector(`#cookie-bot-pick-${profile.id}`);
@@ -1841,7 +1592,7 @@ test("a new enrolment starts at a random time that the dice can change", async (
     const [one, two] = (await times()).map(minutesOf);
     assert.ok(apart(one, two) >= 60, "an added time keeps an hour clear");
     await app.capture("cookie-bot-random-time");
-    await restoreSynchronizerFixture(app);
+    await emit(app, "cloud-auth-expired", null);
   });
 });
 
@@ -1992,39 +1743,34 @@ test("connection diagnostics and extension impact expose real assigned profiles"
 });
 
 test("partial import receipts survive retry without duplicating successful profiles", async () => {
-  await withApp(
-    "motion-import-receipts",
-    async (app) => {
-      const root = path.join(app.root, "import-sources");
-      const sources = [
-        path.join(root, "Default"),
-        path.join(root, "Profile 1"),
-      ];
-      async function writeSource(index) {
-        await mkdir(sources[index], { recursive: true });
-        await writeFile(
-          path.join(sources[index], "Preferences"),
-          JSON.stringify({ profile: { name: `Receipt source ${index + 1}` } }),
-        );
-        await writeFile(
-          path.join(sources[index], "Bookmarks"),
-          JSON.stringify({
-            roots: {
-              bookmark_bar: {
-                type: "folder",
-                children: [
-                  { type: "url", name: "Example", url: "https://example.com/" },
-                ],
-              },
+  await withApp("motion-import-receipts", async (app) => {
+    const root = path.join(app.root, "import-sources");
+    const sources = [path.join(root, "Default"), path.join(root, "Profile 1")];
+    async function writeSource(index) {
+      await mkdir(sources[index], { recursive: true });
+      await writeFile(
+        path.join(sources[index], "Preferences"),
+        JSON.stringify({ profile: { name: `Receipt source ${index + 1}` } }),
+      );
+      await writeFile(
+        path.join(sources[index], "Bookmarks"),
+        JSON.stringify({
+          roots: {
+            bookmark_bar: {
+              type: "folder",
+              children: [
+                { type: "url", name: "Example", url: "https://example.com/" },
+              ],
             },
-          }),
-        );
-      }
-      await writeSource(0);
-      await writeSource(1);
-      // Only fingerprint generation is fixed for this offline UI suite. Scanning,
-      // file copying, reports, progress events and retries run through real IPC.
-      await app.execute(`
+          },
+        }),
+      );
+    }
+    await writeSource(0);
+    await writeSource(1);
+    // Only fingerprint generation is fixed for this offline UI suite. Scanning,
+    // file copying, reports, progress events and retries run through real IPC.
+    await app.execute(`
       window.__donutImportFetch = window.fetch;
       window.__donutImportBatches = [];
       window.fetch = function(input, init) {
@@ -2039,75 +1785,71 @@ test("partial import receipts survive retry without duplicating successful profi
         return window.__donutImportFetch.apply(this, arguments);
       };
     `);
-      try {
-        await app.pressShortcut({ ...modifier, key: "o" });
-        await app.clickText(en.importProfile.manualImport, { roles: ["tab"] });
-        await app.fillSelector("#manual-profile-path", root);
-        await app.clickText(en.importProfile.scanButton, { roles: ["button"] });
-        await app.waitFor(
-          () =>
-            app.execute(
-              `return document.querySelectorAll('[role="checkbox"][data-state="checked"]').length === 3;`,
-            ),
-          { description: "both scanned sources selected" },
-        );
-        await app.clickText(en.importProfile.nextButton, { roles: ["button"] });
-        await rm(sources[1], { recursive: true, force: true });
-        await app.clickText(
-          en.importProfile.importButtonCount.replace("{{count}}", "2"),
-          { roles: ["button"], exact: false },
-        );
-        await app.waitFor(
-          () =>
-            app.execute(
-              `return document.querySelectorAll('[data-slot="import-receipt"][data-status="imported"]').length === 1 && document.querySelectorAll('[data-slot="import-receipt"][data-status="failed"]').length === 1;`,
-            ),
-          { description: "real partial-import receipts" },
-        );
-        const first = await app.invoke("list_browser_profiles");
-        assert.equal(first.length, 1);
-        await app.capture("partial-import-receipts");
-        await writeSource(1);
-        await app.clickSelector(slot("import-retry"));
-        await app.waitFor(
-          () =>
-            app.execute(
-              `return document.querySelectorAll('[data-slot="import-receipt"][data-status="imported"]').length === 2;`,
-            ),
-          { description: "both import receipts after retry" },
-        );
-        const profiles = await app.invoke("list_browser_profiles");
-        assert.equal(profiles.length, 2);
-        assert.ok(profiles.some((profile) => profile.id === first[0].id));
-        await app.waitFor(
-          () =>
-            app.execute(
-              `return [...document.querySelectorAll('[data-sonner-toast]')].some(node => node.getAttribute('data-type') === 'success' && node.textContent.includes(arguments[0]));`,
-              [
-                en.importProfile.resultsSummary
-                  .replace("{{imported}}", "2")
-                  .replace("{{skipped}}", "0")
-                  .replace("{{failed}}", "0"),
-              ],
-            ),
-          { description: "retry toast agrees with the cumulative receipts" },
-        );
-        const batches = await app.execute(
-          `return window.__donutImportBatches;`,
-        );
-        assert.equal(batches[0].length, 2);
-        assert.deepEqual(batches[1], [sources[1]]);
-        await resize(app, 760, 620);
-        await assertContained(app, slot("import-receipts"));
-        await app.capture("import-retry-receipts-small");
-      } finally {
-        await app.execute(
-          `window.fetch = window.__donutImportFetch; delete window.__donutImportFetch; delete window.__donutImportBatches;`,
-        );
-      }
-    },
-    { seedDownloadedBrowser: true },
-  );
+    try {
+      await app.pressShortcut({ ...modifier, key: "o" });
+      await app.clickText(en.importProfile.manualImport, { roles: ["tab"] });
+      await app.fillSelector("#manual-profile-path", root);
+      await app.clickText(en.importProfile.scanButton, { roles: ["button"] });
+      await app.waitFor(
+        () =>
+          app.execute(
+            `return document.querySelectorAll('[role="checkbox"][data-state="checked"]').length === 3;`,
+          ),
+        { description: "both scanned sources selected" },
+      );
+      await app.clickText(en.importProfile.nextButton, { roles: ["button"] });
+      await rm(sources[1], { recursive: true, force: true });
+      await app.clickText(
+        en.importProfile.importButtonCount.replace("{{count}}", "2"),
+        { roles: ["button"], exact: false },
+      );
+      await app.waitFor(
+        () =>
+          app.execute(
+            `return document.querySelectorAll('[data-slot="import-receipt"][data-status="imported"]').length === 1 && document.querySelectorAll('[data-slot="import-receipt"][data-status="failed"]').length === 1;`,
+          ),
+        { description: "real partial-import receipts" },
+      );
+      const first = await app.invoke("list_browser_profiles");
+      assert.equal(first.length, 1);
+      await app.capture("partial-import-receipts");
+      await writeSource(1);
+      await app.clickSelector(slot("import-retry"));
+      await app.waitFor(
+        () =>
+          app.execute(
+            `return document.querySelectorAll('[data-slot="import-receipt"][data-status="imported"]').length === 2;`,
+          ),
+        { description: "both import receipts after retry" },
+      );
+      const profiles = await app.invoke("list_browser_profiles");
+      assert.equal(profiles.length, 2);
+      assert.ok(profiles.some((profile) => profile.id === first[0].id));
+      await app.waitFor(
+        () =>
+          app.execute(
+            `return [...document.querySelectorAll('[data-sonner-toast]')].some(node => node.getAttribute('data-type') === 'success' && node.textContent.includes(arguments[0]));`,
+            [
+              en.importProfile.resultsSummary
+                .replace("{{imported}}", "2")
+                .replace("{{skipped}}", "0")
+                .replace("{{failed}}", "0"),
+            ],
+          ),
+        { description: "retry toast agrees with the cumulative receipts" },
+      );
+      const batches = await app.execute(`return window.__donutImportBatches;`);
+      assert.equal(batches[0].length, 2);
+      assert.deepEqual(batches[1], [sources[1]]);
+      await resize(app, 760, 620);
+      await assertContained(app, slot("import-receipts"));
+      await app.capture("import-retry-receipts-small");
+    } finally {
+      await app.execute(
+        `window.fetch = window.__donutImportFetch; delete window.__donutImportFetch; delete window.__donutImportBatches;`,
+      );
+    }
+  });
 });
 
 test("About shows diagnostics and hides a donut lab that takes bites inside the dialog", async () => {
@@ -2183,7 +1925,7 @@ test("About shows diagnostics and hides a donut lab that takes bites inside the 
     );
     assert.ok(details.startsWith(`Donut Browser ${system.app_version}\n`));
     assert.ok(details.includes(`System: ${system.os} ${system.arch}`));
-    assert.ok(details.includes("Wayfern: "));
+    assert.ok(details.includes("Apostate: "));
     assert.doesNotMatch(details, /@|\/Users\/|\/home\/|\\Users\\/);
     await app.waitFor(
       () =>
@@ -2276,38 +2018,6 @@ test("About shows diagnostics and hides a donut lab that takes bites inside the 
     await labReady();
     await app.capture("donut-lab-small");
   });
-});
-
-test("the Wayfern terms gate lifts when the backend announces acceptance", async () => {
-  // No Wayfern binary in this suite, so the marker is written the way the
-  // binary writes it and the backend's announcement is replayed. The dialog
-  // must close on that event alone: a REST or automation acceptance never
-  // presses the dialog's own button.
-  await withApp(
-    "motion-terms-gate",
-    async (app) => {
-      const termsDialogVisible = () =>
-        app.execute(
-          `return [...document.querySelectorAll('[role="dialog"]')].some(node => node.textContent.includes(arguments[0]));`,
-          [en.wayfernTerms.title],
-        );
-      await app.waitFor(termsDialogVisible, {
-        description: "the Wayfern terms dialog before acceptance",
-      });
-      await app.capture("terms-gate-closed");
-      await mkdir(path.dirname(app.wayfernTermsFile), { recursive: true });
-      await writeFile(
-        app.wayfernTermsFile,
-        `${Math.floor(Date.now() / 1000)}\n`,
-      );
-      assert.equal(await app.invoke("check_wayfern_terms_accepted"), true);
-      await emit(app, "wayfern-terms-accepted", null);
-      await app.waitFor(async () => !(await termsDialogVisible()), {
-        description: "the Wayfern terms dialog to close on the event",
-      });
-    },
-    { wayfernTermsAccepted: false, seedDownloadedBrowser: true },
-  );
 });
 
 test("the cheat code pays out sprinkles and never touches a profile", async () => {

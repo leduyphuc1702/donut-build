@@ -74,7 +74,6 @@ export type BackendErrorCode =
   | "GROUP_NOT_FOUND"
   | "GROUP_ALREADY_EXISTS"
   | "NAME_CANNOT_BE_EMPTY"
-  | "WAYFERN_VERSION_NOT_AVAILABLE"
   | "VPN_NOT_FOUND"
   | "EXTENSION_NOT_FOUND"
   | "EXTENSION_GROUP_NOT_FOUND"
@@ -106,14 +105,11 @@ export type BackendErrorCode =
   | "PROXY_PAYMENT_REQUIRED"
   | "PROXY_TLS_HANDSHAKE_FAILED"
   | "VPN_NOT_WORKING"
-  | "CAMOUFOX_IMPORT_DEPRECATED"
   | "PROXY_SIDECAR_VERSION_MISMATCH"
   | "PROXY_SIDECAR_NOT_RESPONDING"
   | "WAYFERN_NOT_RESPONDING"
   | "UPDATE_CHECKSUMS_UNAVAILABLE"
   | "UPDATE_CHECKSUM_MISMATCH"
-  | "BROWSER_CHECKSUM_UNAVAILABLE"
-  | "BROWSER_CHECKSUM_MISMATCH"
   | "SYSTEM_PROXY_UNREACHABLE"
   | "APP_PROXY_INVALID"
   | "APP_PROXY_UNREACHABLE"
@@ -127,7 +123,6 @@ export type BackendErrorCode =
   | "IMPORT_SOURCE_NOT_CHROMIUM"
   | "IMPORT_SOURCE_BROWSER_RUNNING"
   | "IMPORT_NO_ITEMS"
-  | "BROWSER_NOT_DOWNLOADED"
   | "ARCHIVE_EXTRACTION_FAILED"
   | "UNSUPPORTED_ARCHIVE_FORMAT"
   | "CLEAR_ON_CLOSE_UNAVAILABLE"
@@ -352,6 +347,9 @@ export type BackendErrorCode =
   // The profile's fingerprint claims another OS than the machine running the
   // browser. `params.claimed` and `params.host` name both.
   | "FINGERPRINT_HOST_OS_MISMATCH"
+  // The profile claims a phone or tablet OS (android, ios). Only desktop
+  // personas exist.
+  | "FINGERPRINT_MOBILE_UNSUPPORTED"
   // The launch refuses instead of opening a window on an unmanaged device: a
   // silent fallback would leave the user browsing a random fingerprint while
   // the UI reported success, which is the worst failure an anti-detect product
@@ -681,11 +679,6 @@ export function translateBackendError(t: TFunction, err: unknown): string {
       return t("backendErrors.groupAlreadyExists");
     case "NAME_CANNOT_BE_EMPTY":
       return t("backendErrors.nameCannotBeEmpty");
-    case "WAYFERN_VERSION_NOT_AVAILABLE":
-      return t("backendErrors.wayfernVersionNotAvailable", {
-        requested: parsed.params?.requested ?? "",
-        current: parsed.params?.current ?? "",
-      });
     case "VPN_NOT_FOUND":
       return t("backendErrors.vpnNotFound");
     case "EXTENSION_NOT_FOUND":
@@ -759,8 +752,6 @@ export function translateBackendError(t: TFunction, err: unknown): string {
       });
     case "VPN_NOT_WORKING":
       return t("backendErrors.vpnNotWorking");
-    case "CAMOUFOX_IMPORT_DEPRECATED":
-      return t("backendErrors.camoufoxImportDeprecated");
     case "PROXY_SIDECAR_VERSION_MISMATCH":
       return t("backendErrors.proxySidecarVersionMismatch");
     case "PROXY_SIDECAR_NOT_RESPONDING":
@@ -779,11 +770,6 @@ export function translateBackendError(t: TFunction, err: unknown): string {
       return t("backendErrors.updateChecksumMismatch", {
         file: parsed.params?.file ?? "",
       });
-    case "BROWSER_CHECKSUM_UNAVAILABLE":
-      return t("backendErrors.browserChecksumUnavailable", {
-        browser: parsed.params?.browser ?? "",
-        version: parsed.params?.version ?? "",
-      });
     case "PROFILE_ROUTE_REQUIRED":
       return t("backendErrors.profileRouteRequired");
     case "PROFILE_ROUTE_UNAVAILABLE":
@@ -797,11 +783,6 @@ export function translateBackendError(t: TFunction, err: unknown): string {
     case "APP_PROXY_UNREACHABLE":
       return t("backendErrors.appProxyUnreachable", {
         proxy: parsed.params?.proxy ?? "",
-      });
-    case "BROWSER_CHECKSUM_MISMATCH":
-      return t("backendErrors.browserChecksumMismatch", {
-        browser: parsed.params?.browser ?? "",
-        version: parsed.params?.version ?? "",
       });
     case "UPDATE_PROFILES_RUNNING":
       return t("backendErrors.updateProfilesRunning");
@@ -827,10 +808,6 @@ export function translateBackendError(t: TFunction, err: unknown): string {
       });
     case "IMPORT_NO_ITEMS":
       return t("backendErrors.importNoItems");
-    case "BROWSER_NOT_DOWNLOADED":
-      return t("backendErrors.browserNotDownloaded", {
-        browser: parsed.params?.browser ?? "",
-      });
     case "ARCHIVE_EXTRACTION_FAILED":
       return t("backendErrors.archiveExtractionFailed", {
         detail: parsed.params?.detail ?? "",
@@ -1277,6 +1254,8 @@ export function translateBackendError(t: TFunction, err: unknown): string {
         claimed: remoteOsLabel(parsed.params?.claimed ?? ""),
         host: remoteOsLabel(parsed.params?.host ?? ""),
       });
+    case "FINGERPRINT_MOBILE_UNSUPPORTED":
+      return t("backendErrors.fingerprintMobileUnsupported");
     case "WAYFERN_FINGERPRINT_APPLY_FAILED":
       return t("backendErrors.wayfernFingerprintApplyFailed", {
         detail: parsed.params?.detail ?? "",

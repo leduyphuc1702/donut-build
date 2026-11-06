@@ -95,9 +95,7 @@
       "arrowDown": "Aşağı ok",
       "tab": "Tab"
     },
-    "errors": {
-      "unknown": "Bilinmeyen bir hata oluştu"
-    },
+    "errors": {},
     "window": {
       "minimize": "Küçült",
       "maximize": "Büyüt",
@@ -199,9 +197,6 @@
     },
     "advanced": {
       "title": "Gelişmiş",
-      "clearCache": "Tüm sürüm önbelleğini temizle",
-      "clearCacheDescription": "Önbelleğe alınmış tüm tarayıcı sürüm verilerini temizleyin ve tüm tarayıcı sürümlerini kaynaklarından yenileyin. Bu, tüm tarayıcılar için sürüm bilgilerinin yeniden indirilmesini zorlar.",
-      "clearCacheFailed": "Önbellek temizlenemedi",
       "copyLogs": "Günlükleri kopyala",
       "openLogDir": "Günlük klasörünü aç",
       "copyLogsSuccess": "Günlükler panoya kopyalandı",
@@ -478,20 +473,10 @@
       "removePassword": "Parolayı Kaldır"
     },
     "synchronizer": {
-      "launchWithSync": "Eşitleyici ile Başlat",
       "stopLeader": "Bu profili ve tüm takipçilerini durdur",
       "stopFollower": "{{leaderName}} profilinin işlemlerini takip ediyor",
       "desyncedTooltip": "Eşitleme {{url}} adresinde başarısız oldu",
-      "paidFeature": "Eşitleyici ücretli bir özelliktir",
-      "wayfernOnly": "Yalnızca Wayfern profilleri eşitlenebilir",
-      "selectFollowers": "Takipçi Profilleri Seçin",
-      "selectFollowersDesc": "Lider profilin işlemlerini yansıtacak profilleri seçin. Yalnızca durdurulmuş Wayfern profilleri seçilebilir.",
       "leader": "Lider",
-      "follower": "Takipçi",
-      "startSession": "Eşitleme Oturumu Başlat",
-      "noFollowers": "En az bir takipçi profil seçin",
-      "flakyBadge": "TUTARSIZ",
-      "flakyTooltip": "Bu profilin ekran çözünürlüğü liderinkinden farklı. Sayfa düzenleri farklılık gösterebilir; tıklamalar ve etkileşimler yanlış öğelere denk gelebilir.",
       "pauseMirroring": "Yansıtmayı duraklat",
       "resumeMirroring": "Yansıtmayı sürdür",
       "pausedNote": "Takipçiler lideri kopyalamıyor. Şimdi liderde yapılanlar orada kalır.",
@@ -594,7 +579,6 @@
     "antiDetect": {
       "title": "Anti-Detect Tarayıcı",
       "description": "Tespit önleme özelliklerine sahip bir tarayıcı seçin",
-      "chromium": "Wayfern",
       "badge": "Anti-Detect Tarayıcı"
     },
     "regular": {
@@ -617,26 +601,11 @@
       "label": "Başlatma Kancası URL'si",
       "placeholder": "https://example.com/hooks/profile-launch"
     },
-    "version": {
-      "fetching": "Kullanılabilir sürümler getiriliyor...",
-      "fetchError": "Tarayıcı sürümleri getirilemedi. Lütfen internet bağlantınızı kontrol edip yeniden deneyin.",
-      "needsDownload": "{{browser}} sürümünün ({{version}}) indirilmesi gerekiyor",
-      "available": "{{browser}} sürümü ({{version}}) kullanılabilir",
-      "downloading": "{{browser}} sürümü ({{version}}) indiriliyor...",
-      "latestNeedsDownload": "En son sürümün ({{version}}) indirilmesi gerekiyor",
-      "latestAvailable": "En son sürüm ({{version}}) kullanılabilir",
-      "latestDownloading": "Sürüm ({{version}}) indiriliyor...",
-      "upgradeAvailable": "{{browser}} tarayıcısının daha yeni bir sürümü ({{version}}) mevcut."
-    },
     "chromiumLabel": "Chromium",
-    "chromiumSubtitle": "Wayfern tarafından desteklenir",
-    "platformUnavailable": "{{browser}} henüz platformunuzda kullanılamıyor.",
     "passwordProtect": {
       "label": "Bu profili parolayla koru",
       "description": "Diskteki profil verilerini şifreler. Başlatmak için gereklidir."
     },
-    "downloadingSubtitle": "İndiriliyor…",
-    "browsersDownloading": "Tarayıcılar hâlâ indiriliyor. Bir indirme tamamlandığında profil oluşturma kullanılabilir olacak.",
     "advancedOptions": "Gelişmiş seçenekler",
     "moreOptions": "Diğer seçenekler",
     "hourlyLimit": {
@@ -646,6 +615,9 @@
     },
     "group": {
       "notFound": "Grup bulunamadı."
+    },
+    "engine": {
+      "preparing": "Tarayıcı motoru hâlâ indiriliyor. Profili şimdi oluşturabilirsiniz; motor hazır olur olmaz açılır."
     }
   },
   "deleteDialog": {
@@ -1079,7 +1051,6 @@
     "apiToggleFailed": "API sunucusu açılıp kapatılamadı",
     "apiStartFailed": "API sunucusu başlatılamadı",
     "tokenCopied": "Jeton kopyalandı",
-    "mcpAcceptTermsFirst": "(Önce Ayarlar'dan Wayfern koşullarını kabul edin)",
     "apiRunningOn": "Çalıştığı adres",
     "apiExampleRequest": "Örnek istek",
     "examples": {
@@ -1195,38 +1166,6 @@
     "error": "Profil içe aktarılamadı"
   },
   "config": {
-    "wayfern": {
-      "title": "Wayfern Yapılandırması",
-      "fingerprint": {
-        "title": "Parmak İzi",
-        "randomize": "Başlatmada Rastgele Oluştur",
-        "randomizeDescription": "Tarayıcı her başlatıldığında yeni bir parmak izi oluşturun.",
-        "platformPlaceholder": "örn. Win32, MacIntel, Linux x86_64",
-        "timezoneOffsetPlaceholder": "örn. EST (UTC-5) için 300",
-        "webglRendererPlaceholder": "örn. Intel(R) HD Graphics"
-      },
-      "os": {
-        "title": "İşletim Sistemi",
-        "description": "Parmak izi oluşturma için taklit edilecek işletim sistemi.",
-        "windows": "Windows",
-        "macos": "macOS",
-        "linux": "Linux",
-        "android": "Android",
-        "ios": "iOS"
-      },
-      "screen": {
-        "title": "Ekran Boyutu",
-        "minWidth": "Min. Genişlik",
-        "maxWidth": "Maks. Genişlik",
-        "minHeight": "Min. Yükseklik",
-        "maxHeight": "Maks. Yükseklik"
-      },
-      "blocking": {
-        "title": "Engelleme",
-        "webrtc": "WebRTC'yi Engelle",
-        "webgl": "WebGL'i Engelle"
-      }
-    },
     "shared": {
       "browserBehavior": "Tarayıcı Davranışı",
       "allowAddonsOpenTabs": "Tarayıcı eklentilerinin otomatik olarak yeni sekme açmasına izin ver"
@@ -1249,7 +1188,7 @@
       "sourcePlaceholder": "Çerezlerin kopyalanacağı profili seçin",
       "running": "(çalışıyor)",
       "targetProfiles": "Hedef Profiller ({{count}})",
-      "noOtherTargets": "Başka Wayfern profili seçilmedi",
+      "noOtherTargets": "Başka profil seçilmedi",
       "selectSourceFirst": "Önce bir kaynak profil seçin",
       "selectionStatus": "({{total}} çerezden {{selected}} tanesi seçildi)",
       "searchPlaceholder": "Alan adı veya çerez ara...",
@@ -1470,7 +1409,7 @@
     "renameProfileFailed": "Profil yeniden adlandırılamadı: {{error}}",
     "killBrowserFailed": "Tarayıcı sonlandırılamadı: {{error}}",
     "deleteSelectedProfilesFailed": "Seçili profiller silinemedi: {{error}}",
-    "cookieCopyUnsupportedBrowser": "Çerez kopyalama yalnızca Wayfern profilleriyle çalışır",
+    "cookieCopyUnsupportedBrowser": "Çerez kopyalama yalnızca Apostate profilleriyle çalışır",
     "updateSyncSettingsFailed": "Eşitleme ayarları güncellenemedi",
     "cloneProfileFailed": "Profil klonlanamadı: {{error}}",
     "loadSupportedBrowsersFailed": "Desteklenen tarayıcılar yüklenemedi",
@@ -1486,13 +1425,9 @@
     "themeNotFound": "Tokyo Night teması bulunamadı",
     "setProfilePasswordFailed": "Profil parolası ayarlanamadı: {{error}}"
   },
-  "browser": {
-    "wayfern": "Wayfern"
-  },
+  "browser": {},
   "fingerprint": {
-    "crossOsWarning": "Farklı bir işletim sistemi için parmak izi taklidi daha az güvenilirdir; çünkü altta yatan tüm bileşenleri kusursuz biçimde taklit etmek imkânsızdır. Dikkatli kullanın.",
-    "crossOsApostateWarning": "Bu profil, ilk gerektiğinde indirilen açık kaynaklı Apostate motoruyla açılır. Bağlantısı bu bilgisayardan çıkmamalı olduğu için VPN veya proxy gerekir. Apple silicon üzerinde ARM tabanlı bir Windows dizüstü olarak görünür.",
-    "crossOsLimitations": "İşletim sistemleri arası parmak izi taklidinin sınırlamaları vardır. Sistem düzeyindeki API'ler yine de gerçek işletim sisteminizi yansıtabilir ve bazı özelliklerin performansı düşebilir.",
+    "crossOsApostateWarning": "Bu profil, Donut'un kendisinin indirdiği açık kaynaklı Apostate motoruyla açılır. Proxy veya VPN olmadan da açılır, ancak WireGuard VPN yolu (veya proxy) olmadan ağ katmanı (TCP/IP) yine bu bilgisayarın işletim sistemini gösterir ve bir site bunu parmak iziyle karşılaştırabilir. Apple silicon üzerinde ARM tabanlı bir Windows dizüstü olarak görünür.",
     "osLabel": "İşletim sistemi parmak izi",
     "selectOSPlaceholder": "İşletim sistemi seçin",
     "generateRandomOnLaunch": "Her başlatmada rastgele parmak izi oluştur",
@@ -1764,7 +1699,7 @@
       "unlockedDescription": "Siz kilitleyene kadar verileri şifresi çözülmüş kalır."
     },
     "fingerprint": {
-      "notSupported": "Parmak izi düzenleme yalnızca Wayfern profillerinde kullanılabilir.",
+      "notSupported": "Parmak izi düzenleme yalnızca Apostate profillerinde kullanılabilir.",
       "lockedTitle": "Parmak izini görüntülemek ve düzenlemek bir Pro özelliğidir",
       "lockedDescription": "Cihaz bilgileriniz her profilde korunur. Bir profilin parmak izini görüntülemek ve düzenlemek etkin bir ücretli plan gerektirir.",
       "customValuesKept": "Özel parmak izi değerleriniz saklanır. Hesapta etkin bir Pro planı olduğunda uygulanır."
@@ -2320,16 +2255,6 @@
       "unavailable": "Bu profil şu anda bağlantı açamıyor."
     }
   },
-  "wayfernTerms": {
-    "title": "Wayfern Şartlar ve Koşulları",
-    "description": "Donut Browser'ı kullanmadan önce Wayfern'ün Şartlar ve Koşullarını okuyup kabul etmelisiniz.",
-    "reviewLabel": "Lütfen Şartlar ve Koşulları şu adresten inceleyin:",
-    "agreeNotice": "\"Kabul Ediyorum\"a tıklayarak bu şartlara bağlı kalmayı kabul edersiniz.",
-    "acceptButton": "Kabul Ediyorum",
-    "acceptSuccess": "Şartlar başarıyla kabul edildi",
-    "acceptFailed": "Şartlar kabul edilemedi",
-    "tryAgain": "Lütfen yeniden deneyin"
-  },
   "commercialTrial": {
     "title": "Ticari Deneme Süresi Doldu",
     "description": "2 haftalık ticari deneme süreniz sona erdi.",
@@ -2521,43 +2446,13 @@
   },
   "browserDownload": {
     "toast": {
-      "fetchVersionsFailed": "{{browser}} sürümleri getirilemedi",
-      "foundNewVersions": "{{count}} yeni {{browser}} sürümü bulundu!",
-      "totalAvailableVersions": "Toplam kullanılabilir: {{count}} sürüm",
       "downloadFailed": "{{browser}} {{version}} indirilemedi",
       "calculating": "hesaplanıyor...",
-      "extractionFailed": "{{browser}} {{version}}: çıkarma başarısız",
-      "extractionFailedDescription": "Bozuk dosya silindi. Bir sonraki denemede yeniden indirilecek.",
       "extracting": "Tarayıcı dosyaları çıkarılıyor... Lütfen uygulamayı kapatmayın.",
       "verifying": "Tarayıcı dosyaları doğrulanıyor...",
-      "downloadingRolling": "Sürekli yayın (rolling release) derlemesi indiriliyor...",
       "geoipDownloading": "GeoIP veritabanı indiriliyor",
       "geoipDownloaded": "GeoIP veritabanı başarıyla indirildi!",
       "downloadFailedDescription": "İndirme tamamlanamadı. Bağlantınızı kontrol edip tekrar deneyin."
-    }
-  },
-  "versionUpdater": {
-    "toast": {
-      "alreadyAvailable": "{{browser}} {{version}} zaten kullanılabilir",
-      "updatingProfiles": "Profil yapılandırmaları güncelleniyor...",
-      "updateCompleted": "{{browser}} güncellemesi tamamlandı",
-      "singleProfileUpdated": "\"{{name}}\" profili {{version}} sürümüne güncellendi. Artık tarayıcılarınızı en son sürümle başlatabilirsiniz.",
-      "multipleProfilesUpdated": "{{count}} profil {{version}} sürümüne güncellendi. Artık tarayıcılarınızı en son sürümle başlatabilirsiniz.",
-      "versionAvailable": "{{version}} sürümü artık kullanılabilir. Çalışan profiller yeniden başlatıldığında yeni sürümü kullanacak.",
-      "autoUpdateFailed": "{{browser}} otomatik olarak güncellenemedi",
-      "updateWithErrors": "Güncelleme bazı hatalarla tamamlandı",
-      "updateWithErrorsDescription": "{{newVersions}} yeni sürüm bulundu, {{failedUpdates}} tarayıcı güncellenemedi",
-      "updateSuccess": "Tarayıcı sürümleri başarıyla güncellendi",
-      "updateSuccessDescription": "{{successfulUpdates}} tarayıcıda {{newVersions}} yeni sürüm bulundu. Otomatik indirmeler kısa süre içinde başlayacak.",
-      "upToDate": "Yeni tarayıcı sürümü bulunamadı",
-      "upToDateDescription": "Tüm tarayıcı sürümleri güncel",
-      "updateAllFailed": "Tarayıcı sürümleri güncellenemedi",
-      "updateStarted": "{{browser}} güncellemesi başladı",
-      "updateStartedDescription": "{{version}} sürümünün indirilmesi kısa süre içinde başlayacak. Güncelleme tamamlanana kadar tarayıcı başlatma devre dışı.",
-      "downloadStarting": "{{browser}} {{version}} indirmesi başlatılıyor",
-      "downloadProgressBelow": "İndirme ilerlemesi aşağıda gösterilecek...",
-      "autoDownloadStarted": "{{browser}} {{version}} otomatik olarak indiriliyor. İlerleme aşağıda gösterilecek.",
-      "lookingForUpdates": "{{browser}} için güncellemeler aranıyor"
     }
   },
   "profilePassword": {
@@ -2664,17 +2559,12 @@
     "proxyNotWorking": "Seçilen proxy çalışmıyor, bu nedenle profil oluşturulmadı.",
     "proxyPaymentRequired": "Seçilen proxy ödeme gerektiriyor (402) — aboneliği sona ermiş olabilir — bu nedenle profil oluşturulmadı.",
     "vpnNotWorking": "Seçilen VPN çalışmıyor, bu nedenle profil oluşturulmadı.",
-    "camoufoxImportDeprecated": "Bu profil türünün içe aktarılması artık desteklenmiyor. Lütfen bunun yerine Wayfern kullanın.",
     "updateChecksumsUnavailable": "{{version}} güncellemesi doğrulanamadı çünkü sağlama toplamı dosyası alınamadı. Güncelleme yüklenmedi; daha sonra yeniden denenecek.",
     "updateChecksumMismatch": "İndirilen güncelleme dosyası {{file}} sağlama toplamı doğrulamasını geçemedi ve silindi. Lütfen yeniden deneyin.",
-    "browserChecksumUnavailable": "{{browser}} {{version}} doğrulanamadı çünkü sağlama toplamı dosyası alınamadı. İndirme durduruldu; daha sonra yeniden denenecek.",
-    "browserChecksumMismatch": "İndirilen {{browser}} {{version}} arşivi sağlama toplamı doğrulamasını geçemedi ve silindi. Lütfen yeniden deneyin.",
     "nameCannotBeEmpty": "Ad boş olamaz",
-    "wayfernVersionNotAvailable": "Wayfern {{requested}} sürümü indirilemiyor. Güncel sürüm: {{current}}.",
     "profileNameExists": "\"{{name}}\" adlı bir profil zaten var",
     "importSourceNotFound": "Kaynak yol mevcut değil",
     "importNoItems": "İçe aktarmak için hiçbir şey seçilmedi",
-    "browserNotDownloaded": "{{browser}} tarayıcısının indirilmiş bir sürümü yok. Önce indirin, sonra içe aktarmayı yeniden deneyin.",
     "archiveExtractionFailed": "Arşiv çıkarılamadı: {{detail}}",
     "unsupportedArchiveFormat": "Desteklenmeyen arşiv biçimi. Yalnızca ZIP arşivleri desteklenir.",
     "clearOnCloseUnavailable": "Kapatırken temizleme, geçici veya parola korumalı profillerde kullanılamaz.",
@@ -2686,11 +2576,11 @@
     "fingerprintMatchFailed": "Parmak izi proxy'ye eşlenemedi.",
     "proxySidecarVersionMismatch": "Bazı Donut Browser dosyaları farklı sürümlere ait. En son güncellemeyi yeniden yükleyin; profilleriniz güvende kalır.",
     "proxySidecarNotResponding": "Donut proxy yardımcısı (donut-proxy) {{seconds}} saniye içinde bitmedi. Bir güvenlik yazılımı onu bekletiyor olabilir: antivirüs programınızda donut-proxy'ye izin verin ve yeniden deneyin.",
-    "wayfernNotResponding": "Wayfern başladı ancak {{seconds}} saniye içinde yanıt vermedi. Bir güvenlik yazılımı onu bekletiyor olabilir veya penceresini açamadı. Antivirüs programınızda Wayfern'e izin verin ve yeniden deneyin.",
+    "wayfernNotResponding": "Tarayıcı başladı ancak {{seconds}} saniye içinde yanıt vermedi. Bir güvenlik yazılımı onu bekletiyor olabilir veya penceresini açamadı. Antivirüs programınızda Apostate'e izin verin ve yeniden deneyin.",
     "updateProfilesRunning": "Güncellemeyi yüklemeden önce çalışan tüm profilleri durdurun.",
     "updatePreparationFailed": "Donut Browser arka plandaki bir ağ işlemini güvenli şekilde durduramadı. Bilgisayarınızı yeniden başlatıp güncellemeyi tekrar deneyin.",
     "portableUpdateFailed": "Donut Browser taşınabilir klasördeki dosyalarını değiştiremedi ve mevcut sürümü korudu. Bu klasördeki dosyaları kullanan programları kapatıp yeniden başlatın.",
-    "wayfernTermsRequired": "Wayfern'ü kullanmak için Wayfern Hüküm ve Koşullarını kabul edin.",
+    "wayfernTermsRequired": "Tarayıcı motoru, koşulları kabul edilene kadar başlayamaz.",
     "apiPortUnavailable": "API sunucusu kullanılabilir bir bağlantı noktası bulamadı.",
     "mcpAgentUnknown": "Bu MCP istemcisi desteklenmiyor.",
     "mcpAgentInstallFailed": "Donut Browser MCP istemcisine eklenemedi: {{detail}}",
@@ -2740,7 +2630,8 @@
     "profileLockedElsewhere": "Bu profil başka bir cihazda kullanılıyor.",
     "profileLockUnavailable": "Bu profilin başka bir yerde kullanılıp kullanılmadığı denetlenemedi. Bağlantınızı kontrol edip yeniden deneyin.",
     "fingerprintExitMismatch": "Proxy çıkış düğümü bu profilin parmak iziyle eşleşmiyor.",
-    "fingerprintHostOsMismatch": "Bu profil {{claimed}} olduğunu belirtiyor, ancak Donut {{host}} üzerinde çalışıyor. {{claimed}} bir makinede veya sanal makinede başlatın.",
+    "fingerprintHostOsMismatch": "Bu profil {{claimed}} olduğunu belirtiyor ve Donut {{host}} üzerinde çalışıyor, ancak proxy'si veya VPN'i kullanılamıyor. Onsuz bağlantı bu bilgisayardan çıkar ve {{host}} görünür. Proxy'yi ya da VPN'i düzeltin veya kaldırın, sonra yeniden başlatın.",
+    "fingerprintMobileUnsupported": "Donut artık telefon veya tablet (Android, iOS) olduğunu belirten profilleri açmıyor. Windows, macOS veya Linux seçin.",
     "launchConsentExpired": "Bu onay artık geçerli değil. Yeniden başlatmayı deneyin.",
     "vpnWorkerStartFailed": "VPN bağlantısı başlatılamadı: {{detail}}",
     "exitProbeFailed": "Konumunu denetlemek için proxy çıkış düğümüne ulaşılamadı.",
@@ -2758,7 +2649,7 @@
       "parameter": "Bağlantı, Donut'un desteklemediği bir seçenek içeriyor.",
       "malformed": "Paylaşım bağlantısı geçersiz."
     },
-    "camoufoxRemoved": "Camoufox artık desteklenmiyor. Bu profili Wayfern ile yeniden oluşturun.",
+    "camoufoxRemoved": "Camoufox artık desteklenmiyor. Bu profili yeniden oluşturun; Apostate motorunda çalışır.",
     "noE2ePasswordSet": "Uçtan uca şifreleme parolası ayarlanmamış. Şifreli veriyi eşitlemeden önce bir parola belirleyin.",
     "importSourceNotChromium": "Bu klasör bir Chromium tarayıcı profili değil",
     "importSourceNotChromiumNamed": "{{family}} profilleri içe aktarılamaz; yalnızca Chromium tabanlı tarayıcılar desteklenir",
@@ -2788,7 +2679,7 @@
     "profileImportUnsafeArchive": "Bu arşiv profil klasörünün dışına yazmaya çalıştığı için reddedildi.",
     "recordingAlreadyRunning": "Zaten bir kayıt sürüyor. Yenisine başlamadan önce durdurun.",
     "profileNotRunning": "Bu profilin tarayıcısı çalışmıyor. Önce başlatın.",
-    "wayfern152Required": "Kayıt için Wayfern 152 veya üzeri gerekir. Bu profilin tarayıcısını güncelleyin.",
+    "wayfern152Required": "Kayıt, Apostate motorunda kullanılamaz.",
     "recordingFailed": "Kayıt başlatılamadı. {{detail}}",
     "mcpRemoteRequiresSignIn": "Uzaktan kontrolü açmadan önce Donut hesabınıza giriş yapın.",
     "mcpRemoteUnauthorized": "Donut cloud bu cihazın kimlik bilgilerini reddetti. Çıkış yapıp yeniden giriş yapın.",
@@ -2971,7 +2862,7 @@
     "agentNotEntitled": "Ajan bu hesapta kullanılamıyor.",
     "noCredits": "Ajan için kredi kalmadı.",
     "taskBudget": "Görev kredi sınırına ulaştı.",
-    "agentUnsupported": "Bu tarayıcı sürümü ajanı çalıştıramaz. Wayfern'i güncelle.",
+    "agentUnsupported": "Apostate motoru ajanı çalıştıramaz.",
     "agentBusy": "Bu profil zaten bir görev çalıştırıyor.",
     "agentTokenRequired": "Ajan oturum açamadı. Yeniden dene.",
     "agentEngineFailed": "Ajan bunu yapamadı.",
@@ -3005,7 +2896,7 @@
     "pasteTypingFailed": "Yazılamadı: {{detail}}",
     "profileStillSyncing": "Bu profil hâlâ eşitleniyor. Birazdan yeniden deneyin.",
     "cloudApiUrlInvalid": "Tam bir http:// veya https:// adresi girin.",
-    "cookieBotRequiresWayfern": "Yerel Cookie Bot, tarayıcının DevTools bağlantısını kullandığı için yalnızca Wayfern profillerini sürebilir."
+    "cookieBotRequiresWayfern": "Yerel Cookie Bot, tarayıcının DevTools bağlantısını kullandığı için yalnızca Apostate profillerini sürebilir."
   },
   "rail": {
     "profiles": "Profiller",
@@ -3265,7 +3156,7 @@
     "steps": {
       "createProfile": {
         "title": "İlk profilinizi oluşturun",
-        "content": "İlk profilinizi oluşturmak için buraya tıklayın. Tarayıcı olarak Wayfern'ü seçin — önerilen, parmak izi korumalı Chromium."
+        "content": "İlk profilinizi oluşturmak için buraya tıklayın. Donut tarayıcı motorunu kendisi indirir, bu yüzden hemen başlayabilirsiniz."
       },
       "dnsBlocking": {
         "title": "DNS engelleme",
@@ -3296,25 +3187,6 @@
       "grant": "Erişime izin ver",
       "requesting": "İsteniyor…"
     },
-    "ready": {
-      "title": "Her şey hazırlanıyor",
-      "descDownloading": "İlk tarayıcınız (Wayfern) indiriliyor. Bu tek seferlik kurulum arka planda çalışır — biraz bekleyin.",
-      "descReady": "Tarayıcınız hazır. Hadi ilk profilinizi oluşturalım.",
-      "cta": "İlk profilimi oluştur",
-      "downloading": "İndiriliyor…",
-      "extracting": "Çıkarılıyor…",
-      "stats": "{{downloaded}} / {{total}}",
-      "speed": "{{speed}}/sn",
-      "timeLeft": "{{time}} kaldı",
-      "descExtracting": "Tarayıcınız çıkarılıyor. Bu tek seferlik kurulum arka planda çalışır — biraz bekleyin.",
-      "almostFinished": "Neredeyse bitti…",
-      "errorTitle": "Kurulum başarısız",
-      "errorDownload": "{{browser}} indirilemedi. Bağlantınızı kontrol edip yeniden deneyin.",
-      "errorExtraction": "{{browser}} çıkarılamadı. Lütfen yeniden deneyin.",
-      "errorGeneric": "{{browser}} kurulurken bir şeyler ters gitti. Lütfen yeniden deneyin.",
-      "retry": "Yeniden dene",
-      "proxyHint": "Ağınız Donut'un sunucularını engelliyorsa Donut için bir proxy girin ve yeniden deneyin."
-    },
     "features": {
       "title": "Özellikler",
       "items": {
@@ -3340,10 +3212,6 @@
     },
     "progress": "Kurulum ilerlemesi"
   },
-  "wayfernBlocked": {
-    "title": "Birincil cihazınız değil",
-    "description": "Tarayıcı otomasyonu ve başka bir işletim sistemi için olan profiller yalnızca birincil cihazınızda çalışır. Diğer bilgisayarlarınızda Donut Browser oturumunu kapatın, ardından yeniden deneyin."
-  },
   "profileGenerationLimit": {
     "title": "Saatlik profil sınırına ulaşıldı",
     "description": "Planınızın yeni profiller için saatlik sınırına ulaşıldı. Saat ilerledikçe oluşturma yeniden açılır; hesabınız engellenmez."
@@ -3355,9 +3223,7 @@
     "invalidFingerprintDescription": "Parmak izi yapılandırması geçersiz JSON içeriyor. Lütfen gelişmiş ayarlarınızı kontrol edin.",
     "saveFailed": "Yapılandırma kaydedilemedi"
   },
-  "cookieCopy": {
-    "noOtherTargets": "Başka Wayfern profili seçilmedi"
-  },
+  "cookieCopy": {},
   "about": {
     "website": "Web sitesi",
     "licenses": "Lisanslar",
@@ -3645,7 +3511,14 @@
       "ownTimes": "Her profil için farklı bir saat",
       "timeRandom": "Profil başına rastgele",
       "summaryOwnTimes_one": "Her profil haftada {{count}} kez kendi rastgele saatinde, her seferinde en fazla {{minutes}} dk çalışır.",
-      "summaryOwnTimes_other": "Her profil haftada {{count}} kez kendi rastgele saatinde, her seferinde en fazla {{minutes}} dk çalışır."
+      "summaryOwnTimes_other": "Her profil haftada {{count}} kez kendi rastgele saatinde, her seferinde en fazla {{minutes}} dk çalışır.",
+      "sourceTopic": "Ürün konusu",
+      "topicKeywordPlaceholder": "Anahtar kelime, ör. iphone 15",
+      "topicKeywordLabel": "Ürün anahtar kelimesi",
+      "topicKeywordInvalid": "{{min}} ile {{max}} karakter arası kullanın.",
+      "topicHint": "Bu anahtar kelimeyi Google'da arar, {{site}} sonuçlarını açar, ilanları okuyup fotoğraflara bakar, sonra {{site}} tarafından önerilen varyantlarla aramaya devam eder.",
+      "topicLearned": "Şimdiye kadar öğrenilen varyant: {{count}}",
+      "enterKeywordFirst": "Önce bir anahtar kelime girin"
     },
     "preset": {
       "light": "Hafif",
@@ -3670,7 +3543,7 @@
       "fixFailed": "Bu düzeltme uygulanamadı.",
       "exitNodeHint": "Proxy veya VPN olmadan çalışma, filonun kendi veri merkezi adresinden çıkar. Bir barındırma ağından saatlerce gelen trafik, profilin kimliğine hiç ısıtmamaktan daha çok zarar verir.",
       "reasonSyncPassword": "Eşitleme şifrelemesi parolası ayarlı",
-      "reasonLocalBrowser": "Yerel Cookie Bot bir Wayfern profili gerektirir",
+      "reasonLocalBrowser": "Yerel Cookie Bot bir Apostate profili gerektirir",
       "reasonEphemeral": "Bu profil geçici: kapatıldığında çerezleri kaybolur"
     },
     "conflict": {
@@ -3744,7 +3617,8 @@
       "profileNotSynced": "Buluttaki kopya eksik, eşitlemeyi bir masaüstünden tamamlayın",
       "profileOsMismatch": "Profil, onu çalıştıran sunucudan farklı bir işletim sisteminde oluşturulmuş",
       "cancelledByUser": "Elle durduruldu",
-      "unknown": "Bilinmeyen neden ({{code}})"
+      "unknown": "Bilinmeyen neden ({{code}})",
+      "siteChallenge": "Site insan doğrulaması istedi, bu yüzden çalışma durdu"
     },
     "exitCheck": {
       "failed": "Son kontrol ({{time}}) proxy'ye veya VPN'e ulaşamadı. Lütfen kontrol edin.",
@@ -3825,17 +3699,6 @@
     "handoffLocalLocation": "Bu bilgisayar",
     "handoffSyncDetails": "Eşitleme ayrıntılarını aç"
   },
-  "synchronizerPreview": {
-    "title": "Bir tıklamayı prova edin",
-    "description": "Liderdeki bir eylemin seçilen takipçilere nasıl ulaştığını görün. Bu örnek tarayıcıları başlatmaz.",
-    "send": "Örnek tıklama gönder",
-    "empty": "Önizlemeyi denemek için bir takipçi seçin.",
-    "ready": "Seçilen takipçiler: {{count}}",
-    "sent": "Örnek tıklama gösterildi. Alan takipçiler: {{count}}",
-    "received": "Örnek tıklama alındı",
-    "starting": "Profiller başlatılıyor ve eşitleyici bağlanıyor…",
-    "startError": "Eşitleyici başlatılamadı. Seçiminiz korundu. Profilleri kontrol edip tekrar deneyin."
-  },
   "isolationDemo": {
     "title": "Bir değişiklik. Bir profil.",
     "description": "Bu örnek profilleri deneyin. Buradaki hiçbir şey gerçek profillerinizi değiştirmez.",
@@ -3897,6 +3760,7 @@
     "launch": {
       "queued": "Başlatma istendi",
       "preparing": "Profil hazırlanıyor",
+      "engine": "Tarayıcı motoru hazırlanıyor",
       "network": "Ağ hazırlanıyor",
       "extensions": "Uzantılar hazırlanıyor",
       "starting": "Tarayıcı başlatılıyor",
@@ -4400,7 +4264,7 @@
       "confirmDelete": "Silmek için yeniden tıklayın",
       "emptyTitle": "Ajan ne yapsın?",
       "emptyBody": "Seçtiğiniz profilin tarayıcısında çalışır. Her adımı görürsünüz ve istediğiniz an müdahale edebilirsiniz.",
-      "noProfiles": "Önce bir Wayfern profili oluşturun. Ajan onun tarayıcısında çalışır.",
+      "noProfiles": "Önce bir profil oluşturun. Ajan onun tarayıcısında çalışır.",
       "placeholderStart": "Ajandan bir şey isteyin",
       "placeholderFollowUp": "Devam mesajı yazın",
       "placeholderSteer": "Ajan çalışırken yönlendirin",
@@ -4631,12 +4495,6 @@
         "title": "2FA kodlarını profille birlikte tutun",
         "body": "Profil bilgisine bir hesabın 2FA anahtarını ekleyin, Donut güncel kodu kopyalamaya hazır gösterir. Anahtarlar bu cihazda şifreli kalır.",
         "action": "Bir 2FA anahtarı deneyin"
-      },
-      "synchronizer": {
-        "label": "Eşitleyici",
-        "title": "Birçok profili aynı anda yönetin",
-        "body": "Bir profilin menüsünden Eşitleyici ile Başlat'ı seçin ve takipçileri belirleyin. Liderdeki her tıklama ve tuş vuruşu her takipçide tekrarlanır.",
-        "action": "Profilleri aç"
       }
     },
     "sections": {

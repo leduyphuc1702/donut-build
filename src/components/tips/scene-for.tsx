@@ -24,7 +24,6 @@ import {
   CookieBotScene,
   CrossOsScene,
   RemoteScene,
-  SynchronizerScene,
   TeamScene,
 } from "./scenes-plan";
 import { RequireRouteScene, TotpScene, VpnScene } from "./scenes-safety";
@@ -86,8 +85,6 @@ export function TipScene({ id }: { id: TipId }) {
       return <CookieBotScene />;
     case "crossOs":
       return <CrossOsScene />;
-    case "synchronizer":
-      return <SynchronizerScene />;
     case "automation":
       return <ApiScene variant="run" />;
     case "agent":

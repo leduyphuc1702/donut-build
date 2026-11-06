@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import en from "../../src/i18n/locales/en.json" with { type: "json" };
+import { seedEngineStandIn } from "./fixtures.mjs";
 import { WebDriverClient } from "./webdriver.mjs";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -65,13 +66,11 @@ export class AppSession {
     application,
     driverUrl,
     cwd,
-    token,
+    paidPlan,
     extraEnv = {},
     args = [],
-    seedVersionCache = true,
-    seedDownloadedBrowser = false,
+    engine = "standin",
     onboardingCompleted = true,
-    wayfernTermsAccepted = true,
     settings = {},
   }) {
     this.name = name;
@@ -79,13 +78,14 @@ export class AppSession {
     this.application = application;
     this.driver = new WebDriverClient(driverUrl);
     this.cwd = cwd;
-    this.token = token;
+    this.paidPlan = paidPlan;
     this.extraEnv = extraEnv;
     this.args = args;
-    this.seedVersionCache = seedVersionCache;
-    this.seedDownloadedBrowser = seedDownloadedBrowser;
+    // "standin" seeds a stand-in engine executable so the app sees the engine
+    // as installed without touching the network; "none" leaves the data root
+    // without one, for a session that tests the first-run download.
+    this.engine = engine;
     this.onboardingCompleted = onboardingCompleted;
-    this.wayfernTermsAccepted = wayfernTermsAccepted;
     // Extra keys for the seeded app_settings.json, on top of the defaults.
     this.settings = settings;
     this.session = null;
@@ -93,30 +93,6 @@ export class AppSession {
 
   get dataRoot() {
     return path.join(this.root, "donut");
-  }
-
-  /** Where this session's app looks for the Wayfern terms marker. */
-  get wayfernTermsFile() {
-    if (process.platform === "darwin") {
-      return path.join(
-        this.root,
-        "home",
-        "Library",
-        "Application Support",
-        "Wayfern",
-        "license-accepted",
-      );
-    }
-    if (process.platform === "win32") {
-      return path.join(
-        this.root,
-        "windows",
-        "roaming",
-        "Wayfern",
-        "license-accepted",
-      );
-    }
-    return path.join(this.root, "xdg", "config", "Wayfern", "license-accepted");
   }
 
   async start() {
@@ -171,90 +147,8 @@ export class AppSession {
         }
       });
     }
-    if (this.wayfernTermsAccepted) {
-      const termsFile = this.wayfernTermsFile;
-      await mkdir(path.dirname(termsFile), { recursive: true });
-      await writeFile(termsFile, `${Math.floor(Date.now() / 1000)}\n`, {
-        flag: "wx",
-      }).catch((error) => {
-        if (error.code !== "EEXIST") {
-          throw error;
-        }
-      });
-    }
-    if (this.seedVersionCache) {
-      const seededVersion =
-        typeof this.seedVersionCache === "string"
-          ? this.seedVersionCache
-          : "150.0.7871.100";
-      const versionCache = path.join(
-        this.root,
-        "donut",
-        "cache",
-        "version_cache",
-        "wayfern_versions.json",
-      );
-      await mkdir(path.dirname(versionCache), { recursive: true });
-      await writeFile(
-        versionCache,
-        `${JSON.stringify({
-          releases: [{ version: seededVersion, date: "2026-07-01" }],
-          timestamp: Math.floor(Date.now() / 1000),
-        })}\n`,
-        { flag: "wx" },
-      ).catch((error) => {
-        if (error.code !== "EEXIST") {
-          throw error;
-        }
-      });
-    }
-    if (this.seedDownloadedBrowser) {
-      // Registers a Wayfern version as "downloaded" without installing a
-      // binary. Profile import derives its version from this registry and
-      // fails with BROWSER_NOT_DOWNLOADED otherwise, so suites that exercise
-      // import but never launch a browser need the entry and nothing else.
-      const seededVersion =
-        typeof this.seedDownloadedBrowser === "string"
-          ? this.seedDownloadedBrowser
-          : "150.0.7871.100";
-      const installDir = path.join(
-        this.dataRoot,
-        "data",
-        "binaries",
-        "wayfern",
-        seededVersion,
-      );
-      await mkdir(installDir, { recursive: true });
-      const registryPath = path.join(
-        this.dataRoot,
-        "data",
-        "data",
-        "downloaded_browsers.json",
-      );
-      await mkdir(path.dirname(registryPath), { recursive: true });
-      await writeFile(
-        registryPath,
-        `${JSON.stringify(
-          {
-            browsers: {
-              wayfern: {
-                [seededVersion]: {
-                  browser: "wayfern",
-                  version: seededVersion,
-                  file_path: installDir,
-                },
-              },
-            },
-          },
-          null,
-          2,
-        )}\n`,
-        { flag: "wx" },
-      ).catch((error) => {
-        if (error.code !== "EEXIST") {
-          throw error;
-        }
-      });
+    if (this.engine === "standin") {
+      await seedEngineStandIn(this.dataRoot);
     }
     const env = isolatedEnvironment(this.root, {
       DONUT_E2E_DISABLE_STARTUP_NETWORK: "1",
@@ -276,7 +170,7 @@ export class AppSession {
               : {}),
           }
         : {}),
-      ...(this.token ? { WAYFERN_TEST_TOKEN: this.token } : {}),
+      ...(this.paidPlan ? { DONUT_E2E_PAID_PLAN: this.paidPlan } : {}),
       ...this.extraEnv,
     });
     this.session = await this.driver.createSession({
@@ -322,21 +216,26 @@ export class AppSession {
     ]);
     if (microphone && camera) return;
 
-    const title = microphone
-      ? en.permissionDialog.titleCamera
-      : en.permissionDialog.titleMicrophone;
+    // The dialog names whichever permission the app finds missing first, which
+    // can differ from the state read above if a grant lands in between.
+    const titles = [
+      en.permissionDialog.titleMicrophone,
+      en.permissionDialog.titleCamera,
+    ];
     await this.clickElement(
       () =>
         this.execute(
           `
-            const dialog = [...document.querySelectorAll("[role='dialog']")].find(
-              (node) => node.querySelector("h2")?.textContent === arguments[0]
+            const dialogs = [...document.querySelectorAll("[role='dialog']")];
+            const dialog = dialogs.find((node) =>
+              arguments[0].includes(node.querySelector("h2")?.textContent)
             );
-            return [...(dialog?.querySelectorAll("button") ?? [])].find(
+            if (!dialog) return null;
+            return [...dialog.querySelectorAll("button")].find(
               (button) => button.textContent.trim() === arguments[1]
             ) ?? null;
           `,
-          [title, en.permissionDialog.cancelButton],
+          [titles, en.permissionDialog.cancelButton],
         ),
       "startup permission dialog Cancel button",
     );
@@ -344,9 +243,9 @@ export class AppSession {
       () =>
         this.execute(
           `return ![...document.querySelectorAll("[role='dialog']")].some(
-            (node) => node.querySelector("h2")?.textContent === arguments[0]
+            (node) => arguments[0].includes(node.querySelector("h2")?.textContent)
           );`,
-          [title],
+          [titles],
         ),
       { description: "startup permission dialog to close" },
     );
@@ -663,13 +562,11 @@ export function appFromEnvironment(name, options = {}) {
     application: process.env.DONUT_E2E_APP,
     driverUrl: process.env.DONUT_E2E_DRIVER_URL,
     cwd: process.env.DONUT_E2E_PROJECT_ROOT,
-    token: process.env.WAYFERN_TEST_TOKEN,
+    paidPlan: process.env.DONUT_E2E_PAID_PLAN,
     extraEnv: options.extraEnv,
     args: options.args,
-    seedVersionCache: options.seedVersionCache,
-    seedDownloadedBrowser: options.seedDownloadedBrowser,
+    engine: options.engine,
     onboardingCompleted: options.onboardingCompleted,
-    wayfernTermsAccepted: options.wayfernTermsAccepted,
     settings: options.settings,
   });
 }

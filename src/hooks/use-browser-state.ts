@@ -13,7 +13,6 @@ import type { BrowserProfile } from "@/types";
 export function useBrowserState(
   profiles: BrowserProfile[],
   runningProfiles: Set<string>,
-  _isUpdating: (browser: string) => boolean,
   launchingProfiles: Set<string>,
   stoppingProfiles: Set<string>,
 ) {

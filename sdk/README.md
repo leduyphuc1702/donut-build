@@ -30,8 +30,7 @@ That screen also shows the two things a client needs:
 - the **authentication token**, sent as `Authorization: Bearer <token>`.
 
 The server binds `127.0.0.1` only, so it is never reachable from another
-machine. Requests are also refused with `403` until the Wayfern terms have been
-accepted in the app.
+machine.
 
 Both SDKs read arguments first, then the environment:
 
@@ -220,7 +219,7 @@ server-side failure.
 | 400 | `ValidationError` | `ValidationError` | Malformed request, duplicate name, unsupported input |
 | 401 | `Unauthorized` | `Unauthorized` | Missing or wrong bearer token |
 | 402 | `PaymentRequired` | `PaymentRequired` | Automation needs an active paid plan |
-| 403 | `Forbidden` | `Forbidden` | Wayfern terms not accepted, or not signed in |
+| 403 | `Forbidden` | `Forbidden` | Not signed in |
 | 404 | `NotFound` | `NotFound` | No entity with that id |
 | 408 | `RequestTimeout` | `RequestTimeout` | `agent/pick` waited and nothing was picked |
 | 409 | `Conflict` | `Conflict` | A browser, a teammate or a remote session holds the profile |

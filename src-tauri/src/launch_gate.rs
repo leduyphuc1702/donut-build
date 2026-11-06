@@ -298,53 +298,68 @@ pub async fn enforce_exit_country(
 
 /// A fingerprint describes the machine the browser runs on: its fonts, media
 /// APIs and, below every engine patch, its TCP/IP stack. A profile claiming
-/// another OS therefore leaks at the first SYN even when the browser lies
-/// about every JavaScript-visible value. Refuse the launch instead of opening
-/// a window the destination can disprove.
+/// another desktop OS therefore shows this machine's stack at the first SYN
+/// unless the connection starts somewhere else: behind a Donut WireGuard VPN
+/// (its worker shapes the SYN to the claimed OS) or a proxy (the TCP
+/// connection starts at the proxy).
 ///
-/// The one exception is a profile that runs on the Apostate engine (it was
-/// created for a desktop OS other than the host's) AND reaches the internet by
-/// a route whose first SYN does not come from this machine's stack: a Donut
-/// WireGuard VPN (its worker shapes the SYN to the claimed OS) or a proxy (the
-/// TCP connection starts at the proxy). `has_upstream` says the route really
-/// resolved for this launch; a proxy or VPN that is gone leaves the browser
-/// going direct, which is the refusal case again. A cross-OS profile on a
-/// direct connection, a Wayfern profile of another OS and a mobile claim stay
-/// refused.
-///
-/// Without a route, a Windows identity is still possible on another host: run
-/// Donut itself in Windows (a VM with bridged or kernel NAT, never user-mode
-/// NAT), and this machine reports Windows.
+/// The person chooses that. A cross-OS profile with no proxy or VPN at all
+/// launches on a direct connection, and the profile form warns at creation
+/// that the network layer still shows this machine's OS. What stays refused is
+/// a route that was chosen and is not there: the proxy was deleted or the VPN
+/// gave no port (`has_upstream` is false though the profile declares one), so
+/// the browser would go out from this machine's own address while the profile
+/// says it does not. A mobile claim has no persona and is refused with its own
+/// code.
 pub fn enforce_host_os(profile: &BrowserProfile, has_upstream: bool) -> Result<(), String> {
   let claimed = claimed_fingerprint_os(profile);
   let host = crate::profile::types::get_host_os();
-  let apostate = crate::apostate::uses_apostate(profile);
-  let routed = has_upstream && (profile.vpn_id.is_some() || profile.proxy_id.is_some());
-  if host_os_verdict(&claimed, &host, apostate, routed) {
-    return Ok(());
+  let declares_route = profile.vpn_id.is_some() || profile.proxy_id.is_some();
+  match host_os_verdict(&claimed, &host, declares_route, has_upstream) {
+    Ok(()) => {
+      if claimed != host && !declares_route {
+        log::info!(
+          "Launch with another OS on a direct connection, the network layer shows this machine profile={} claimed={claimed} host={host}",
+          profile.id
+        );
+      }
+      Ok(())
+    }
+    Err(code) => {
+      log::warn!(
+        "Launch refused, fingerprint OS does not match this machine profile={} claimed={claimed} host={host} declared_route={declares_route} route_up={has_upstream}",
+        profile.id
+      );
+      Err(
+        serde_json::json!({
+          "code": code,
+          "params": { "claimed": claimed, "host": host },
+        })
+        .to_string(),
+      )
+    }
   }
-  log::warn!(
-    "Launch refused, fingerprint OS does not match this machine profile={} claimed={} host={} engine={} routed={}",
-    profile.id,
-    claimed,
-    host,
-    if apostate { "apostate" } else { "wayfern" },
-    routed
-  );
-  Err(
-    serde_json::json!({
-      "code": "FINGERPRINT_HOST_OS_MISMATCH",
-      "params": { "claimed": claimed, "host": host },
-    })
-    .to_string(),
-  )
 }
 
-/// Whether a launch claiming `claimed` may start on `host`. The same OS always
-/// may. Another desktop OS may only on Apostate, behind a route that does not
-/// start at this machine.
-fn host_os_verdict(claimed: &str, host: &str, apostate: bool, routed: bool) -> bool {
-  claimed == host || (apostate && routed && crate::apostate::needs_apostate(claimed, host))
+/// Whether a launch claiming `claimed` may start on `host`, or the code that
+/// refuses it. The same OS always may. Another desktop OS may unless the
+/// profile declares a proxy or VPN that did not come up.
+fn host_os_verdict(
+  claimed: &str,
+  host: &str,
+  declares_route: bool,
+  route_up: bool,
+) -> Result<(), &'static str> {
+  if claimed == host {
+    return Ok(());
+  }
+  if crate::apostate::is_mobile_os(claimed) {
+    return Err("FINGERPRINT_MOBILE_UNSUPPORTED");
+  }
+  if crate::apostate::needs_apostate(claimed, host) && (!declares_route || route_up) {
+    return Ok(());
+  }
+  Err("FINGERPRINT_HOST_OS_MISMATCH")
 }
 
 /// The OS a profile's fingerprint claims. `wayfern_config.os` is the claim
@@ -786,34 +801,38 @@ mod tests {
   }
 
   #[test]
-  fn an_apostate_profile_of_another_os_on_a_direct_connection_is_refused() {
+  fn an_apostate_profile_of_another_os_on_a_direct_connection_launches() {
     let profile = apostate_profile(None, None);
-    let error = enforce_host_os(&profile, false).unwrap_err();
-    assert!(error.contains("FINGERPRINT_HOST_OS_MISMATCH"), "{error}");
-    // Even a stray upstream does not count when the profile declares no route.
-    assert!(enforce_host_os(&profile, true).is_err());
+    assert!(enforce_host_os(&profile, false).is_ok());
+    assert!(enforce_host_os(&profile, true).is_ok());
   }
 
   #[test]
   fn a_route_that_did_not_come_up_leaves_the_apostate_profile_refused() {
     // The proxy was deleted or the VPN gave no port: the browser would go out
-    // from this machine's own stack.
-    assert!(enforce_host_os(&apostate_profile(Some("gone"), None), false).is_err());
-    assert!(enforce_host_os(&apostate_profile(None, Some("down")), false).is_err());
+    // from this machine's own address while the profile says it does not.
+    for profile in [
+      apostate_profile(Some("gone"), None),
+      apostate_profile(None, Some("down")),
+      apostate_profile(Some("gone"), Some("down")),
+    ] {
+      let error = enforce_host_os(&profile, false).unwrap_err();
+      assert!(error.contains("FINGERPRINT_HOST_OS_MISMATCH"), "{error}");
+    }
   }
 
   #[test]
-  fn a_wayfern_profile_of_another_os_stays_refused_even_through_a_route() {
-    let mut profile = apostate_profile(Some("proxy-1"), Some("vpn-1"));
-    profile.wayfern_config.as_mut().unwrap().engine = None;
-    assert!(enforce_host_os(&profile, true).is_err());
-  }
-
-  #[test]
-  fn a_mobile_claim_is_refused_on_apostate_through_a_route() {
+  fn a_mobile_claim_is_refused_with_its_own_code_routed_or_not() {
     let mut profile = apostate_profile(Some("proxy-1"), None);
     profile.wayfern_config.as_mut().unwrap().os = Some("android".to_string());
-    assert!(enforce_host_os(&profile, true).is_err());
+    for upstream in [true, false] {
+      let error = enforce_host_os(&profile, upstream).unwrap_err();
+      assert!(error.contains("FINGERPRINT_MOBILE_UNSUPPORTED"), "{error}");
+    }
+    profile.proxy_id = None;
+    profile.wayfern_config.as_mut().unwrap().os = Some("ios".to_string());
+    let error = enforce_host_os(&profile, false).unwrap_err();
+    assert!(error.contains("FINGERPRINT_MOBILE_UNSUPPORTED"), "{error}");
   }
 
   #[test]
@@ -824,47 +843,59 @@ mod tests {
   }
 
   #[test]
-  fn a_fingerprint_of_another_os_is_refused_before_spawn() {
+  fn a_down_route_does_not_matter_when_the_profile_claims_this_machine() {
+    let mut profile = apostate_profile(Some("gone"), None);
+    profile.wayfern_config.as_mut().unwrap().os = Some(crate::profile::types::get_host_os());
+    assert!(enforce_host_os(&profile, false).is_ok());
+  }
+
+  #[test]
+  fn the_refusal_names_what_was_claimed_and_what_this_machine_is() {
     let host = crate::profile::types::get_host_os();
-    let claimed = if host == "windows" {
-      "macos"
-    } else {
-      "windows"
-    };
-    let mut profile = profile_with(r#"{"timezone":"Europe/Berlin"}"#);
-    profile.wayfern_config.as_mut().unwrap().os = Some(claimed.to_string());
+    let claimed = other_desktop_os();
+    let profile = apostate_profile(Some("gone"), None);
 
     let error = enforce_host_os(&profile, false).unwrap_err();
     let parsed: serde_json::Value = serde_json::from_str(&error).unwrap();
     assert_eq!(parsed["code"], "FINGERPRINT_HOST_OS_MISMATCH");
-    assert_eq!(parsed["params"]["claimed"], claimed);
+    assert_eq!(parsed["params"]["claimed"], claimed.as_str());
     assert_eq!(parsed["params"]["host"], host.as_str());
   }
 
   #[test]
   fn a_profile_without_an_explicit_os_claims_the_machine_that_made_it() {
     let host = crate::profile::types::get_host_os();
-    let other = if host == "windows" {
-      "macos"
-    } else {
-      "windows"
-    };
+    let other = other_desktop_os();
     let mut profile = profile_with(r#"{"timezone":"Europe/Berlin"}"#);
     profile.wayfern_config.as_mut().unwrap().os = None;
+    profile.proxy_id = Some("gone".to_string());
 
-    profile.host_os = Some(other.to_string());
+    profile.host_os = Some(other);
     assert!(enforce_host_os(&profile, false).is_err());
+    assert!(enforce_host_os(&profile, true).is_ok());
 
     profile.host_os = Some(host);
     assert!(enforce_host_os(&profile, false).is_ok());
   }
 
   #[test]
-  fn a_mobile_fingerprint_on_a_desktop_is_refused() {
-    let mut profile = profile_with(r#"{"timezone":"Europe/Berlin"}"#);
-    profile.wayfern_config.as_mut().unwrap().os = Some("android".into());
-    let error = enforce_host_os(&profile, false).unwrap_err();
-    assert!(error.contains("FINGERPRINT_HOST_OS_MISMATCH"), "{error}");
+  fn the_os_verdict_covers_every_case() {
+    let (host, other) = ("macos", "windows");
+    assert_eq!(host_os_verdict(host, host, true, false), Ok(()));
+    assert_eq!(host_os_verdict(other, host, false, false), Ok(()));
+    assert_eq!(host_os_verdict(other, host, true, true), Ok(()));
+    assert_eq!(
+      host_os_verdict(other, host, true, false),
+      Err("FINGERPRINT_HOST_OS_MISMATCH")
+    );
+    assert_eq!(
+      host_os_verdict("android", host, false, false),
+      Err("FINGERPRINT_MOBILE_UNSUPPORTED")
+    );
+    assert_eq!(
+      host_os_verdict("ios", host, true, true),
+      Err("FINGERPRINT_MOBILE_UNSUPPORTED")
+    );
   }
 
   #[test]

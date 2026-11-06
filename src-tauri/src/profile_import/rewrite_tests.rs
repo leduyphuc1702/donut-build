@@ -90,7 +90,13 @@ fn v24_cookie_is_reframed_for_the_target_key() {
 
   let target = TargetKey::ensure(dir.path()).unwrap();
   let mut report = ProfileImportReport::default();
-  reencrypt_cookies(&default_dir, &source, &target, &mut report);
+  reencrypt_cookies(
+    &layout::host_cookie_path(&default_dir),
+    &source,
+    &target,
+    &mut report,
+    true,
+  );
 
   assert_eq!(report.cookies_migrated, 1);
   assert_eq!(report.cookies_unrecoverable, 0);
@@ -151,7 +157,13 @@ fn cookie_sealed_as_sqlite_text_is_still_recovered() {
 
   let target = TargetKey::ensure(dir.path()).unwrap();
   let mut report = ProfileImportReport::default();
-  reencrypt_cookies(&default_dir, &source, &target, &mut report);
+  reencrypt_cookies(
+    &layout::host_cookie_path(&default_dir),
+    &source,
+    &target,
+    &mut report,
+    true,
+  );
 
   assert_eq!(report.cookies_migrated, 1);
   let conn = Connection::open(&cookie_path).unwrap();
@@ -256,7 +268,13 @@ fn plaintext_cookie_is_sealed_and_value_cleared() {
   let target = TargetKey::ensure(dir.path()).unwrap();
   let source = source_keyring_with(b"unused");
   let mut report = ProfileImportReport::default();
-  reencrypt_cookies(&default_dir, &source, &target, &mut report);
+  reencrypt_cookies(
+    &layout::host_cookie_path(&default_dir),
+    &source,
+    &target,
+    &mut report,
+    true,
+  );
 
   assert_eq!(report.cookies_migrated, 1);
   let conn = Connection::open(&cookie_path).unwrap();
@@ -294,7 +312,13 @@ fn v23_cookie_has_no_prefix_to_strip_and_is_upgraded_to_v24() {
 
   let target = TargetKey::ensure(dir.path()).unwrap();
   let mut report = ProfileImportReport::default();
-  reencrypt_cookies(&default_dir, &source, &target, &mut report);
+  reencrypt_cookies(
+    &layout::host_cookie_path(&default_dir),
+    &source,
+    &target,
+    &mut report,
+    true,
+  );
 
   assert_eq!(report.cookies_migrated, 1);
   let conn = Connection::open(&cookie_path).unwrap();
@@ -338,7 +362,13 @@ fn unrecoverable_cookie_row_is_deleted_and_counted() {
   let target = TargetKey::ensure(dir.path()).unwrap();
   let source = source_keyring_with(b"source-password");
   let mut report = ProfileImportReport::default();
-  reencrypt_cookies(&default_dir, &source, &target, &mut report);
+  reencrypt_cookies(
+    &layout::host_cookie_path(&default_dir),
+    &source,
+    &target,
+    &mut report,
+    true,
+  );
 
   assert_eq!(report.cookies_unrecoverable, 1);
   assert_eq!(report.cookies_migrated, 0);
@@ -359,7 +389,13 @@ fn cookie_store_older_than_chromium_migrates_is_removed_with_a_warning() {
   let target = TargetKey::ensure(dir.path()).unwrap();
   let source = source_keyring_with(b"x");
   let mut report = ProfileImportReport::default();
-  reencrypt_cookies(&default_dir, &source, &target, &mut report);
+  reencrypt_cookies(
+    &layout::host_cookie_path(&default_dir),
+    &source,
+    &target,
+    &mut report,
+    true,
+  );
 
   assert!(report
     .warnings
@@ -545,37 +581,21 @@ fn bookmarks_are_counted_recursively() {
   assert_eq!(count_bookmarks(Some(&roots)), 2);
 }
 
-/// Load the freshly minted `os_crypt_key` back as a keyring, so tests assert
-/// against what Wayfern will actually do rather than against our own writer.
+/// The engine's key as a keyring, so tests assert against what Apostate will
+/// actually do rather than against our own writer.
 fn target_as_keyring(user_data_dir: &Path) -> SourceKeyring {
-  let contents =
-    std::fs::read(user_data_dir.join(crate::profile_import::os_crypt::KEY_FILE_NAME)).unwrap();
   #[cfg(target_os = "windows")]
   {
-    let bytes: [u8; 32] = contents.as_slice().try_into().unwrap();
+    let material = super::super::os_crypt::engine_key_material(user_data_dir).unwrap();
+    let bytes: [u8; 32] = material.as_slice().try_into().unwrap();
     SourceKeyring {
       v10: Some(CryptoKey::Aes256Gcm(bytes)),
       ..Default::default()
     }
   }
-  #[cfg(target_os = "macos")]
+  #[cfg(not(target_os = "windows"))]
   {
-    SourceKeyring {
-      v10: Some(CryptoKey::Aes128Cbc(derive_key(
-        &contents,
-        super::super::os_crypt::MAC_ITERATIONS,
-      ))),
-      ..Default::default()
-    }
-  }
-  #[cfg(target_os = "linux")]
-  {
-    SourceKeyring {
-      v11: Some(CryptoKey::Aes128Cbc(derive_key(
-        &contents,
-        super::super::os_crypt::POSIX_ITERATIONS,
-      ))),
-      ..Default::default()
-    }
+    let _ = user_data_dir;
+    SourceKeyring::sealed_under(std::env::consts::OS, None).unwrap()
   }
 }

@@ -50,7 +50,6 @@ import type { BrowserProfile } from "@/types";
 interface ProfileSelectorDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  isUpdating: (browser: string) => boolean;
   url?: string;
   runningProfiles?: Set<string>;
 }
@@ -83,7 +82,6 @@ export function ProfileSelectorDialog({
   onClose,
   url,
   runningProfiles: externalRunningProfiles,
-  isUpdating,
 }: ProfileSelectorDialogProps) {
   const { t } = useTranslation();
   const motionAllowed = useMotionAllowed();
@@ -113,7 +111,6 @@ export function ProfileSelectorDialog({
   const browserState = useBrowserState(
     profiles,
     runningProfiles,
-    isUpdating,
     NO_IDS,
     NO_IDS,
   );

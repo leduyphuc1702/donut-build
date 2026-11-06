@@ -1,6 +1,5 @@
 use crate::browser::ProxySettings;
 use crate::cloud_auth::CLOUD_AUTH;
-use crate::downloaded_browsers_registry::DownloadedBrowsersRegistry;
 use crate::events;
 use crate::log_redaction::ShortId;
 use crate::profile::{BrowserProfile, ProfileManager};
@@ -8,7 +7,6 @@ use crate::proxy_manager::PROXY_MANAGER;
 use crate::wayfern_manager::{WayfernConfig, WayfernManager};
 use serde::Serialize;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -72,7 +70,7 @@ fn log_err(err: &str, profile: &BrowserProfile) -> String {
 }
 
 /// Outcomes the person meets as a dialog or a notice, not a fault.
-const LAUNCH_BLOCK_CODES: [&str; 12] = [
+const LAUNCH_BLOCK_CODES: [&str; 10] = [
   "FINGERPRINT_EXIT_MISMATCH",
   "LAUNCH_CONSENT_EXPIRED",
   "PROFILE_RUNNING",
@@ -83,8 +81,6 @@ const LAUNCH_BLOCK_CODES: [&str; 12] = [
   "PROFILE_LOCKED_ELSEWHERE",
   "PROFILE_ROUTE_REQUIRED",
   "PROFILE_ROUTE_UNAVAILABLE",
-  "WAYFERN_CROSS_OS_REQUIRES_PLAN",
-  "WAYFERN_CROSS_OS_PRIMARY_DEVICE",
 ];
 
 /// One line per failed launch. A coded error logs its code and detail only:
@@ -143,8 +139,6 @@ fn local_os_refusal(profile: &BrowserProfile) -> Option<String> {
 
 pub struct BrowserRunner {
   pub profile_manager: &'static ProfileManager,
-  pub downloaded_browsers_registry: &'static DownloadedBrowsersRegistry,
-  auto_updater: &'static crate::auto_updater::AutoUpdater,
   wayfern_manager: &'static WayfernManager,
 }
 
@@ -152,18 +146,12 @@ impl BrowserRunner {
   fn new() -> Self {
     Self {
       profile_manager: ProfileManager::instance(),
-      downloaded_browsers_registry: DownloadedBrowsersRegistry::instance(),
-      auto_updater: crate::auto_updater::AutoUpdater::instance(),
       wayfern_manager: WayfernManager::instance(),
     }
   }
 
   pub fn instance() -> &'static BrowserRunner {
     &BROWSER_RUNNER
-  }
-
-  pub fn get_binaries_dir(&self) -> PathBuf {
-    crate::app_dirs::binaries_dir()
   }
 
   /// Resolve the DNS blocklist level to a cached file path plus whether that
@@ -312,28 +300,6 @@ impl BrowserRunner {
       .await
   }
 
-  /// Get the executable path for a browser profile
-  /// This is a common helper to eliminate code duplication across the codebase
-  pub fn get_browser_executable_path(
-    &self,
-    profile: &BrowserProfile,
-  ) -> Result<PathBuf, Box<dyn std::error::Error + Send + Sync>> {
-    // Create browser instance to get executable path
-    let browser_type = crate::browser::BrowserType::from_str(&profile.browser)
-      .map_err(|e| format!("Invalid browser type: {e}"))?;
-    let browser = crate::browser::create_browser(browser_type);
-
-    // Construct browser directory path: binaries/<browser>/<version>/
-    let mut browser_dir = self.get_binaries_dir();
-    browser_dir.push(&profile.browser);
-    browser_dir.push(&profile.version);
-
-    // Get platform-specific executable path
-    browser
-      .get_executable_path(&browser_dir)
-      .map_err(|e| format!("Failed to get executable path for {}: {e}", profile.browser).into())
-  }
-
   /// One argument per thing a launch decides, and they are all independent:
   /// grouping them into a struct would only move the same list one level out,
   /// and the one caller shape that repeats already has `LaunchOptions`.
@@ -351,18 +317,19 @@ impl BrowserRunner {
     // Handle Wayfern profiles using WayfernManager
     if profile.browser == "wayfern" {
       let launch_started = std::time::Instant::now();
-      let _launch_in_progress = crate::wayfern_identity_storage::yield_to_launch().await;
-      let converted;
-      let mut launch_only = false;
-      let profile = if crate::wayfern_identity_storage::needs_conversion(profile) {
-        converted = crate::wayfern_identity_storage::convert_for_launch(profile)
-          .await
-          .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
-        launch_only = crate::wayfern_identity_storage::is_launch_only(&converted);
-        &converted
-      } else {
-        profile
-      };
+      // The engine is downloaded at startup. A launch that comes before it is
+      // done shows the stage and waits for the same download, before any route
+      // worker starts that would idle through it.
+      if crate::apostate::installed_executable().is_none() {
+        emit_launch_stage(profile, "engine", None);
+      }
+      crate::apostate::ensure_installed()
+        .await
+        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { e.into() })?;
+      // A profile the startup pass has not reached (a sync just delivered it)
+      // moves to the engine before it opens.
+      let adopted = crate::apostate::adopt_profile(profile);
+      let profile = adopted.as_ref().unwrap_or(profile);
       // Get or create wayfern config
       let mut wayfern_config = profile.wayfern_config.clone().unwrap_or_else(|| {
         log::debug!("No wayfern config, using default profile={}", profile.id);
@@ -611,8 +578,8 @@ impl BrowserRunner {
           profile.id
         );
       }
-      let needs_device = crate::wayfern_identity_storage::stored_shape(&wayfern_config)
-        == crate::wayfern_identity_storage::StoredShape::Empty;
+      let needs_device =
+        crate::apostate::stored_shape(&wayfern_config) == crate::apostate::StoredShape::Empty;
       let fingerprint_generated = randomize_requested || needs_device;
       if fingerprint_generated {
         // Create a config copy without the existing fingerprint to force generation of a new one
@@ -643,29 +610,14 @@ impl BrowserRunner {
 
         let geolocation_applied = generated.geolocation_applied;
 
-        // Update the config with the new device for launching. An identity
-        // stores the id and the location only; a legacy browser stores the
-        // whole payload.
-        let is_identity = generated.identity_id.is_some();
-        wayfern_config.identity_id = generated.identity_id.clone();
+        // Update the config with the new device for launching.
         wayfern_config.location = generated.location.clone();
-        wayfern_config.identity_baseline = None;
-        wayfern_config.fingerprint = if is_identity {
-          None
-        } else {
-          Some(generated.fingerprint.clone())
-        };
+        wayfern_config.fingerprint = Some(generated.fingerprint.clone());
 
         // Save the updated device to the profile so it persists.
         let mut updated_wayfern_config = updated_profile.wayfern_config.clone().unwrap_or_default();
-        updated_wayfern_config.identity_id = generated.identity_id;
         updated_wayfern_config.location = generated.location;
-        updated_wayfern_config.identity_baseline = None;
-        updated_wayfern_config.fingerprint = if is_identity {
-          None
-        } else {
-          Some(generated.fingerprint)
-        };
+        updated_wayfern_config.fingerprint = Some(generated.fingerprint);
         // Preserve the randomize flag so it persists across launches
         updated_wayfern_config.randomize_fingerprint_on_launch =
           wayfern_config.randomize_fingerprint_on_launch;
@@ -774,9 +726,9 @@ impl BrowserRunner {
       let proxy_url = wayfern_config.proxy.as_deref();
 
       emit_launch_stage(profile, "starting", None);
-      let mut launched = self
+      let wayfern_result = self
         .wayfern_manager
-        .launch_wayfern(
+        .launch_apostate(
           &app_handle,
           &updated_profile,
           &profile_path_str,
@@ -789,51 +741,12 @@ impl BrowserRunner {
           headless,
           kind,
         )
-        .await;
-      // The server drops a token on a plan change and after a day, and the
-      // engine then reads a paid account as one without a plan. One new token,
-      // one more try.
-      let refused_for_plan = launched
-        .as_ref()
-        .is_err_and(|e| e.to_string().contains("\"WAYFERN_CROSS_OS_REQUIRES_PLAN\""));
-      if refused_for_plan
-        && crate::cloud_auth::CLOUD_AUTH
-          .wayfern_token_after_refusal(None)
-          .await
-          .is_some()
-      {
-        log::info!(
-          "Browser launch retried with a new Wayfern token profile={}",
-          profile.id
-        );
-        launched = self
-          .wayfern_manager
-          .launch_wayfern(
-            &app_handle,
-            &updated_profile,
-            &profile_path_str,
-            &wayfern_config,
-            url.as_deref(),
-            proxy_url,
-            profile.ephemeral,
-            &extension_paths,
-            remote_debugging_port,
-            headless,
-            kind,
-          )
-          .await;
-      }
-      let wayfern_result = launched.map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
-        // A refused apply reports itself as a structured error so the dialog
-        // can name the cause. Prefixing it would put English in front of the
-        // JSON the frontend parses, and the whole thing would reach the user
-        // as raw machine output.
-        crate::wrap_backend_error(
-          crate::wayfern_manager::explain_cross_os_refusal(e.to_string()),
-          "Failed to launch Wayfern",
-        )
-        .into()
-      })?;
+        .await
+        .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> {
+          // A structured error reaches the dialog as it is. Prefixing it would
+          // put English in front of the JSON the frontend parses.
+          crate::wrap_backend_error(e.to_string(), "Failed to launch the browser").into()
+        })?;
 
       // Get the process ID from launch result
       let Some(process_id) = wayfern_result.processId.filter(|pid| *pid != 0) else {
@@ -933,27 +846,11 @@ impl BrowserRunner {
         kind == crate::wayfern_manager::LaunchKind::Automation,
       );
 
-      // The browser returned a config to store, and it is on disk already.
-      if let Some(stored) = wayfern_result.stored_profile.as_ref() {
-        updated_profile.wayfern_config = stored.wayfern_config.clone();
-        updated_profile.host_os = stored.host_os.clone();
-      }
-
       // Update profile with the process info
       updated_profile.process_id = Some(process_id);
       updated_profile.last_launch = Some(SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs());
 
-      // Save the updated profile
-      if launch_only {
-        let mut persisted = updated_profile.clone();
-        if let Some(disk) = crate::wayfern_identity_storage::read_profile(&updated_profile.id) {
-          persisted.wayfern_config = disk.wayfern_config;
-          persisted.host_os = disk.host_os;
-        }
-        self.save_process_info(&persisted)?;
-      } else {
-        self.save_process_info(&updated_profile)?;
-      }
+      self.save_process_info(&updated_profile)?;
       BROWSER_STARTED.notify_one();
       let _ = crate::tag_manager::TAG_MANAGER.lock().map(|tm| {
         let _ = tm.rebuild_from_profiles(&self.profile_manager.list_profiles().unwrap_or_default());
@@ -1435,53 +1332,6 @@ impl BrowserRunner {
         PROXY_MANAGER.stop_worker_of_exited_browser(pid).await;
       }
 
-      // Check for pending updates and apply them
-      if let Ok(Some(pending_update)) = self
-        .auto_updater
-        .get_pending_update(&profile.browser, &profile.version)
-      {
-        match self.profile_manager.update_profile_version(
-          &app_handle,
-          &profile.id.to_string(),
-          &pending_update.new_version,
-        ) {
-          Ok(updated_profile_after_update) => {
-            log::info!(
-              "Pending browser update applied profile={} from={} to={}",
-              profile.id,
-              profile.version,
-              pending_update.new_version
-            );
-            updated_profile = updated_profile_after_update;
-
-            if let Err(e) = self
-              .auto_updater
-              .dismiss_update_notification(&pending_update.id)
-            {
-              log::warn!("Update notification dismiss failed err=\"{e}\"");
-            }
-          }
-          Err(e) => {
-            log::warn!(
-              "Pending browser update failed profile={} to={} err=\"{e}\"",
-              profile.id,
-              pending_update.new_version
-            );
-          }
-        }
-      }
-
-      // If no pending update was applied, check if a newer installed version exists
-      if updated_profile.version == profile.version {
-        if let Some(p) = self
-          .auto_updater
-          .update_profile_to_latest_installed(&app_handle, &updated_profile)
-        {
-          updated_profile = p;
-        }
-      }
-      crate::wayfern_identity_storage::request_conversion_pass();
-
       // Emit profile update event to frontend
       if let Err(e) = events::emit("profile-updated", &updated_profile) {
         log::warn!("Event emit failed event=profile-updated err=\"{e}\"");
@@ -1544,11 +1394,6 @@ impl BrowserRunner {
           ),
         }
       }
-
-      // Consolidate browser versions after stopping a browser
-      let _ = self
-        .downloaded_browsers_registry
-        .consolidate_browser_versions(&app_handle);
 
       return Ok(());
     }
@@ -2025,15 +1870,6 @@ async fn launch_browser_profile_tracked(
 }
 
 #[tauri::command]
-pub fn check_browser_exists(browser_str: String, version: String) -> bool {
-  // This is an alias for is_browser_downloaded to provide clearer semantics for auto-updates
-  let runner = BrowserRunner::instance();
-  runner
-    .downloaded_browsers_registry
-    .is_browser_downloaded(&browser_str, &version)
-}
-
-#[tauri::command]
 pub async fn kill_browser_profile(
   app_handle: tauri::AppHandle,
   profile: BrowserProfile,
@@ -2061,44 +1897,6 @@ pub async fn kill_browser_profile(
           .mark_profile_stopped(&profile.id.to_string())
           .await;
       }
-
-      // Auto-update non-running profiles and cleanup unused binaries
-      let browser_for_update = profile.browser.clone();
-      let app_handle_for_update = app_handle.clone();
-      tauri::async_runtime::spawn(async move {
-        let registry = crate::downloaded_browsers_registry::DownloadedBrowsersRegistry::instance();
-        let mut versions = registry.get_downloaded_versions(&browser_for_update);
-        if !versions.is_empty() {
-          versions.sort_by(|a, b| crate::api_client::compare_versions(b, a));
-          let latest_version = &versions[0];
-
-          let auto_updater = crate::auto_updater::AutoUpdater::instance();
-          match auto_updater
-            .auto_update_profile_versions(
-              &app_handle_for_update,
-              &browser_for_update,
-              latest_version,
-            )
-            .await
-          {
-            Ok(updated) => {
-              if !updated.is_empty() {
-                log::info!(
-                  "Profiles moved to latest browser after stop count={} browser={browser_for_update} version={latest_version}",
-                  updated.len()
-                );
-              }
-            }
-            Err(e) => {
-              log::warn!("Profile browser update after stop failed err=\"{e}\"");
-            }
-          }
-        }
-
-        if let Err(e) = registry.cleanup_unused_binaries() {
-          log::warn!("Unused browser cleanup after stop failed err=\"{e}\"");
-        }
-      });
 
       Ok(())
     }

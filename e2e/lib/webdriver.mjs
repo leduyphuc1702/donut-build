@@ -8,7 +8,7 @@ export const ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecf";
  *
  * `fetch` is undici, and undici gives every request a 300 s headers timeout
  * of its own. A long `execute/async` sends no headers until the script
- * completes, so a `download_browser` that pulls a 1 GB Wayfern build over a
+ * completes, so a `download_browser` that pulls the engine over a
  * slow link died at 300 s whatever `timeoutMs` asked for. `node:http` has no
  * such default, which leaves `timeoutMs` as the only clock.
  */

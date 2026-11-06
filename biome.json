@@ -13,7 +13,8 @@
       "!**/node_modules",
       "!**/dist",
       "!**/.next",
-      "!**/out"
+      "!**/out",
+      "!src-tauri/src/warmup/*.js"
     ]
   },
   "formatter": {

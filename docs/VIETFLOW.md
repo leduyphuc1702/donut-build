@@ -70,8 +70,8 @@ Không công cụ nào cam kết kín 100% trước mọi thuật toán: độ t
 1. **Gắn WireGuard (VPN) vào hồ sơ ngay khi tạo, trước lần mở đầu tiên.** Donut lấy múi giờ, ngôn ngữ và tọa độ của vân tay theo lối ra của hồ sơ lúc tạo, nên lối ra Mỹ phải có trước.
 2. **Khóa mọi hồ sơ mua hàng vào thị trường của nó** (trường "Thị trường"). Hồ sơ gắn WireGuard mà WireGuard hỏng, hay máy chưa nối WiFi Mỹ, đều không mở được. Với hồ sơ chỉ đi qua WireGuard của Donut, bật thêm **Cài đặt → Quyền riêng tư → "Chặn khởi chạy khi không có proxy hoặc VPN"**. Khi hồ sơ đi qua WireGuard của Donut, DNS, WebRTC và mọi kết nối của trình duyệt đều đi trong tunnel, nên IPv6 hay DNS của mạng máy không lộ ra.
    - Máy nối WiFi Mỹ (hồ sơ không gắn proxy/VPN): tắt IPv6 trên máy, hoặc chắc chắn WiFi đó không cấp IPv6. Donut đo cả IPv6 và chặn khi nó ở nước khác, nhưng tắt từ gốc vẫn hơn.
-3. **Cùng một phiên bản Donut và Wayfern trên mọi máy.**
-   - Phiên bản trình duyệt nằm trong User-Agent, và nhiều trang so nó với lúc đăng nhập.
+3. **Cùng một phiên bản Donut trên mọi máy.**
+   - Engine Apostate được ghim theo từng bản Donut, nên cùng bản Donut là cùng phiên bản Chromium trong User-Agent; nhiều trang so nó với lúc đăng nhập.
    - Phiên bản tụt lùi (máy B cũ hơn máy A) là bất thường. Cập nhật tất cả các máy cùng lúc.
 4. **Không bật "Danh sách chặn DNS" (chặn quảng cáo) trên hồ sơ dùng để mua.** Nó chặn luôn script chống gian lận của Amazon, eBay và Shopify; trang không đo được thiết bị sẽ chấm rủi ro cao hơn.
 5. **Không cài tiện ích (extension) vào hồ sơ mua hàng**, trừ khi thật cần. Tiện ích bị trang đo được.
@@ -86,7 +86,7 @@ Không công cụ nào cam kết kín 100% trước mọi thuật toán: độ t
 - **Độ trễ khoảng 200 ms** từ Việt Nam sang Mỹ. Trang có thể đo được, và nó lệch với một IP nhà dân ở Mỹ. Chỉ trình duyệt chạy ngay trên máy ở Mỹ mới hết.
 - **Dấu TCP của WireGuard trong Donut.** WireGuard của Donut tự dựng gói TCP bằng một bộ TCP chạy trong ứng dụng (smoltcp), không qua Windows hay macOS. Bản Vietflow đã cho gói tin mang TTL đúng của hệ điều hành máy (128 trên Windows, 64 trên Mac). Kích thước cửa sổ và thứ tự tùy chọn TCP vẫn khác của Windows hay macOS thật. Chỉ công cụ dò hệ điều hành theo gói tin (p0f) mới đọc được chi tiết này.
 - **MSS 1340** (gói TCP nhỏ hơn bình thường, do tunnel). Đây là dấu hiệu "đang dùng VPN" của cả văn phòng.
-- **Kết quả vẽ đồ họa** (canvas, WebGL) vẫn do GPU và driver thật tạo ra rồi được Wayfern làm nhiễu. Hai máy khác GPU có thể ra kết quả khác nhau.
+- **Kết quả vẽ đồ họa** (canvas, WebGL) vẫn do GPU và driver thật tạo ra rồi được Apostate làm nhiễu. Hai máy khác GPU có thể ra kết quả khác nhau.
 - **Thông số máy giả lập khác máy thật:** số nhân CPU và RAM khai báo có thể lệch với tốc độ chạy thật đo bằng JavaScript.
 - **Cổng gỡ lỗi (CDP) của trình duyệt** mở trên 127.0.0.1. Chromium mới đã chặn trang công khai dò cổng localhost, nhưng đây vẫn là bề mặt cần biết.
 
@@ -109,7 +109,7 @@ Máy đo: macOS, Wi-Fi văn phòng đi qua WireGuard US.
 - MTU tunnel: 1380; MSS bị clamp còn 1340; TTL giảm 2 hop.
 - p0f/browserleaks: SYN từ exit có MSS 1340, options của Darwin (nop, wscale 6, timestamps, sackOK, eol), bị xếp **iOS/Darwin**, link type **OpenVPN UDP**. Không phải Windows/Linux. Đây là lý do profile Windows không thể chạy trên máy macOS này.
 
-Từ bản này, launch gate so OS mà fingerprint khai với OS đang chạy app; lệch thì trả `FINGERPRINT_HOST_OS_MISMATCH` và không mở browser. Muốn profile Windows: chạy Donut trong Windows VM/máy Windows thật, dùng bridged/TAP hoặc kernel NAT; không dùng user-mode NAT (QEMU slirp) vì nó terminate TCP và lộ stack host. Chạy app trong VM, không chỉ browser.
+Hồ sơ khai OS khác máy chạy app (ví dụ hồ sơ Windows trên Mac) vẫn mở được, kể cả khi không gắn proxy/VPN: Donut chỉ cảnh báo lúc tạo hồ sơ (`fingerprint.crossOsApostateWarning`) rằng tầng TCP/mạng vẫn lộ OS của máy khi không đi qua WireGuard. Nếu hồ sơ đã gắn proxy/VPN mà lối đó đang hỏng thì launch gate trả `FINGERPRINT_HOST_OS_MISMATCH` và không mở, vì đó là lối hỏng chứ không phải lựa chọn. Hồ sơ mua hàng nên chạy trên máy cùng OS với hồ sơ; muốn p0f khớp hẳn với Windows thì chạy Donut trong Windows VM/máy Windows thật, dùng bridged/TAP hoặc kernel NAT; không dùng user-mode NAT (QEMU slirp) vì nó terminate TCP và lộ stack host. Chạy app trong VM, không chỉ browser.
 
 ## Tài khoản tự host (control plane)
 
@@ -118,22 +118,22 @@ Từ bản này, tài khoản không cần Donut cloud. `vietflow/control-plane/
 - không giới hạn số hồ sơ mỗi giờ và số trình duyệt chạy cùng lúc;
 - `requestsPerHour: 0`, nên automation cục bộ (REST/MCP trên máy) không bị đếm;
 - bật quyền sửa vân tay; hồ sơ mới sinh thiết bị ngay trên máy, không cần token hay cloud;
-- cổng chống lệch OS vẫn chặn nếu máy chạy app không khớp, nên profile Windows vẫn phải chạy trên Windows;
+- hồ sơ khai OS khác máy vẫn mở được (kèm cảnh báo về tầng TCP/mạng); chỉ chặn khi proxy/VPN đã gắn mà lối đó hỏng;
 - bật nhóm cục bộ một ghế: tài khoản là chủ sở hữu, nhật ký hoạt động (mở/đóng hồ sơ, sửa hồ sơ/proxy/nhóm/VPN/extension) lưu tại control plane và xem/xuất CSV được trong **Tài khoản → Nhật ký hoạt động**;
 - bật cookie bot, phiên từ xa và dịch vụ agent cục bộ (chi tiết bên dưới). Remote MCP (kết nối từ donutbrowser.com) vẫn là dịch vụ cloud; automation cục bộ qua REST/MCP vẫn chạy.
 
 ### Dịch vụ cục bộ thay cho dịch vụ cloud
 
-- **Cookie Bot** chạy trên chính máy này (`src-tauri/src/cookie_bot_local.rs`). Lịch, lần chạy, thống kê và mẫu lưu trong `settings/cookie_bot_local.json`. Mỗi lần một hồ sơ, chỉ khi Donut đang mở, chỉ với hồ sơ Wayfern cùng OS và không ephemeral; không cần proxy/exit node và không tiêu "giờ từ xa" (mức hiển thị chỉ là danh nghĩa). Lệch vân tay với lối ra chỉ ghi log, không chặn lần chạy nền.
+- **Cookie Bot** chạy trên chính máy này (`src-tauri/src/cookie_bot_local.rs`). Lịch, lần chạy, thống kê và mẫu lưu trong `settings/cookie_bot_local.json`. Mỗi lần một hồ sơ, chỉ khi Donut đang mở, chỉ với hồ sơ cùng OS với máy và không ephemeral; không cần proxy/exit node và không tiêu "giờ từ xa" (mức hiển thị chỉ là danh nghĩa). Lệch vân tay với lối ra chỉ ghi log, không chặn lần chạy nền.
 - **Phiên từ xa** mở hồ sơ ngay trên máy này. Nút **Chạy trên máy này** trong chi tiết hồ sơ (và mục tương ứng trong menu chuột phải) tạo một phiên có trạng thái đang chạy, dừng được, và dùng chung đường launch/CDP với phiên cloud. Máy chủ phiên chính là máy đang chạy Donut.
-- **Agent**: control plane trả credits, token, routine và lần chạy tại `/api/agent/*`. Các tab Chat/Tasks/Routines chỉ hiện khi bản Wayfern đã cài có engine agent; bản Wayfern phát hành hiện tại báo không hỗ trợ engine nên các tab này còn ẩn, và nhiệm vụ agent chưa chạy được. Các tab Conversation/Profiles/Activity/Recipes/Schedules thuộc dịch vụ cloud nên vẫn khóa; muốn điều khiển hồ sơ bằng agent ngay bây giờ thì dùng MCP cục bộ trong **Tích hợp**.
+- **Agent**: control plane trả credits, token, routine và lần chạy tại `/api/agent/*`. Agent tasks điều khiển trình duyệt qua miền CDP `Wayfern.*` của bản Wayfern đóng, mà Apostate không có, nên các tab Chat/Tasks/Routines và Recipes/Schedules bị ẩn và nhiệm vụ agent bị từ chối bằng `APOSTATE_FEATURE_UNSUPPORTED`. Muốn điều khiển hồ sơ bằng agent thì dùng MCP cục bộ trong **Tích hợp**.
 
 Giới hạn của các dịch vụ cục bộ:
 
 - Cookie Bot chỉ chạy khi app mở; đóng app là lịch dừng. Mỗi lúc chỉ một lần chạy.
 - Danh sách phiên từ xa nằm trong bộ nhớ: khởi động lại app thì phiên không còn trong danh sách; nếu trình duyệt vẫn mở, dừng nó bằng nút Stop thường.
 - Team chỉ có một ghế owner; không có lời mời thành viên hay phân quyền nhóm.
-- Agent tasks cần Wayfern có engine agent; nếu không, chỉ dùng MCP cục bộ.
+- Agent tasks, ghi recipe và synchronizer cần miền CDP `Wayfern.*` nên không chạy được trên Apostate; chỉ dùng MCP cục bộ.
 
 Cách dùng:
 
@@ -145,34 +145,46 @@ Bản build phát cho cả công ty không cần bước 3: build với `DONUT_S
 
 Đồng bộ hồ sơ vẫn do `vietflow/sync-server/` đảm nhiệm; control plane không giữ dữ liệu hồ sơ. Khi tài khoản là tự host, app không gửi token của tài khoản đó tới `sync.donutbrowser.com`; nó dùng server đồng bộ tự host đã cấu hình. Mục **Tài khoản → Tự lưu trữ** vẫn mở sau khi đăng nhập tài khoản tự host, nên bản build tự đăng nhập vẫn đặt được `SYNC_TOKEN`.
 
+## Engine: chỉ còn Apostate
+
+Donut bản Vietflow không còn dùng Wayfern. Mọi hồ sơ chạy trên **Apostate** (`github.com/heretic-tech/apostate`, bản 0.5.1, Chromium 155.0.8059.31, GPL-3.0; dùng nội bộ nên không vướng nghĩa vụ phát hành). Apostate là file chạy tải riêng, Donut không liên kết vào mã của mình. Chuỗi `wayfern` vẫn còn trong ID trình duyệt, tên khóa lưu trữ và dữ liệu đồng bộ để dữ liệu cũ đọc được; người dùng không còn thấy tên Wayfern trên giao diện.
+
+**Lần mở đầu tiên.**
+- Không có màn tải trình duyệt, không có điều khoản Wayfern, không có token. Mở app là dùng được ngay.
+- Donut tự tải Apostate ở nền ngay khi khởi động (~160 MB, sha256 được ghim trong `src-tauri/src/apostate.rs`). Có tiến trình nhỏ ở góc màn hình; mất mạng thì tự thử lại, giãn dần tới 5 phút một lần. Bản tải dở do tắt app giữa chừng, bản Apostate cũ và thư mục Wayfern cũ trong `binaries/` được xóa ở lần khởi động sau.
+- Trong lúc đó vẫn tạo được hồ sơ (hộp thoại tạo hồ sơ có dòng "đang chuẩn bị engine"). Bấm mở hồ sơ trước khi engine tải xong thì Donut chờ bản tải đang chạy và hiện bước "Đang chuẩn bị engine" thay vì báo lỗi.
+- Sai checksum thì xóa bản tải và báo `APOSTATE_CHECKSUM_MISMATCH`; lỗi mạng báo `APOSTATE_DOWNLOAD_FAILED`; máy không có bản dựng (ví dụ Windows ARM) báo `APOSTATE_UNSUPPORTED_HOST`.
+- Lệnh `get_engine_install_status` cho biết đã cài chưa; **Giới thiệu → Chẩn đoán** hiện phiên bản.
+
+**Hồ sơ cũ (đã tạo bằng Wayfern) tự chuyển sang Apostate.**
+- Lúc khởi động (và khi mở nếu sót), Donut ghi `engine = apostate` cho hồ sơ, đặt phiên bản về Chromium của engine, giữ nguyên thư mục dữ liệu nên cookie và đăng nhập còn nguyên.
+- Hồ sơ cũ lưu thiết bị sau một `identity_id` (Wayfern sinh, Donut không giữ nội dung) được bốc lại một thiết bị cục bộ từ chính id hồ sơ, rồi áp các chỉnh sửa của người dùng lên trên; xóa `identity_id`.
+- Việc chuyển không phải là sửa hồ sơ: không đổi `updated_at`, không ghi nhật ký nhóm, nên không máy nào đẩy lên một thay đổi mà các máy khác không tự làm được.
+
 ## Sinh vân tay cục bộ
 
-Trên tài khoản tự host, hồ sơ mới không gọi `Wayfern.createIdentity` và không cần token của Donut cloud. Donut tự dựng thiết bị (`src-tauri/src/fingerprint_generator.rs`): User-Agent, platform, màn hình, CPU/RAM, WebGL, font, voice, audio, battery, … theo OS của máy, rồi ghi toàn bộ vào `wayfern_config.fingerprint`. Khi mở, thiết bị được áp bằng `Wayfern.setFingerprint`.
+Hồ sơ mới không gọi Wayfern và không cần token nào. Donut tự dựng thiết bị (`src-tauri/src/fingerprint_generator.rs`): User-Agent, platform, màn hình, CPU/RAM, WebGL, font, voice, audio, battery, … theo OS khai báo, rồi ghi toàn bộ vào `wayfern_config.fingerprint`. Khi mở, Apostate nhận thiết bị qua dòng lệnh (`--fingerprint-*`); không có API danh tính.
 
 - Cùng một profile id luôn ra cùng một thiết bị; hai hồ sơ khác nhau ra hai thiết bị khác nhau.
-- Màn hình, GPU, số nhân CPU và RAM được bốc theo tần suất thật của máy để bàn (`src-tauri/src/fingerprint_devices.json`, lấy từ dữ liệu của Apify fingerprint-suite, giấy phép Apache-2.0): khoảng 40 cỡ màn hình và 30–90 GPU mỗi OS. Donut tự ghép cho hợp lý: chip Apple M chỉ đi với số nhân nó có (M1 = 8, M4 = 10, ...), RAM khai tối đa 8 GB như Chrome, và GPU cùng hãng với GPU thật của máy (Mac Apple Silicon chỉ khai chip Apple M; máy Windows chỉ khai hãng có driver trong máy) vì WebGL vẫn vẽ bằng GPU thật.
+- Màn hình, GPU, số nhân CPU và RAM được bốc theo tần suất thật của máy để bàn (`src-tauri/src/fingerprint_devices.json`, lấy từ dữ liệu của Apify fingerprint-suite, giấy phép Apache-2.0): khoảng 40 cỡ màn hình và 30–90 GPU mỗi OS. Donut tự ghép cho hợp lý: chip Apple M chỉ đi với số nhân nó có (M1 = 8, M4 = 10, ...), RAM khai tối đa 8 GB như Chrome, và GPU cùng hãng với GPU thật của máy vì WebGL vẫn vẽ bằng GPU thật.
 - Múi giờ, ngôn ngữ và tọa độ lấy từ lối ra của hồ sơ (proxy/VPN) lúc tạo, không lấy từ máy. Nếu không đo được lối ra mà hồ sơ có proxy/VPN, các trường vị trí bị bỏ trống để lần đo sau điền lại.
-- Chỉ hỗ trợ Windows/macOS/Linux. Hồ sơ khai báo cùng OS với máy chạy Wayfern như trước; hồ sơ khai báo OS khác máy chạy engine Apostate (xem mục "Mở hồ sơ Windows trên Mac" bên dưới) và cần proxy hoặc VPN. Android/iOS bị từ chối.
-- Hồ sơ cũ dùng `identity_id` (Wayfern sinh trước bản này) vẫn sửa được bằng nút **Tạo lại vân tay**: lần tạo lại chuyển hồ sơ sang thiết bị cục bộ. Nếu chưa tạo lại, sửa tay trên hồ sơ cũ vẫn cần token Donut và sẽ bị từ chối khi mở.
-- Đây là bước đầu của việc thay engine. Wayfern vẫn là binary đóng: WebGPU, Client Hints, font và TLS/p0f chưa do Donut kiểm soát hoàn toàn. p0f/TCP-IP vẫn phụ thuộc OS của máy và lối ra; launch gate chỉ cho khai OS khác máy khi hồ sơ có proxy/VPN và chạy bằng Apostate.
+- Chỉ hỗ trợ Windows/macOS/Linux, kể cả OS trùng với máy chạy app. Android/iOS không còn trong danh sách chọn OS, và backend từ chối bằng `FINGERPRINT_MOBILE_UNSUPPORTED`.
+- WebGPU, Client Hints, font và TLS/p0f do Apostate kiểm soát ở mức trình duyệt; p0f/TCP-IP vẫn phụ thuộc OS của máy và lối ra.
 
-## Mở hồ sơ Windows trên Mac
+## Hồ sơ khai OS khác máy (ví dụ Windows trên Mac)
 
-Wayfern từ chối mở hồ sơ khai báo OS khác máy nếu không có token Donut cloud. Với máy Mac muốn mở hồ sơ Windows (hoặc Linux), Donut dùng engine mã nguồn mở **Apostate** (`github.com/heretic-tech/apostate`, bản 0.5.1, Chromium 155, GPL-3.0). Apostate là file chạy tải riêng, Donut không liên kết vào mã của mình.
-
-- **Tự động, không có nút chọn engine.** Engine được quyết định một lần lúc tạo hồ sơ: OS khai báo khác OS máy (chỉ tính Windows/macOS/Linux) thì hồ sơ dùng Apostate; cùng OS vẫn dùng Wayfern. Hồ sơ đã có không bị đổi. Trong hộp thoại tạo hồ sơ, các OS máy tính để bàn luôn chọn được; Android/iOS vẫn bị khóa.
-- **Cần proxy hoặc VPN.** Hồ sơ Apostate khác OS chỉ mở được khi có proxy hoặc VPN đã chạy: múi giờ, ngôn ngữ và tọa độ lấy từ lối ra đó. Không có lối ra thì launch gate báo `FINGERPRINT_HOST_OS_MISMATCH` và không mở.
-- **Mac Apple silicon khai báo Windows-on-ARM.** Trên Mac Apple silicon, Apostate dựng thiết bị Windows ARM (GPU Adreno) chứ không phải Windows x64 với card NVIDIA/Intel, vì đó là loại phần cứng Mac có thể giả gần nhất. Donut chỉ truyền hạt giống (id hồ sơ), OS, ngôn ngữ và múi giờ; thiết bị cụ thể do Apostate chọn.
-- **Tải về lần đầu.** Lần đầu có hồ sơ Apostate, Donut tải đúng bản đã ghim từ GitHub (~160 MB), kiểm tra sha256 rồi giải nén vào thư mục binaries. Sai checksum thì xóa và báo `APOSTATE_CHECKSUM_MISMATCH`; lỗi mạng báo `APOSTATE_DOWNLOAD_FAILED`.
-- **Font Windows.** Để hồ sơ Windows không lộ font của Mac, cài font trên máy bằng `apostate fonts install windows` (Donut không phát hành lại các font này, chỉ dùng nội bộ). Chưa cài thì Donut vẫn mở và ghi cảnh báo `Persona fonts missing` trong log.
-- **Tính năng chỉ có ở Wayfern** (làm mới vân tay, agent, ghi recipe, synchronizer, xem danh tính) từ chối hồ sơ Apostate bằng mã `APOSTATE_FEATURE_UNSUPPORTED`.
+- **Không có nút chọn engine**, chỉ có một engine. Danh sách OS trong hộp thoại tạo hồ sơ có đủ Windows/macOS/Linux.
+- **Mở được khi không có proxy/VPN**, kèm cảnh báo lúc tạo hồ sơ: tầng TCP/mạng vẫn lộ OS của máy nếu không đi qua WireGuard. Hồ sơ đã gắn proxy/VPN mà lối đó hỏng thì vẫn bị chặn (`FINGERPRINT_HOST_OS_MISMATCH`). "Thị trường" (khóa nước lối ra) giữ nguyên hành vi.
+- **Mac Apple silicon khai báo Windows-on-ARM.** Apostate dựng thiết bị Windows ARM (GPU Adreno) chứ không phải Windows x64 với card NVIDIA/Intel, vì đó là loại phần cứng Mac có thể giả gần nhất. Donut chỉ truyền hạt giống (id hồ sơ), OS, ngôn ngữ và múi giờ.
+- **Font.** Máy Windows không cần cài gì. Hồ sơ cùng OS với máy cũng không cần. Hồ sơ Windows trên Mac hoặc Linux cần font Windows trên máy, nếu không trang thấy rất ít font; Donut vẫn mở và ghi cảnh báo `Persona fonts missing` trong log. Donut **chưa tự cài** các font này: lệnh `apostate fonts install windows` của Apostate cần `git`, tải khoảng 200 MB từ `MauCariApa-com/windows-11-fonts` và font Marlett từ `liblaf/fonts`, rồi chép vào `~/Library/Fonts/apostate-windows` (Mac) hoặc `~/.local/share/fonts/apostate-windows` (Linux). Văn phòng đã có máy Windows thật nên cách sạch nhất là chép thư mục `C:\Windows\Fonts` của một máy đó sang Mac rồi chạy `apostate fonts install windows --from <thư mục đã chép>` (lấy đúng 96 họ font Windows 11, có cả Marlett). Font macOS cho hồ sơ Mac trên Windows phải lấy từ một máy Mac thật (`apostate fonts export-macos`).
+- **Tính năng chỉ có ở Wayfern** (agent, ghi recipe, synchronizer, bộ chọn phần tử của MCP dựa trên miền `Wayfern.*`, xem/làm mới danh tính) bị ẩn khỏi giao diện hoặc từ chối bằng `APOSTATE_FEATURE_UNSUPPORTED`.
 
 Những gì vẫn còn lộ:
 
 - WebGL/WebGPU vẫn vẽ bằng GPU Apple thật nên giới hạn và kết quả vẽ không giống hẳn Adreno.
 - Số nhân CPU và RAM của máy thật là trần; hồ sơ không khai nhiều hơn máy có.
 - Camera và micro của Mac vẫn là thiết bị người dùng thấy.
-- p0f/TCP-IP vẫn là của máy chạy app, không phải của OS khai báo.
+- p0f/TCP-IP vẫn là của máy chạy app, không phải của OS khai báo (trừ khi đi qua WireGuard của Donut, nơi Donut gán TTL và cửa sổ TCP theo OS khai báo).
 
 ## Phụ thuộc vào máy chủ bên ngoài
 
@@ -181,13 +193,11 @@ Khi dùng tài khoản tự host, ứng dụng chỉ gọi ra ngoài các địa
 | Địa chỉ | Để làm gì | Thay được không |
 |---|---|---|
 | `github.com/leduyphuc1702/donutbrowser` | Kiểm tra và tải bản cập nhật | Đã là repo của Vietflow |
-| `donutbrowser.com/wayfern.json` | Biết phiên bản Wayfern mới nhất để tải; kết quả được lưu lại cục bộ | Chưa; nếu địa chỉ này mất, máy mới không biết tải bản Wayfern nào |
-| `download.wayfern.com` | Tải trình duyệt Wayfern (mã đóng, của bên thứ ba) | Không. Wayfern là phụ thuộc cứng duy nhất của Donut |
-| `github.com/heretic-tech/apostate/releases` | Tải engine Apostate (mã nguồn mở) khi có hồ sơ khai báo OS khác máy; bản và sha256 được ghim trong `src-tauri/src/apostate.rs` | Có thể mirror, nhưng phải đổi `RELEASE_BASE`; không cần nếu không dùng hồ sơ khác OS |
+| `github.com/heretic-tech/apostate/releases` | Tải engine Apostate (mã nguồn mở) ở lần mở đầu tiên; bản và sha256 được ghim trong `src-tauri/src/apostate.rs` | Có thể mirror, nhưng phải đổi `RELEASE_BASE`. Đây là phụ thuộc cứng duy nhất để mở trình duyệt; sau khi tải xong không cần mạng nữa |
 | GitHub (cơ sở dữ liệu GeoIP) | Định vị IP lối ra | Có thể tự host, chưa cần |
 | Control plane của Vietflow | Tài khoản, entitlements, khóa hồ sơ | Đã tự host (`vietflow/control-plane/`) |
 | Máy chủ đồng bộ của Vietflow | Đồng bộ hồ sơ và khóa phiên | Đã tự host (`vietflow/sync-server/`) |
 
-`api.donutbrowser.com` và `sync.donutbrowser.com` chỉ còn được gọi khi cố ý dùng tài khoản Donut cloud. Khi dùng control plane tự host, hồ sơ mới sinh thiết bị cục bộ nên không cần token Donut; binary Wayfern vẫn do Donut phát hành và vẫn là mã đóng, nên WebGPU/TLS/p0f và việc thay engine vẫn là bước tiếp theo.
+`api.donutbrowser.com` và `sync.donutbrowser.com` chỉ còn được gọi khi cố ý dùng tài khoản Donut cloud. Khi dùng control plane tự host, hồ sơ mới sinh thiết bị cục bộ và engine là Apostate mã nguồn mở nên không cần token hay điều khoản của bên thứ ba nào.
 
 Khi chưa đăng nhập control plane, vẫn còn giới hạn cũ: đang mở **hơn 3 trình duyệt** cùng lúc thì Donut không tạo được hồ sơ mới (việc sinh thiết bị cần mở thêm một trình duyệt ngầm). Đăng nhập tài khoản tự host để bỏ giới hạn này.

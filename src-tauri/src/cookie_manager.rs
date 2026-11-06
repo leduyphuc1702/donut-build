@@ -18,27 +18,38 @@ pub mod chrome_decrypt {
 
   const HOST_HASH_LEN: usize = 32; // SHA-256 output length
 
-  /// The exact contents of a profile's `os_crypt_key` file.
+  /// The key material that may open a profile's cookies: what Apostate seals
+  /// with on this host, then the contents of the profile's own `os_crypt_key`
+  /// file, which opens what Wayfern sealed and the engine has not re-sealed yet.
   ///
-  /// Which cipher opens a record depends on the file's format and the record's
-  /// tag, never on the OS reading it, so a profile written on any OS decrypts
-  /// on every OS (see `os_crypt::key_for_tag`).
+  /// Which cipher opens a record depends on the key's format and the record's
+  /// tag, never on the OS reading it (see `os_crypt::key_for_tag`).
   pub struct EncryptionKey {
-    contents: Vec<u8>,
+    candidates: Vec<Vec<u8>>,
   }
 
   impl EncryptionKey {
+    #[cfg(test)]
     pub fn from_contents(contents: Vec<u8>) -> Option<Self> {
-      (!contents.is_empty()).then_some(Self { contents })
+      (!contents.is_empty()).then_some(Self {
+        candidates: vec![contents],
+      })
     }
   }
 
   pub fn get_encryption_key(profile_data_path: &Path) -> Option<EncryptionKey> {
+    let mut candidates: Vec<Vec<u8>> = os_crypt::engine_key_material(profile_data_path)
+      .into_iter()
+      .collect();
     // Read as raw bytes and do NOT trim — Chromium's `ReadFileToString`
     // passes the exact file contents to `Pbkdf2(file_contents)`. Any
     // normalisation we do here would produce a different derived key.
-    let contents = std::fs::read(profile_data_path.join(os_crypt::KEY_FILE_NAME)).ok()?;
-    EncryptionKey::from_contents(contents)
+    if let Ok(file) = std::fs::read(profile_data_path.join(os_crypt::KEY_FILE_NAME)) {
+      if !file.is_empty() && !candidates.contains(&file) {
+        candidates.push(file);
+      }
+    }
+    (!candidates.is_empty()).then_some(EncryptionKey { candidates })
   }
 
   /// Decrypt a Chrome encrypted cookie value.
@@ -50,23 +61,28 @@ pub mod chrome_decrypt {
   /// without it we'd return 32 bytes of hash noise plus the actual value,
   /// which is not valid UTF-8 and gets thrown away.
   ///
-  /// An AES-128-CBC record that does not open under the key file's key is
-  /// retried with Chromium's fixed fallback keys; the first key whose output
-  /// is a valid value wins.
+  /// An AES-128-CBC record that does not open under a key's cipher is retried
+  /// with Chromium's fixed fallback keys; the first key whose output is a valid
+  /// value wins.
   pub fn decrypt(encrypted: &[u8], host_key: &str, key: &EncryptionKey) -> Option<String> {
     if encrypted.len() < 3 {
       return None;
     }
     let (tag, ciphertext) = encrypted.split_at(3);
-    let primary = os_crypt::key_for_tag(&key.contents, tag)?;
     if ciphertext.is_empty() {
-      return Some(String::new());
+      return key
+        .candidates
+        .iter()
+        .any(|contents| os_crypt::key_for_tag(contents, tag).is_some())
+        .then(String::new);
     }
-    primary
-      .with_fallbacks()
-      .iter()
-      .filter_map(|candidate| candidate.decrypt(ciphertext))
-      .find_map(|plaintext| cookie_value(&plaintext, host_key))
+    key.candidates.iter().find_map(|contents| {
+      os_crypt::key_for_tag(contents, tag)?
+        .with_fallbacks()
+        .iter()
+        .filter_map(|candidate| candidate.decrypt(ciphertext))
+        .find_map(|plaintext| cookie_value(&plaintext, host_key))
+    })
   }
 
   /// Strip the SHA-256(host_key) integrity prefix if present. Older cookies
@@ -2029,7 +2045,41 @@ mod tests {
     assert!(chrome_decrypt::EncryptionKey::from_contents(Vec::new()).is_none());
     let empty_dir = tempfile::TempDir::new().unwrap();
     std::fs::write(empty_dir.path().join("os_crypt_key"), b"").unwrap();
-    assert!(chrome_decrypt::get_encryption_key(empty_dir.path()).is_none());
+    let from_engine_alone = crate::profile_import::os_crypt::engine_key_material(empty_dir.path());
+    assert_eq!(
+      chrome_decrypt::get_encryption_key(empty_dir.path()).is_some(),
+      from_engine_alone.is_some(),
+      "an empty key file adds no key; the engine's own key is all there is"
+    );
+  }
+
+  #[cfg(any(target_os = "macos", target_os = "linux"))]
+  #[test]
+  fn cookies_open_under_the_engine_key_without_any_key_file() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let engine = crate::profile_import::os_crypt::TargetKey::engine(dir.path()).unwrap();
+    use sha2::{Digest, Sha256};
+    let mut plain = Sha256::digest(SYNTHETIC_COOKIE_HOST.as_bytes()).to_vec();
+    plain.extend_from_slice(SYNTHETIC_COOKIE_VALUE.as_bytes());
+    let sealed = engine.encrypt(&plain).unwrap();
+
+    let key = chrome_decrypt::get_encryption_key(dir.path()).expect("the engine's key");
+    assert_eq!(
+      chrome_decrypt::decrypt(&sealed, SYNTHETIC_COOKIE_HOST, &key).as_deref(),
+      Some(SYNTHETIC_COOKIE_VALUE)
+    );
+  }
+
+  #[cfg(any(target_os = "macos", target_os = "linux"))]
+  #[test]
+  fn cookies_wayfern_sealed_still_open_through_the_profiles_key_file() {
+    let dir = tempfile::TempDir::new().unwrap();
+    std::fs::write(dir.path().join("os_crypt_key"), SYNTHETIC_OS_CRYPT_PASSWORD).unwrap();
+    let key = chrome_decrypt::get_encryption_key(dir.path()).expect("the key file");
+    assert_eq!(
+      open(SYNTHETIC_ENCRYPTED_COOKIE_HEX, &key).as_deref(),
+      Some(SYNTHETIC_COOKIE_VALUE)
+    );
   }
 
   #[test]

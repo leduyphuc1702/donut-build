@@ -1,4 +1,4 @@
-//! Re-sealing the copied profile with Wayfern's key, and stripping the state
+//! Re-sealing the copied profile with the engine's key, and stripping the state
 //! that is bound to the machine it came from.
 //!
 //! Every encrypted store in a Chromium profile goes through one
@@ -96,6 +96,7 @@ fn reencrypt_column(
   column: &str,
   source: &SourceKeyring,
   target: &TargetKey,
+  drop_unopenable: bool,
 ) -> Counts {
   let mut counts = Counts::default();
   if !table_exists(conn, table) {
@@ -125,6 +126,10 @@ fn reencrypt_column(
       Decrypted::Value(v) => v,
       // Already plaintext: seal it so the store is uniform.
       Decrypted::NotEncrypted => stored.clone(),
+      // Sealed for the engine already, which a profile the engine has run on
+      // holds next to rows from before, or a row a re-seal in place cannot
+      // open: nothing to do.
+      Decrypted::Unrecoverable if !drop_unopenable || target.opens(&stored) => continue,
       Decrypted::Unrecoverable => {
         counts.unrecoverable += 1;
         // Blank rather than leave a blob no key can open. Chromium logs a
@@ -164,14 +169,21 @@ fn reencrypt_column(
 /// encrypted plaintext is `SHA256(host_key) || value`, and Chromium drops any
 /// row whose prefix does not match (`kHashFailed`) as well as any row where
 /// both `value` and `encrypted_value` are non-empty.
+///
+/// An import (`drop_unopenable`) deletes a store whose schema this code does
+/// not know and every row no key opens: Chromium would drop them anyway, and a
+/// copy of them would look like a successful import of nothing. A re-seal in
+/// place deletes nothing, because a profile the engine already wrote must not
+/// lose cookies to a schema one release ahead, or to a guess about which key
+/// sealed them.
 fn reencrypt_cookies(
-  default_dir: &Path,
+  path: &Path,
   source: &SourceKeyring,
   target: &TargetKey,
   report: &mut ProfileImportReport,
+  drop_unopenable: bool,
 ) {
-  let path = layout::host_cookie_path(default_dir);
-  let Some(conn) = open_rw(&path) else {
+  let Some(conn) = open_rw(path) else {
     return;
   };
   if !table_exists(&conn, "cookies") {
@@ -186,18 +198,16 @@ fn reencrypt_cookies(
     .and_then(|v| v.parse().ok())
     .unwrap_or(COOKIE_VERSION_CURRENT);
 
-  if version < COOKIE_VERSION_MIN {
-    // Chromium deletes and recreates a store this old on first launch, so
-    // copying it would look like a successful import of nothing.
+  if !(COOKIE_VERSION_MIN..=COOKIE_VERSION_CURRENT).contains(&version) {
     drop(conn);
-    let _ = std::fs::remove_file(&path);
-    report.warn(warning::STORE_TOO_OLD);
-    return;
-  }
-  if version > COOKIE_VERSION_CURRENT {
-    drop(conn);
-    let _ = std::fs::remove_file(&path);
-    report.warn(warning::STORE_TOO_NEW);
+    if drop_unopenable {
+      let _ = std::fs::remove_file(path);
+      report.warn(if version < COOKIE_VERSION_MIN {
+        warning::STORE_TOO_OLD
+      } else {
+        warning::STORE_TOO_NEW
+      });
+    }
     return;
   }
 
@@ -239,6 +249,11 @@ fn reencrypt_cookies(
             } else if decrypted.len() >= 32 {
               // The prefix is mandatory at v24 and does not match. The row is
               // corrupt or belongs to another host; Chromium would drop it.
+              // Unless the engine's own key opens it, and the source key only
+              // happened to produce valid padding.
+              if !drop_unopenable || target.opens_cookie(&stored, &host_key) {
+                continue;
+              }
               doomed.push(rowid);
               report.cookies_unrecoverable += 1;
               continue;
@@ -248,6 +263,9 @@ fn reencrypt_cookies(
         }
         Decrypted::NotEncrypted => stored.clone(),
         Decrypted::Unrecoverable => {
+          if !drop_unopenable || target.opens_cookie(&stored, &host_key) {
+            continue;
+          }
           doomed.push(rowid);
           report.cookies_unrecoverable += 1;
           continue;
@@ -297,18 +315,44 @@ fn reencrypt_cookies(
   );
 }
 
-/// Re-seal every store, and count what came across.
+/// Re-seal every store of a freshly copied profile, and count what came across.
 pub fn reencrypt_profile(
   default_dir: &Path,
   source: &SourceKeyring,
   target: &TargetKey,
   report: &mut ProfileImportReport,
 ) {
-  reencrypt_cookies(default_dir, source, target, report);
+  let cookie_store = layout::host_cookie_path(default_dir);
+  reencrypt_stores(default_dir, &cookie_store, source, target, report, true);
+}
+
+/// Re-seal the stores of a profile that is already in place and has been used,
+/// for the engine's key: rows already sealed for it stay, and a store this code
+/// cannot read stays too. `cookie_store` is the cookie database as the profile
+/// keeps it, which is not always where a fresh import puts it.
+pub fn reseal_in_place(
+  default_dir: &Path,
+  cookie_store: &Path,
+  source: &SourceKeyring,
+  target: &TargetKey,
+  report: &mut ProfileImportReport,
+) {
+  reencrypt_stores(default_dir, cookie_store, source, target, report, false);
+}
+
+fn reencrypt_stores(
+  default_dir: &Path,
+  cookie_store: &Path,
+  source: &SourceKeyring,
+  target: &TargetKey,
+  report: &mut ProfileImportReport,
+  drop_unopenable: bool,
+) {
+  reencrypt_cookies(cookie_store, source, target, report, drop_unopenable);
 
   if let Some(conn) = open_rw(&default_dir.join("Login Data")) {
     for (table, column) in LOGIN_COLUMNS {
-      let counts = reencrypt_column(&conn, table, column, source, target);
+      let counts = reencrypt_column(&conn, table, column, source, target, drop_unopenable);
       report.logins_migrated += counts.migrated;
       report.logins_unrecoverable += counts.unrecoverable;
     }
@@ -316,7 +360,7 @@ pub fn reencrypt_profile(
 
   if let Some(conn) = open_rw(&default_dir.join("Web Data")) {
     for (table, column) in WEB_DATA_COLUMNS {
-      let counts = reencrypt_column(&conn, table, column, source, target);
+      let counts = reencrypt_column(&conn, table, column, source, target, drop_unopenable);
       report.payment_methods_migrated += counts.migrated;
       report.payment_methods_unrecoverable += counts.unrecoverable;
     }

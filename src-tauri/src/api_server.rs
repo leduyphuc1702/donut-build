@@ -147,9 +147,8 @@ pub struct CreateProfileRequest {
   /// Browser engine. Must be `"wayfern"` (anti-detect Chromium). Any other
   /// value (e.g. `"chromium"`) is rejected with 400.
   pub browser: String,
-  /// Optional. Omit (or pass `"latest"`) to use the newest already-downloaded
-  /// version of the chosen browser. A concrete version must already be
-  /// downloaded; the create path does not fetch new versions.
+  /// Ignored. Every profile runs the one engine Donut downloads itself.
+  /// Kept so existing clients still validate.
   #[serde(default)]
   pub version: Option<String>,
   /// Optional stored-proxy id. Omit it, send `null`, or send an empty string
@@ -197,6 +196,8 @@ pub struct UpdateProfileRequest {
   // No `browser` field: a profile's engine is fixed at creation (changing it
   // would invalidate the generated fingerprint and on-disk profile dir).
   // Accepting it here only to silently ignore it misled API clients.
+  /// Ignored. Every profile runs the one engine Donut downloads itself, so a
+  /// profile has no version to move. Kept so existing clients still validate.
   pub version: Option<String>,
   /// Omitted or `null` leaves the proxy assignment unchanged; an empty string
   /// detaches it. Assigning a proxy clears any assigned VPN.
@@ -928,6 +929,7 @@ struct ImportProxiesResponse {
     StartCookieBotRunRequest,
     crate::remote_session::RemoteSessionState,
     crate::cookie_bot::CookieBotSchedule,
+    crate::cookie_bot::CookieBotFocus,
     crate::cookie_bot_exit::ExitCheckView,
     crate::cookie_bot::CookieBotScheduleList,
     crate::cookie_bot::CookieBotScheduleSaved,
@@ -1112,8 +1114,7 @@ impl ApiServer {
       .layer(middleware::from_fn_with_state(
         state.clone(),
         auth_middleware,
-      ))
-      .layer(middleware::from_fn(terms_check_middleware));
+      ));
 
     let api_for_v1 = api.clone();
     let app = Router::new()
@@ -1282,19 +1283,6 @@ fn build_v1_router() -> Router<ApiServerState> {
     .split_for_parts();
 
   routes.merge(extension_payload_routes.layer(DefaultBodyLimit::max(64 * 1024 * 1024)))
-}
-
-// Terms and Conditions check middleware
-async fn terms_check_middleware(
-  request: axum::extract::Request,
-  next: Next,
-) -> Result<Response, StatusCode> {
-  // Check if Wayfern terms have been accepted
-  if !crate::wayfern_terms::WayfernTermsManager::instance().is_terms_accepted() {
-    return Err(StatusCode::FORBIDDEN);
-  }
-
-  Ok(next.run(request).await)
 }
 
 // Authentication middleware
@@ -1596,7 +1584,7 @@ fn manager_error_response(err: impl std::fmt::Display) -> (StatusCode, String) {
         StatusCode::INTERNAL_SERVER_ERROR
       } else {
         // Validation-style codes (NAME_CANNOT_BE_EMPTY, GROUP_ALREADY_EXISTS,
-        // WAYFERN_VERSION_NOT_AVAILABLE, ...).
+        // FINGERPRINT_MOBILE_UNSUPPORTED, ...).
         StatusCode::BAD_REQUEST
       };
       return (status, msg);
@@ -1779,7 +1767,7 @@ async fn get_profile_fingerprint_api(
   request_body = CreateProfileRequest,
   responses(
     (status = 200, description = "Profile created successfully", body = ApiProfileResponse),
-    (status = 400, description = "Invalid browser, invalid wayfern_config, invalid dns_server, or no downloaded version available"),
+    (status = 400, description = "Invalid browser, invalid wayfern_config, or invalid dns_server"),
     (status = 401, description = "Unauthorized"),
     (status = 402, description = "Selected proxy requires payment, or a cross-OS fingerprint or custom launch arguments require Pro"),
     (status = 429, description = "Hourly profile generation limit reached; the body carries retryAfterSeconds"),
@@ -1811,32 +1799,9 @@ async fn create_profile(
     ));
   }
 
-  // Resolve the version. Omitted, empty, or "latest" means "newest version
-  // already downloaded for this browser". The create path generates the
-  // fingerprint by launching that binary, so the version must be present
-  // locally — we don't fetch new versions here. 400 if none is downloaded.
-  let version = match request.version.as_deref() {
-    Some(v) if !v.is_empty() && v != "latest" => v.to_string(),
-    _ => {
-      let registry = crate::downloaded_browsers_registry::DownloadedBrowsersRegistry::instance();
-      let mut versions = registry.get_downloaded_versions(&request.browser);
-      // browsers is a HashMap, so keys are unordered — sort newest-first by
-      // semver before taking the latest.
-      versions.sort_by(|a, b| crate::api_client::compare_versions(b, a));
-      match versions.into_iter().next() {
-        Some(v) => v,
-        None => {
-          return Err((
-            StatusCode::BAD_REQUEST,
-            format!(
-              "No downloaded version of \"{}\" is available. Download the browser in Donut Browser first — this endpoint does not download browsers.",
-              request.browser
-            ),
-          ));
-        }
-      }
-    }
-  };
+  // There is one engine, and its Chromium is the version of every profile.
+  // Whatever the request names, the profile gets that one.
+  let version = crate::apostate::CHROMIUM.to_string();
 
   // Parse wayfern config if provided. A malformed config is a 400, never a
   // silent fallback: swallowing it here produced a host-OS profile from a
@@ -2036,12 +2001,6 @@ async fn update_profile(
   // Update profile fields
   if let Some(new_name) = request.name {
     if let Err(e) = profile_manager.rename_profile(&state.app_handle, &id, &new_name) {
-      return Err(manager_error_response(e));
-    }
-  }
-
-  if let Some(version) = request.version {
-    if let Err(e) = profile_manager.update_profile_version(&state.app_handle, &id, &version) {
       return Err(manager_error_response(e));
     }
   }
@@ -5373,16 +5332,10 @@ async fn import_profile_cookies(
   tag = "browsers"
 )]
 async fn download_browser_api(
-  State(state): State<ApiServerState>,
+  State(_state): State<ApiServerState>,
   Json(request): Json<DownloadBrowserRequest>,
 ) -> Result<Json<DownloadBrowserResponse>, (StatusCode, String)> {
-  match crate::downloader::download_browser(
-    state.app_handle.clone(),
-    request.browser.clone(),
-    request.version,
-  )
-  .await
-  {
+  match crate::apostate::download_browser(request.browser.clone(), request.version).await {
     // Echo the version the downloader actually installed, not the requested one.
     Ok(version) => Ok(Json(DownloadBrowserResponse {
       browser: request.browser,
@@ -5421,15 +5374,12 @@ async fn get_browser_versions(
   Path(browser): Path<String>,
   State(_state): State<ApiServerState>,
 ) -> Result<Json<Vec<String>>, (StatusCode, String)> {
-  let version_manager = crate::browser_version_manager::BrowserVersionManager::instance();
-
-  match version_manager
-    .fetch_browser_versions_with_count(&browser, false)
-    .await
-  {
-    Ok(result) => Ok(Json(result.versions)),
-    Err(e) => Err(manager_error_response(e)),
+  if browser != "wayfern" {
+    return Err(manager_error_response(format!(
+      "Unsupported browser: {browser}"
+    )));
   }
+  Ok(Json(vec![crate::apostate::CHROMIUM.to_string()]))
 }
 
 // API Handler - Check if Browser is Downloaded
@@ -5454,7 +5404,9 @@ async fn check_browser_downloaded(
   Path((browser, version)): Path<(String, String)>,
   State(_state): State<ApiServerState>,
 ) -> Result<Json<bool>, StatusCode> {
-  let is_downloaded = crate::downloaded_browsers_registry::is_browser_downloaded(browser, version);
+  let is_downloaded = browser == "wayfern"
+    && version == crate::apostate::CHROMIUM
+    && crate::apostate::installed_executable().is_some();
   Ok(Json(is_downloaded))
 }
 
@@ -5511,35 +5463,19 @@ fn resolve_error_response(error: crate::cdp_target::ResolveError) -> (StatusCode
   }
 }
 
+/// An agent call's answer, as a JSON body or a mapped failure.
+fn agent_reply<T>(
+  result: Result<T, crate::mcp_server::AgentError>,
+) -> Result<Json<T>, (StatusCode, String)> {
+  result.map(Json).map_err(agent_error_response)
+}
+
 /// Map a shared agent failure onto a status, with the structured detail in
 /// the body.
 ///
 /// The body is the same `{"code": ..., ...}` envelope the MCP transport puts
 /// in its error `data`, plus `message`, so a locator that matched three
 /// buttons hands a REST client the same candidate list an agent gets.
-/// An agent call's answer. A browser that refuses automation as unpaid on an
-/// account whose plan includes it gets the real reason: another desktop is the
-/// primary one, or the browser's own plan token is stale.
-async fn agent_reply<T>(
-  id: &str,
-  result: Result<T, crate::mcp_server::AgentError>,
-) -> Result<Json<T>, (StatusCode, String)> {
-  use crate::mcp_server::AgentError;
-  match result {
-    Ok(value) => Ok(Json(value)),
-    Err(AgentError::PaymentRequired(message)) => {
-      let reason = match crate::cloud_auth::CLOUD_AUTH.wayfern_device_refusal() {
-        Some(device) => Some(device),
-        None => crate::mcp_server::stale_plan_token_refusal(Some(id)).await,
-      };
-      Err(agent_error_response(AgentError::PaymentRequired(
-        reason.unwrap_or(message),
-      )))
-    }
-    Err(error) => Err(agent_error_response(error)),
-  }
-}
-
 fn agent_error_response(error: crate::mcp_server::AgentError) -> (StatusCode, String) {
   use crate::cdp_target::CdpError;
   use crate::mcp_server::AgentError;
@@ -5598,7 +5534,7 @@ async fn agent_perceive_api(
   Json(request): Json<crate::wayfern_cdp::PerceptionRequest>,
 ) -> Result<Json<crate::wayfern_cdp::PerceptionPage>, (StatusCode, String)> {
   let ctx = agent_context_for(&id).await?;
-  agent_reply(&id, crate::mcp_server::agent_perceive(&ctx, &request).await).await
+  agent_reply(crate::mcp_server::agent_perceive(&ctx, &request).await)
 }
 
 #[utoipa::path(
@@ -5629,11 +5565,7 @@ async fn agent_resolve_locator_api(
   Json(request): Json<crate::mcp_server::AgentResolveRequest>,
 ) -> Result<Json<crate::wayfern_cdp::LocatorResolution>, (StatusCode, String)> {
   let ctx = agent_context_for(&id).await?;
-  agent_reply(
-    &id,
-    crate::mcp_server::agent_resolve_locator(&ctx, &request).await,
-  )
-  .await
+  agent_reply(crate::mcp_server::agent_resolve_locator(&ctx, &request).await)
 }
 
 #[utoipa::path(
@@ -5664,11 +5596,7 @@ async fn agent_click_api(
   Json(request): Json<crate::mcp_server::AgentClickRequest>,
 ) -> Result<Json<crate::mcp_server::AgentClick>, (StatusCode, String)> {
   let ctx = agent_context_for(&id).await?;
-  agent_reply(
-    &id,
-    crate::mcp_server::agent_click_locator(&ctx, &request).await,
-  )
-  .await
+  agent_reply(crate::mcp_server::agent_click_locator(&ctx, &request).await)
 }
 
 #[utoipa::path(
@@ -5699,7 +5627,7 @@ async fn agent_hold_api(
   Json(request): Json<crate::mcp_server::AgentHoldRequest>,
 ) -> Result<Json<crate::mcp_server::AgentHold>, (StatusCode, String)> {
   let ctx = agent_context_for(&id).await?;
-  agent_reply(&id, crate::mcp_server::agent_hold(&ctx, &request).await).await
+  agent_reply(crate::mcp_server::agent_hold(&ctx, &request).await)
 }
 
 #[utoipa::path(
@@ -5731,11 +5659,9 @@ async fn agent_type_api(
 ) -> Result<Json<crate::mcp_server::AgentTyping>, (StatusCode, String)> {
   let ctx = agent_context_for(&id).await?;
   agent_reply(
-    &id,
     crate::mcp_server::agent_type_locator(&ctx, &request, crate::mcp_server::MAX_TYPING_SECONDS)
       .await,
   )
-  .await
 }
 
 #[utoipa::path(
@@ -5766,7 +5692,7 @@ async fn agent_extract_api(
   Json(request): Json<crate::wayfern_cdp::ExtractionRequest>,
 ) -> Result<Json<crate::wayfern_cdp::Extraction>, (StatusCode, String)> {
   let ctx = agent_context_for(&id).await?;
-  agent_reply(&id, crate::mcp_server::agent_extract(&ctx, &request).await).await
+  agent_reply(crate::mcp_server::agent_extract(&ctx, &request).await)
 }
 
 #[utoipa::path(
@@ -5802,11 +5728,7 @@ async fn agent_pick_api(
     .timeout_ms
     .unwrap_or(crate::mcp_server::DEFAULT_PICK_TIMEOUT_MS)
     .clamp(1_000, crate::mcp_server::MAX_PICK_TIMEOUT_MS);
-  agent_reply(
-    &id,
-    crate::mcp_server::agent_pick_element(&ctx, timeout_ms).await,
-  )
-  .await
+  agent_reply(crate::mcp_server::agent_pick_element(&ctx, timeout_ms).await)
 }
 
 #[cfg(test)]
@@ -7562,6 +7484,7 @@ mod tests {
       "SetCookieBotScheduleRequest",
       "StartCookieBotRunRequest",
       "CookieBotSchedule",
+      "CookieBotFocus",
       "CookieBotScheduleList",
       "CookieBotScheduleSaved",
       "CookieBotScheduleDeleted",
@@ -7834,7 +7757,3 @@ mod tests {
     }
   }
 }
-
-#[cfg(all(test, feature = "e2e"))]
-#[path = "api_server_fingerprint_browser_tests.rs"]
-mod fingerprint_browser_tests;

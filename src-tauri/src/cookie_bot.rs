@@ -120,6 +120,21 @@ pub struct CookieBotSlot {
   pub run_at_minute: u16,
 }
 
+/// A topic warm-up: instead of a site list, the bot shops one site for one
+/// product keyword, the way a buyer narrowing down on it does. Only the
+/// self-hosted bot runs it; the cloud ignores the field.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, utoipa::ToSchema)]
+pub struct CookieBotFocus {
+  /// The shop, `ebay` for now.
+  pub site: String,
+  /// The product the person named, such as `iphone`.
+  pub keyword: String,
+  /// Searches the site itself suggested around the keyword in earlier runs.
+  /// Kept by the desktop; what a caller sends here is ignored.
+  #[serde(default)]
+  pub learned: Vec<String>,
+}
+
 /// A profile enrolled in the nightly bot.
 #[derive(Debug, Clone, Serialize, Deserialize, utoipa::ToSchema)]
 pub struct CookieBotSchedule {
@@ -155,6 +170,9 @@ pub struct CookieBotSchedule {
   pub max_minutes: u32,
   #[serde(default)]
   pub sites: Vec<String>,
+  /// A topic warm-up in place of browsing `sites`.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub focus: Option<CookieBotFocus>,
   #[serde(default)]
   pub jitter_seconds: u32,
 
@@ -240,6 +258,9 @@ pub struct CookieBotScheduleInput {
   pub template_id: Option<String>,
   pub max_minutes: u32,
   pub sites: Vec<String>,
+  /// A topic warm-up in place of a site list; `sites` is then sent empty.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub focus: Option<CookieBotFocus>,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub jitter_seconds: Option<u32>,
 

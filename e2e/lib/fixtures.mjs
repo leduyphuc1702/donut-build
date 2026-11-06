@@ -1,181 +1,149 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import {
-  chmod,
-  copyFile,
-  cp,
-  mkdir,
-  rename,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+  createCipheriv,
+  createHash,
+  pbkdf2Sync,
+  randomBytes,
+} from "node:crypto";
+import { existsSync, statSync } from "node:fs";
+import { chmod, cp, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { crc32 } from "node:zlib";
 import {
-  WAYFERN_DOWNLOAD_CLIENT_TIMEOUT_MS,
-  WAYFERN_DOWNLOAD_TIMEOUT_MS,
+  ENGINE_DOWNLOAD_CLIENT_TIMEOUT_MS,
+  ENGINE_DOWNLOAD_TIMEOUT_MS,
 } from "./limits.mjs";
 
-export const TEST_BROWSER_VERSION = "150.0.7871.100";
+/**
+ * The engine the app pins (`apostate.rs`): its own release, and the Chromium
+ * every profile stores as its `version`. The smoke suite compares both with
+ * `get_engine_install_status`, so a bump in one place cannot pass unnoticed.
+ */
+export const ENGINE_VERSION = "0.5.1";
+export const ENGINE_CHROMIUM = "155.0.8059.31";
 
-export function defaultWayfernPath(projectRoot) {
-  if (process.env.DONUT_E2E_WAYFERN_PATH) {
-    return path.resolve(process.env.DONUT_E2E_WAYFERN_PATH);
-  }
-  const fixtureRoot = path.join(projectRoot, ".cache", "e2e-wayfern-fixture");
-  // Linux and Windows builds are a directory, as the portable archives unpack.
+/** The build target and executable the app resolves for this machine, or null. */
+export function engineTarget() {
+  const key = `${process.platform}-${process.arch}`;
+  const targets = {
+    "darwin-arm64": {
+      target: "macos-arm64",
+      executable: "Chromium.app/Contents/MacOS/Chromium",
+    },
+    "win32-x64": { target: "windows-x64", executable: "chrome.exe" },
+    "linux-x64": { target: "linux-x64", executable: "chrome" },
+    "linux-arm64": { target: "linux-arm64", executable: "chrome" },
+  };
+  return targets[key] ?? null;
+}
+
+/** Where the app looks for the engine under a session's data root. */
+export function engineInstallDir(dataRoot) {
+  const engine = engineTarget();
+  if (!engine) return null;
   return path.join(
-    fixtureRoot,
-    process.platform === "darwin" ? "Wayfern.app" : "wayfern",
+    dataRoot,
+    "data",
+    "binaries",
+    "apostate",
+    ENGINE_VERSION,
+    engine.target,
   );
 }
 
-/** Executable names the app looks for in a Linux or Windows build. */
-const WAYFERN_EXECUTABLES = ["wayfern", "chromium", "chrome"].map((name) =>
-  process.platform === "win32" ? `${name}.exe` : name,
-);
+function engineExecutable(dataRoot) {
+  const dir = engineInstallDir(dataRoot);
+  return dir ? path.join(dir, engineTarget().executable) : null;
+}
 
-function isDirectory(file) {
-  return existsSync(file) && statSync(file).isDirectory();
+/** Whether the engine in a data root is only the stand-in. */
+function isStandIn(file) {
+  return existsSync(file) && statSync(file).size < 4096;
 }
 
 /**
- * Where the cache fixture records which PUBLISHED version it was installed for.
- *
- * The bundle's own `CFBundleShortVersionString` cannot answer that question: a
- * published version and the version stamped inside the bundle it serves do not
- * always agree, and the app keys everything (download registry, profile
- * `version`, release types) off the PUBLISHED string. Comparing the bundle's
- * own version against the published one would therefore call an up-to-date
- * fixture stale and re-download 1 GB on every single run.
+ * Put a stand-in engine executable where the app looks for it, so a session
+ * that never opens a browser sees the engine as installed and the app does not
+ * reach for the network (the session also sets
+ * `DONUT_E2E_DISABLE_STARTUP_NETWORK`). It exits at once if it is ever run.
+ * A real install already in place is left alone.
  */
-function fixtureStampPath(projectRoot) {
+export async function seedEngineStandIn(dataRoot) {
+  const executable = engineExecutable(dataRoot);
+  if (!executable || existsSync(executable)) return;
+  await mkdir(path.dirname(executable), { recursive: true });
+  await writeFile(
+    executable,
+    process.platform === "win32" ? "" : "#!/bin/sh\nexit 1\n",
+  );
+  if (process.platform !== "win32") await chmod(executable, 0o755);
+}
+
+/**
+ * Where the cache fixture keeps a real install of the engine: the directory the
+ * app itself installs into, copied whole. `DONUT_E2E_APOSTATE_PATH` pins an
+ * explicit install directory (a locally built engine) and is used as given.
+ */
+export function defaultEnginePath(projectRoot) {
+  if (process.env.DONUT_E2E_APOSTATE_PATH) {
+    return path.resolve(process.env.DONUT_E2E_APOSTATE_PATH);
+  }
+  const engine = engineTarget();
   return path.join(
-    path.dirname(defaultWayfernPath(projectRoot)),
-    "published-version.txt",
+    projectRoot,
+    ".cache",
+    "e2e-apostate-fixture",
+    ENGINE_VERSION,
+    engine?.target ?? "unsupported",
   );
 }
 
-/**
- * The published version the cache fixture stands for, or `null` when there is
- * no fixture.
- *
- * Falls back to the bundle's own version when no stamp is present, which is
- * what a hand-installed fixture looks like: it is only right when the two
- * agree, and when they do not the fixture is replaced, which is the safe way
- * to be wrong.
- */
-export function cachedFixtureVersion(projectRoot) {
-  const bundle = defaultWayfernPath(projectRoot);
-  if (!existsSync(bundle)) return null;
-  const stamp = fixtureStampPath(projectRoot);
-  if (existsSync(stamp)) {
-    const recorded = readFileSync(stamp, "utf8").trim();
-    if (recorded) return recorded;
-  }
-  return inspectWayfern(bundle).version;
+function cachedEngineExists(projectRoot) {
+  const engine = engineTarget();
+  if (!engine) return false;
+  const executable = path.join(
+    defaultEnginePath(projectRoot),
+    engine.executable,
+  );
+  return existsSync(executable) && !isStandIn(executable);
 }
 
-export function wayfernExecutable(bundlePath) {
+async function cloneInstall(source, destination) {
+  await mkdir(path.dirname(destination), { recursive: true });
   if (process.platform === "darwin") {
-    return path.join(bundlePath, "Contents", "MacOS", "Wayfern");
-  }
-  if (!isDirectory(bundlePath)) return bundlePath;
-  // The executable sits at the top of the build or in its one subdirectory.
-  const subdirectories = readdirSync(bundlePath)
-    .map((name) => path.join(bundlePath, name))
-    .filter(isDirectory);
-  for (const dir of [bundlePath, ...subdirectories]) {
-    for (const name of WAYFERN_EXECUTABLES) {
-      const candidate = path.join(dir, name);
-      if (existsSync(candidate) && !isDirectory(candidate)) return candidate;
+    try {
+      execFileSync("/bin/cp", ["-cR", source, destination]);
+      return;
+    } catch (_error) {
+      // Not on a filesystem that clones; copy the bytes.
     }
   }
-  return path.join(bundlePath, WAYFERN_EXECUTABLES[0]);
-}
-
-export function inspectWayfern(bundlePath) {
-  const executable = wayfernExecutable(bundlePath);
-  assert.ok(
-    existsSync(executable),
-    `Wayfern executable is missing: ${executable}`,
-  );
-  const output =
-    process.platform === "darwin"
-      ? execFileSync(
-          "/usr/bin/plutil",
-          [
-            "-extract",
-            "CFBundleShortVersionString",
-            "raw",
-            "-o",
-            "-",
-            path.join(bundlePath, "Contents", "Info.plist"),
-          ],
-          { encoding: "utf8" },
-        ).trim()
-      : execFileSync(executable, ["--version"], {
-          encoding: "utf8",
-          timeout: 15_000,
-        }).trim();
-  const match = output.match(/(\d+\.\d+\.\d+\.\d+)/);
-  assert.ok(match, `Could not parse Wayfern version from: ${output}`);
-  return { bundlePath, executable, version: match[1], output };
-}
-
-async function cloneAppBundle(source, destination) {
-  await mkdir(path.dirname(destination), { recursive: true });
-  try {
-    execFileSync("/bin/cp", ["-cR", source, destination]);
-  } catch (_error) {
-    await cp(source, destination, {
-      recursive: true,
-      preserveTimestamps: true,
-      errorOnExist: true,
-    });
-  }
-}
-
-/** Where the app itself resolves the current Wayfern build (api_client.rs). */
-const WAYFERN_RELEASE_URL = "https://donutbrowser.com/wayfern.json";
-
-/**
- * The newest published Wayfern version, read from the same manifest the app
- * reads.
- *
- * Deliberately NOT asked of a running app session. Seeding a browser into a
- * session's data root only works before that session starts: a running app
- * runs `cleanup_unused_binaries`, which deletes any binary directory no
- * profile references, and a just-seeded fixture is exactly that. Resolving the
- * version over plain HTTP keeps the seed ahead of app startup.
- */
-async function publishedWayfernVersion() {
-  const response = await fetch(WAYFERN_RELEASE_URL, {
-    signal: AbortSignal.timeout(30_000),
+  await cp(source, destination, {
+    recursive: true,
+    preserveTimestamps: true,
+    errorOnExist: true,
   });
-  assert.ok(
-    response.ok,
-    `Could not read ${WAYFERN_RELEASE_URL}: HTTP ${response.status}`,
-  );
-  const manifest = await response.json();
-  assert.ok(
-    typeof manifest.version === "string" && manifest.version,
-    `No Wayfern version published at ${WAYFERN_RELEASE_URL}`,
-  );
-  return manifest.version;
 }
 
-async function downloadWayfern(app, version) {
-  await app.session.setTimeouts({ script: WAYFERN_DOWNLOAD_TIMEOUT_MS });
+/** Seed a real engine install into a data root, before the app starts. */
+export async function seedEngine(dataRoot, projectRoot) {
+  const destination = engineInstallDir(dataRoot);
+  assert.ok(destination, "this machine has no Apostate build");
+  await rm(destination, { recursive: true, force: true });
+  await cloneInstall(defaultEnginePath(projectRoot), destination);
+  return destination;
+}
+
+async function downloadEngine(app) {
+  await app.session.setTimeouts({ script: ENGINE_DOWNLOAD_TIMEOUT_MS });
   try {
     await app.invoke(
       "download_browser",
-      { browserStr: "wayfern", version },
-      WAYFERN_DOWNLOAD_CLIENT_TIMEOUT_MS,
+      { browserStr: "wayfern", version: "" },
+      ENGINE_DOWNLOAD_CLIENT_TIMEOUT_MS,
     );
   } finally {
     await app.session.setTimeouts();
@@ -183,150 +151,58 @@ async function downloadWayfern(app, version) {
 }
 
 /**
- * Put the build this session just downloaded into the cache fixture, in place
- * of whatever build the cache held before. The swap goes through a staging
- * copy and renames, so a suite that dies mid-copy leaves the old fixture or
- * the new one on disk, never a half-written bundle.
+ * Put the install this session just downloaded into the cache fixture. The swap
+ * goes through a staging copy and renames, so a suite that dies mid-copy leaves
+ * the old fixture or the new one on disk, never a half-written install.
  */
-async function cacheDownloadedWayfern(app, projectRoot, version) {
-  if (process.env.DONUT_E2E_WAYFERN_PATH) return;
-  const destination = defaultWayfernPath(projectRoot);
-
-  const installDir = path.join(
-    app.dataRoot,
-    "data",
-    "binaries",
-    "wayfern",
-    version,
-  );
-  const source =
-    process.platform === "darwin"
-      ? path.join(installDir, "Wayfern.app")
-      : installDir;
+async function cacheDownloadedEngine(app, projectRoot) {
+  if (process.env.DONUT_E2E_APOSTATE_PATH) return;
+  const destination = defaultEnginePath(projectRoot);
   const staging = `${destination}.tmp-${process.pid}`;
-  const retired = `${destination}.stale-${process.pid}`;
   await rm(staging, { recursive: true, force: true });
-  await rm(retired, { recursive: true, force: true });
   try {
-    if (process.platform === "darwin") {
-      await cloneAppBundle(source, staging);
-    } else {
-      await mkdir(path.dirname(staging), { recursive: true });
-      await cp(source, staging, { recursive: true, preserveTimestamps: true });
-    }
-    if (existsSync(destination)) await rename(destination, retired);
+    await cloneInstall(engineInstallDir(app.dataRoot), staging);
+    await rm(destination, { recursive: true, force: true });
     await rename(staging, destination);
-    // Stamped only after the bundle is in place, so an interrupted swap can
-    // never leave a stamp claiming a version the fixture does not hold.
-    await writeFile(fixtureStampPath(projectRoot), `${version}\n`);
   } catch (error) {
     await rm(staging, { recursive: true, force: true });
-    if (!existsSync(destination) && existsSync(retired)) {
-      await rename(retired, destination);
-    }
-    if (!existsSync(destination)) throw error;
-    // The session itself runs the build it downloaded; only the cache is
-    // behind, and the next run resolves the published version again and
-    // replaces it then.
     console.warn(
-      `[donut-e2e] Could not refresh the Wayfern fixture cache: ${error}`,
+      `[donut-e2e] Could not refresh the engine fixture cache: ${error}`,
     );
-  } finally {
-    await rm(retired, { recursive: true, force: true });
   }
-}
-
-export async function seedWayfern(dataRoot, wayfern) {
-  const installDir = path.join(
-    dataRoot,
-    "data",
-    "binaries",
-    "wayfern",
-    wayfern.version,
-  );
-  await mkdir(installDir, { recursive: true });
-  if (process.platform === "darwin") {
-    await cloneAppBundle(
-      wayfern.bundlePath,
-      path.join(installDir, "Wayfern.app"),
-    );
-  } else if (isDirectory(wayfern.bundlePath)) {
-    await cp(wayfern.bundlePath, installDir, {
-      recursive: true,
-      preserveTimestamps: true,
-    });
-  } else {
-    const name = process.platform === "win32" ? "wayfern.exe" : "wayfern";
-    const destination = path.join(installDir, name);
-    await copyFile(wayfern.executable, destination);
-    if (process.platform !== "win32") {
-      await chmod(destination, 0o755);
-    }
-  }
-  const registry = {
-    browsers: {
-      wayfern: {
-        [wayfern.version]: {
-          browser: "wayfern",
-          version: wayfern.version,
-          file_path: installDir,
-        },
-      },
-    },
-  };
-  const registryPath = path.join(
-    dataRoot,
-    "data",
-    "data",
-    "downloaded_browsers.json",
-  );
-  await mkdir(path.dirname(registryPath), { recursive: true });
-  await writeFile(registryPath, `${JSON.stringify(registry, null, 2)}\n`);
-  return installDir;
 }
 
 /**
- * Make the newest published Wayfern available to `app` and report the version
- * it will run.
+ * Make the real Apostate engine available to `app` and report what it runs.
  *
- * `DONUT_E2E_WAYFERN_PATH` pins an explicit bundle and is used as given: that
- * is how a locally built browser gets under test. Without it the suite runs
- * the build the product would offer today, always. The ignored cache fixture
- * only ever saves the download: it is used when it holds exactly that build
- * and replaced when it holds any other, so a cache filled months ago can never
- * quietly keep an old browser under test.
+ * A cached or pinned install is copied in before the app starts. Without one,
+ * the app downloads and verifies the pinned release itself (the same path a
+ * first launch takes), and the install is kept for the next run. The cache is
+ * keyed by the pinned engine release, so a new pin never reuses an old build.
  */
-export async function prepareWayfern(app, projectRoot) {
-  const localBundle = defaultWayfernPath(projectRoot);
-  if (process.env.DONUT_E2E_WAYFERN_PATH) {
-    const wayfern = inspectWayfern(localBundle);
-    await seedWayfern(app.dataRoot, wayfern);
-    return { version: wayfern.version, source: "pinned fixture" };
-  }
-
-  const version = await publishedWayfernVersion();
-  const cachedVersion = cachedFixtureVersion(projectRoot);
-  if (cachedVersion === version) {
-    // Seeded under the PUBLISHED version, not the bundle's own, because that
-    // is the string the app itself would have registered had it downloaded
-    // this build, and what every later `version` assertion compares against.
-    // Seeded BEFORE the app starts, or its unused-binary cleanup deletes it.
-    await seedWayfern(app.dataRoot, {
-      ...inspectWayfern(localBundle),
-      version,
-    });
-    return { version, source: "cached fixture" };
-  }
-  if (cachedVersion) {
-    console.log(
-      `[donut-e2e] Cached Wayfern fixture ${cachedVersion} is not the published ${version}; replacing it`,
-    );
+export async function prepareEngine(app, projectRoot) {
+  assert.ok(engineTarget(), "this machine has no Apostate build");
+  if (process.env.DONUT_E2E_APOSTATE_PATH || cachedEngineExists(projectRoot)) {
+    await seedEngine(app.dataRoot, projectRoot);
+    return {
+      version: ENGINE_CHROMIUM,
+      engine: ENGINE_VERSION,
+      source: process.env.DONUT_E2E_APOSTATE_PATH
+        ? "pinned fixture"
+        : "cached fixture",
+    };
   }
 
   if (!app.session) await app.start();
-  await downloadWayfern(app, version);
-  await cacheDownloadedWayfern(app, projectRoot, version);
-  return { version, source: "published download" };
+  const executable = engineExecutable(app.dataRoot);
+  if (isStandIn(executable)) await rm(executable, { force: true });
+  await downloadEngine(app);
+  await cacheDownloadedEngine(app, projectRoot);
+  return {
+    version: ENGINE_CHROMIUM,
+    engine: ENGINE_VERSION,
+    source: "published download",
+  };
 }
 
 export function wireGuardFixture() {
@@ -619,9 +495,24 @@ export function writeChromiumCookies(dbPath, cookies) {
        encrypted_value, path, expires_utc, is_secure, is_httponly, last_access_utc)
      VALUES(?, ?, '', ?, '', CAST(? AS TEXT), '/', 0, 0, 0, 0)`,
   );
+  // A row that is already sealed (`encryptedValue`, bytes) and still alive when
+  // a browser loads it (`expires`, microseconds since 1601).
+  const insertSealed = db.prepare(
+    `INSERT INTO cookies(creation_utc, host_key, top_frame_site_key, name, value,
+       encrypted_value, path, expires_utc, is_secure, is_httponly, last_access_utc)
+     VALUES(?, ?, '', ?, '', ?, '/', ?, 0, 0, 0)`,
+  );
   let creation = 13000000000000000;
   for (const cookie of cookies) {
-    if (cookie.encryptedValueText === undefined) {
+    if (cookie.encryptedValue !== undefined) {
+      insertSealed.run(
+        creation++,
+        cookie.host,
+        cookie.name,
+        cookie.encryptedValue,
+        cookie.expires ?? 0,
+      );
+    } else if (cookie.encryptedValueText === undefined) {
       insert.run(creation++, cookie.host, cookie.name, cookie.value, "");
     } else {
       insertAsText.run(
@@ -633,6 +524,26 @@ export function writeChromiumCookies(dbPath, cookies) {
     }
   }
   db.close();
+}
+
+/**
+ * A cookie value sealed the way the closed engine did: with a password kept in
+ * the profile's own `os_crypt_key` file (PBKDF2, 1003 rounds on macOS under
+ * `v10`, one round on Linux under `v11`), behind the SHA-256 of its host.
+ */
+export function sealLikeTheClosedEngine(password, host, value) {
+  const linux = process.platform === "linux";
+  const key = pbkdf2Sync(password, "saltysalt", linux ? 1 : 1003, 16, "sha1");
+  const cipher = createCipheriv("aes-128-cbc", key, Buffer.alloc(16, 0x20));
+  const plain = Buffer.concat([
+    createHash("sha256").update(host).digest(),
+    Buffer.from(value),
+  ]);
+  return Buffer.concat([
+    Buffer.from(linux ? "v11" : "v10"),
+    cipher.update(plain),
+    cipher.final(),
+  ]);
 }
 
 /** Write a Chromium History database holding the given URLs. */

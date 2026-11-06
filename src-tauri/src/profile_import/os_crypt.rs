@@ -1,8 +1,25 @@
-//! Key material for profile import.
+//! Key material for profile import, and the key Apostate seals secrets with.
 //!
-//! A Donut profile keeps its os_crypt key material in
+//! Apostate is stock Chromium here: it never reads `<user-data-dir>/os_crypt_key`
+//! (that file was Wayfern's). The key it seals cookies, logins and cards with is
+//! whatever the host's provider gives it, and Donut starts it so that key is
+//! fixed and known ([`engine_key_material`]):
+//!
+//! | Host    | Provider                                   | Records                                 |
+//! |---------|--------------------------------------------|-----------------------------------------|
+//! | macOS   | `--use-mock-keychain`, password `mock_password` | `v10`, AES-128-CBC, PBKDF2 1003 rounds |
+//! | Linux   | `--password-store=basic`, password `peanuts`    | `v10`, AES-128-CBC, PBKDF2 1 round     |
+//! | Windows | the key DPAPI-wrapped in `Local State`          | `v10`, AES-256-GCM                     |
+//!
+//! Anything Donut writes into a profile Apostate will open (an import, a profile
+//! Wayfern sealed with its key file) is sealed with that key ([`TargetKey`]).
+//!
+//! The rest of this page is the key file format, which Wayfern used for every
+//! profile and which still carries the *source* side of a re-seal.
+//!
+//! A Wayfern profile kept its os_crypt key material in
 //! `<user-data-dir>/os_crypt_key` rather than the OS keyring, so a profile
-//! directory is self-contained and portable.
+//! directory was self-contained and portable.
 //!
 //! That portability is exactly why an imported Chrome profile carries nothing:
 //! its secrets are sealed with a key held in the macOS Keychain / Windows DPAPI
@@ -29,10 +46,6 @@
 use aes::cipher::{block_padding::Pkcs7, BlockModeDecrypt, BlockModeEncrypt, KeyIvInit};
 use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
-// Windows stores the raw 32-byte key, so it neither encodes nor decodes
-// base64; only the mac/Linux password paths below need the trait in scope.
-#[cfg(not(target_os = "windows"))]
-use base64::Engine;
 use rand::RngExt;
 use ring::pbkdf2;
 use std::num::NonZeroU32;
@@ -67,6 +80,16 @@ pub const EMPTY_PASSWORD_KEY: [u8; 16] = [
 // Read on Linux and by the known-answer tests; unreferenced on other hosts.
 #[allow(dead_code)]
 pub const POSIX_FALLBACK_PASSWORD: &[u8] = b"peanuts";
+
+/// What a profile's stores are sealed under while its key file is the key
+/// (Wayfern), as opposed to an OS's engine key.
+pub const WAYFERN_SCHEME: &str = "wayfern";
+
+/// The password Chromium's mock keychain hands out (`--use-mock-keychain`),
+/// which Apostate is started with on macOS.
+// Read on macOS and by the known-answer tests; unreferenced on other hosts.
+#[allow(dead_code)]
+pub const MOCK_KEYCHAIN_PASSWORD: &[u8] = b"mock_password";
 
 /// `PBKDF2-HMAC-SHA1(password = "peanuts", salt = "saltysalt", iterations = 1)`.
 ///
@@ -122,6 +145,36 @@ pub fn key_for_tag(contents: &[u8], tag: &[u8]) -> Option<CryptoKey> {
     }),
     b"v11" => Some(CryptoKey::Aes128Cbc(derive_key(contents, POSIX_ITERATIONS))),
     _ => None,
+  }
+}
+
+/// The key Apostate seals records with on this host, as `os_crypt_key` file
+/// contents ([`key_for_tag`] turns it into the cipher), or `None` where the OS
+/// holds it and the profile has none yet: Windows before the engine first ran
+/// on the profile. Linux's `v10` records are keyed by PBKDF2 with one round,
+/// which `key_for_tag` reaches through [`CryptoKey::with_fallbacks`].
+pub fn engine_key_material(user_data_dir: &Path) -> Option<Vec<u8>> {
+  #[cfg(target_os = "macos")]
+  {
+    let _ = user_data_dir;
+    Some(MOCK_KEYCHAIN_PASSWORD.to_vec())
+  }
+  #[cfg(target_os = "linux")]
+  {
+    let _ = user_data_dir;
+    Some(POSIX_FALLBACK_PASSWORD.to_vec())
+  }
+  #[cfg(target_os = "windows")]
+  {
+    super::keyring::windows_local_state_key(user_data_dir)
+      .ok()
+      .flatten()
+      .map(|key| key.to_vec())
+  }
+  #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+  {
+    let _ = user_data_dir;
+    None
   }
 }
 
@@ -220,101 +273,113 @@ impl CryptoKey {
   }
 }
 
-/// Wayfern's key for the profile being created.
+/// The key records written into a profile are sealed with, so the engine that
+/// opens the profile can read them.
 pub struct TargetKey {
   key: CryptoKey,
   tag: &'static [u8; 3],
 }
 
 impl TargetKey {
-  /// The tag the host platform's key provider claims.
-  pub const fn host_tag() -> &'static [u8; 3] {
+  /// Apostate's own key on this host ([`engine_key_material`]), or `None` where
+  /// the OS holds it and the profile has none yet.
+  pub fn engine(user_data_dir: &Path) -> Option<Self> {
+    #[cfg(target_os = "macos")]
+    {
+      let _ = user_data_dir;
+      Some(Self {
+        key: CryptoKey::Aes128Cbc(derive_key(MOCK_KEYCHAIN_PASSWORD, MAC_ITERATIONS)),
+        tag: b"v10",
+      })
+    }
     #[cfg(target_os = "linux")]
     {
-      b"v11"
+      let _ = user_data_dir;
+      Some(Self {
+        key: CryptoKey::Aes128Cbc(POSIX_FALLBACK_KEY),
+        tag: b"v10",
+      })
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
-      b"v10"
+      let material = engine_key_material(user_data_dir)?;
+      Some(Self {
+        key: key_for_tag(&material, b"v10")?,
+        tag: b"v10",
+      })
     }
   }
 
-  /// Build the key from the raw `os_crypt_key` file contents: the host's tag,
-  /// keyed by the file's format ([`key_for_tag`]). A key file another OS wrote
-  /// works as well as one minted here, so it is never replaced.
+  /// Whether `stored` already opens under this key: a record sealed for the
+  /// engine, which a re-seal must leave alone.
+  pub fn opens(&self, stored: &[u8]) -> bool {
+    match stored.split_at_checked(3) {
+      Some((tag, body)) => tag == self.tag && self.key.decrypt(body).is_some(),
+      None => false,
+    }
+  }
+
+  /// [`opens`](Self::opens) for a cookie row, which also carries the
+  /// `SHA256(host_key)` prefix the plaintext must start with.
+  pub fn opens_cookie(&self, stored: &[u8], host_key: &str) -> bool {
+    use sha2::{Digest, Sha256};
+    let Some((tag, body)) = stored.split_at_checked(3) else {
+      return false;
+    };
+    if tag != self.tag {
+      return false;
+    }
+    let Some(plain) = self.key.decrypt(body) else {
+      return false;
+    };
+    let expected: [u8; 32] = Sha256::digest(host_key.as_bytes()).into();
+    plain.len() >= 32 && plain[..32] == expected
+  }
+
+  /// The engine's key for a profile that is about to be written into: the
+  /// host's own key where it is fixed, and on Windows, where the OS holds it,
+  /// the key already in `Local State` or a new one put there.
   ///
-  /// Returns `None` only for an empty file.
-  fn from_file_contents(contents: &[u8]) -> Option<Self> {
-    let tag = Self::host_tag();
-    Some(Self {
-      key: key_for_tag(contents, tag)?,
-      tag,
+  /// Writing eagerly (rather than letting the first launch mint it) is
+  /// deliberate: a key the browser cannot persist would live only in memory,
+  /// die with the process, and orphan everything written with it. Failing here
+  /// instead turns that silent data loss into a visible import error.
+  pub fn ensure(user_data_dir: &Path) -> Result<Self, String> {
+    Self::adopting(user_data_dir, &[])
+  }
+
+  /// [`ensure`](Self::ensure) for a profile Wayfern sealed with the key file
+  /// `legacy`. Where the OS holds the engine's key and the profile has none,
+  /// a raw 32-byte legacy key becomes it, so everything Wayfern sealed already
+  /// opens; any other legacy key is replaced by a new one.
+  pub fn adopting(user_data_dir: &Path, legacy: &[u8]) -> Result<Self, String> {
+    if let Some(engine) = Self::engine(user_data_dir) {
+      return Ok(engine);
+    }
+    Self::seed_local_state_key(user_data_dir, legacy)
+  }
+
+  #[cfg(target_os = "windows")]
+  fn seed_local_state_key(user_data_dir: &Path, preferred: &[u8]) -> Result<Self, String> {
+    std::fs::create_dir_all(user_data_dir)
+      .map_err(|e| format!("Failed to create profile directory: {e}"))?;
+    let key: [u8; 32] = match <[u8; 32]>::try_from(preferred) {
+      Ok(raw) => raw,
+      Err(_) => rand::rng().random(),
+    };
+    super::keyring::write_local_state_key(user_data_dir, &key)?;
+    Ok(Self {
+      key: CryptoKey::Aes256Gcm(key),
+      tag: b"v10",
     })
   }
 
-  /// Fresh key material in the host platform's `os_crypt_key` format.
-  fn generate_file_contents() -> Vec<u8> {
-    #[cfg(target_os = "windows")]
-    {
-      // Windows stores the AES-256 key itself, so it must be 32 bytes.
-      let key: [u8; 32] = rand::rng().random();
-      key.to_vec()
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-      // mac/Linux store a *password* that is fed to PBKDF2. Wayfern mints
-      // `base64(16 random bytes)`; match it so the file is indistinguishable
-      // from one the browser wrote itself.
-      let raw: [u8; 16] = rand::rng().random();
-      base64::engine::general_purpose::STANDARD
-        .encode(raw)
-        .into_bytes()
-    }
+  #[cfg(not(target_os = "windows"))]
+  fn seed_local_state_key(_user_data_dir: &Path, _preferred: &[u8]) -> Result<Self, String> {
+    Err("this host has no engine key to seed".to_string())
   }
 
-  /// Read the existing `os_crypt_key`, or mint and persist one.
-  ///
-  /// Writing eagerly at import time — rather than letting the first launch do
-  /// it — is deliberate: a key the browser cannot persist would live only in
-  /// memory, die with the process, and orphan everything written with it.
-  /// Failing here instead turns that silent data loss into a visible import
-  /// error.
-  pub fn ensure(user_data_dir: &Path) -> Result<Self, String> {
-    let key_file = user_data_dir.join(KEY_FILE_NAME);
-
-    // Any non-empty key file keys every tag, whichever OS wrote it, and the
-    // profile's existing records depend on it, so it is reused as it is.
-    if let Ok(existing) = std::fs::read(&key_file) {
-      if let Some(key) = Self::from_file_contents(&existing) {
-        return Ok(key);
-      }
-    }
-
-    std::fs::create_dir_all(user_data_dir)
-      .map_err(|e| format!("Failed to create profile directory: {e}"))?;
-    let contents = Self::generate_file_contents();
-    std::fs::write(&key_file, &contents)
-      .map_err(|e| format!("Failed to write os_crypt_key: {e}"))?;
-
-    #[cfg(unix)]
-    {
-      use std::os::unix::fs::PermissionsExt;
-      let _ = std::fs::set_permissions(&key_file, std::fs::Permissions::from_mode(0o600));
-    }
-
-    // Read back rather than trust the write: a key that did not land is the
-    // one failure mode that silently destroys every secret we are about to
-    // write with it.
-    let written =
-      std::fs::read(&key_file).map_err(|e| format!("Failed to verify os_crypt_key: {e}"))?;
-    if written != contents {
-      return Err("os_crypt_key verification failed after write".to_string());
-    }
-
-    Self::from_file_contents(&contents).ok_or_else(|| "Failed to derive os_crypt_key".to_string())
-  }
-
-  /// Seal a value the way Wayfern will expect to find it: `tag || ciphertext`.
+  /// Seal a value the way the engine expects to find it: `tag || ciphertext`.
   pub fn encrypt(&self, plaintext: &[u8]) -> Option<Vec<u8>> {
     let body = self.key.encrypt(plaintext)?;
     let mut out = Vec::with_capacity(3 + body.len());
@@ -352,6 +417,34 @@ pub struct SourceKeyring {
 impl SourceKeyring {
   pub fn is_empty(&self) -> bool {
     self.v10.is_none() && self.v11.is_none()
+  }
+
+  /// The keys a Wayfern `os_crypt_key` file opens, for each tag it serves.
+  pub fn from_key_file(contents: &[u8]) -> Self {
+    Self {
+      v10: key_for_tag(contents, b"v10"),
+      v11: key_for_tag(contents, b"v11"),
+      ..Default::default()
+    }
+  }
+
+  /// The keys that open what `scheme` sealed: `WAYFERN_SCHEME` (the profile's
+  /// own key file), or the name of the OS whose engine sealed it
+  /// (`std::env::consts::OS`). `key_file` is the profile's `os_crypt_key`,
+  /// which a Windows engine's records also need: its key is the one Donut put
+  /// in `Local State`. `None` when the keys cannot be known here.
+  pub fn sealed_under(scheme: &str, key_file: Option<&[u8]>) -> Option<Self> {
+    let v10 = match scheme {
+      WAYFERN_SCHEME => return key_file.map(Self::from_key_file),
+      "macos" => CryptoKey::Aes128Cbc(derive_key(MOCK_KEYCHAIN_PASSWORD, MAC_ITERATIONS)),
+      "linux" => CryptoKey::Aes128Cbc(POSIX_FALLBACK_KEY),
+      "windows" => CryptoKey::Aes256Gcm(<[u8; GCM_KEY_LEN]>::try_from(key_file?).ok()?),
+      _ => return None,
+    };
+    Some(Self {
+      v10: Some(v10),
+      ..Default::default()
+    })
   }
 
   /// Open one stored value, dispatching on its version tag exactly as

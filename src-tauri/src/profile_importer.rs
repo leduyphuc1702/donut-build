@@ -5,7 +5,6 @@ use std::fs::{self, create_dir_all, File};
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::downloaded_browsers_registry::DownloadedBrowsersRegistry;
 use crate::events;
 use crate::profile::types::{get_host_os, BrowserProfile, SyncMode};
 use crate::profile::ProfileManager;
@@ -328,7 +327,6 @@ struct BrowserSource {
 
 pub struct ProfileImporter {
   base_dirs: BaseDirs,
-  downloaded_browsers_registry: &'static DownloadedBrowsersRegistry,
   profile_manager: &'static ProfileManager,
   wayfern_manager: &'static crate::wayfern_manager::WayfernManager,
 }
@@ -337,7 +335,6 @@ impl ProfileImporter {
   fn new() -> Self {
     Self {
       base_dirs: BaseDirs::new().expect("Failed to get base directories"),
-      downloaded_browsers_registry: DownloadedBrowsersRegistry::instance(),
       profile_manager: ProfileManager::instance(),
       wayfern_manager: crate::wayfern_manager::WayfernManager::instance(),
     }
@@ -1045,28 +1042,16 @@ impl ProfileImporter {
       }
     };
 
-    let version = match self.get_default_version_for_browser(mapped) {
-      Ok(version) => version,
-      Err(e) => {
-        let _ = fs::remove_dir_all(&new_profile_dir);
-        return Err(e);
-      }
-    };
+    let version = crate::apostate::CHROMIUM.to_string();
 
     let final_wayfern_config = if mapped == "wayfern" {
       let mut config = wayfern_config.unwrap_or_default();
       config.sanitize_launch_args().await;
-      config.engine = crate::apostate::engine_for_new_profile(config.os.as_deref());
-
-      // A caller-supplied device is a set of explicit field choices, not a
-      let supplied_device = if crate::wayfern_manager::supports_wayfern_152(&version) {
-        config
-          .fingerprint
-          .take()
-          .and_then(|json| crate::wayfern_manager::WayfernManager::fingerprint_object(&json))
-      } else {
-        None
-      };
+      if let Err(e) = crate::apostate::refuse_mobile(config.os.as_deref()) {
+        let _ = fs::remove_dir_all(&new_profile_dir);
+        return Err(e.into());
+      }
+      crate::apostate::stamp_engine(&mut config);
 
       if let Some(ref proxy_id_val) = proxy_id {
         if let Some(proxy_settings) = PROXY_MANAGER.get_proxy_settings_by_id(proxy_id_val) {
@@ -1076,7 +1061,7 @@ impl ProfileImporter {
         }
       }
 
-      if config.fingerprint.is_none() && config.identity_id.is_none() {
+      if config.fingerprint.is_none() {
         let temp_profile = BrowserProfile {
           id: profile_id,
           name: new_profile_name.to_string(),
@@ -1122,14 +1107,8 @@ impl ProfileImporter {
           // geo_proxy_signature is intentionally left unset here: the first
           // launch's signature-mismatch refresh verifies the location either way.
           Ok(generated) => {
-            config.identity_id = generated.identity_id;
             config.location = generated.location;
-            config.identity_baseline = None;
-            config.fingerprint = if config.identity_id.is_some() {
-              None
-            } else {
-              Some(generated.fingerprint)
-            };
+            config.fingerprint = Some(generated.fingerprint);
           }
           Err(e) => {
             let _ = fs::remove_dir_all(&new_profile_dir);
@@ -1142,17 +1121,6 @@ impl ProfileImporter {
               .into(),
             );
           }
-        }
-      }
-
-      if let Some(object) = supplied_device {
-        let overrides =
-          crate::wayfern_manager::WayfernManager::overrides_from_explicit_fingerprint(&object);
-        if !overrides.is_empty() {
-          config.identity_overrides = serde_json::to_string(&overrides).ok();
-        }
-        if let Some(location) = crate::wayfern_manager::WayfernManager::location_of(&object) {
-          config.location = Some(location);
         }
       }
 
@@ -1227,30 +1195,6 @@ impl ProfileImporter {
     }
 
     Ok((profile, report))
-  }
-
-  fn get_default_version_for_browser(
-    &self,
-    browser_type: &str,
-  ) -> Result<String, Box<dyn std::error::Error>> {
-    let downloaded_versions = self
-      .downloaded_browsers_registry
-      .get_downloaded_versions(browser_type);
-    let mut downloaded_versions = downloaded_versions;
-    downloaded_versions.sort_by(|a, b| crate::api_client::compare_versions(b, a));
-
-    if let Some(version) = downloaded_versions.first() {
-      return Ok(version.clone());
-    }
-
-    Err(
-      serde_json::json!({
-        "code": "BROWSER_NOT_DOWNLOADED",
-        "params": { "browser": self.get_browser_display_name(browser_type) }
-      })
-      .to_string()
-      .into(),
-    )
   }
 
   pub fn copy_directory_recursive(
@@ -1472,25 +1416,6 @@ mod tests {
     assert!(dest_dir.join("Preferences").exists());
     assert!(fs::symlink_metadata(dest_dir.join("SingletonLock")).is_err());
     assert!(!dest_dir.join("linked").exists());
-  }
-
-  #[test]
-  fn test_get_default_version_for_browser_no_versions() {
-    let (importer, _temp_dir) = create_test_profile_importer();
-
-    // Use a browser name that is guaranteed to have no downloaded versions,
-    // since the global registry singleton may contain real data from the system.
-    let result = importer.get_default_version_for_browser("nonexistent_browser_xyz");
-    assert!(
-      result.is_err(),
-      "Should fail when no versions are available"
-    );
-
-    let error_msg = result.unwrap_err().to_string();
-    assert!(
-      error_msg.contains("BROWSER_NOT_DOWNLOADED"),
-      "Error should carry the BROWSER_NOT_DOWNLOADED code"
-    );
   }
 
   #[test]

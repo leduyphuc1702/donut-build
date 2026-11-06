@@ -9,7 +9,7 @@ import { appFromEnvironment } from "../lib/app.mjs";
 import { CdpClient } from "../lib/cdp.mjs";
 import {
   extensionZipBase64,
-  prepareWayfern,
+  prepareEngine,
   wireGuardFixture,
 } from "../lib/fixtures.mjs";
 
@@ -455,24 +455,17 @@ test("VLESS Reality persists, imports, routes through Xray-core, records traffic
   assert.ok(vlessUri, "The network harness must provide a VLESS Reality URI");
   assert.ok(accessLog, "The network harness must provide an Xray access log");
 
-  const app = appFromEnvironment("network-xray-reality", {
-    seedVersionCache: false,
-    wayfernTermsAccepted: false,
-  });
+  const app = appFromEnvironment("network-xray-reality");
   let apiPort;
   let activeCdp;
   let profile;
   let worker;
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    if (!(await app.invoke("check_wayfern_terms_accepted"))) {
-      await app.invoke("accept_wayfern_terms");
-      await app.restart();
-    }
 
     const invalidUri = vlessUri.replace("type=tcp", "type=kcp");
     const invalidCreate = await app.invokeError("create_stored_proxy", {
@@ -757,23 +750,16 @@ test("a profile DNS server resolves through the proxy, which sees addresses only
     "HTTP",
   );
 
-  const app = appFromEnvironment("network-dns-server", {
-    seedVersionCache: false,
-    wayfernTermsAccepted: false,
-  });
+  const app = appFromEnvironment("network-dns-server");
   let apiPort;
   let activeCdp;
   let profile;
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    if (!(await app.invoke("check_wayfern_terms_accepted"))) {
-      await app.invoke("accept_wayfern_terms");
-      await app.restart();
-    }
 
     const vless = await app.invoke("create_stored_proxy", {
       name: "DNS VLESS",
@@ -949,23 +935,16 @@ test("visible UI creates and assigns profiles, groups, proxies, VPNs, extensions
         "base64",
       ).toString("utf8")
     : null;
-  const app = appFromEnvironment("network-visible-ui", {
-    seedVersionCache: false,
-    wayfernTermsAccepted: false,
-  });
+  const app = appFromEnvironment("network-visible-ui");
   let apiPort;
   let activeCdp;
   let activeVpnId;
   try {
-    const prepared = await prepareWayfern(
+    const prepared = await prepareEngine(
       app,
       process.env.DONUT_E2E_PROJECT_ROOT,
     );
     if (!app.session) await app.start();
-    if (!(await app.invoke("check_wayfern_terms_accepted"))) {
-      await app.invoke("accept_wayfern_terms");
-      await app.restart();
-    }
     assert.equal(
       await app.visibleTextIncludes("Welcome to Donut Browser"),
       false,
@@ -1143,7 +1122,7 @@ test("visible UI creates and assigns profiles, groups, proxies, VPNs, extensions
         const value = document.body?.innerText?.trim() ?? "";
         return /^[0-9a-f:.]+$/i.test(value) ? value : false;
       })()`,
-      { timeoutMs: 30_000, description: "Wayfern residential proxy exit IP" },
+      { timeoutMs: 30_000, description: "browser residential proxy exit IP" },
     );
     assert.ok(isIP(browserExitIp));
     await stopProfile(app, base, saved.api_token, profile.id, activeCdp);
@@ -1171,7 +1150,7 @@ test("visible UI creates and assigns profiles, groups, proxies, VPNs, extensions
       activeCdp = tunneled.cdp;
       await app.waitFor(wireGuardTargetWasReached, {
         timeoutMs: 30_000,
-        description: "Wayfern GET through local WireGuard peer",
+        description: "browser GET through local WireGuard peer",
       });
       await stopProfile(app, base, saved.api_token, profile.id, activeCdp);
       activeCdp = null;

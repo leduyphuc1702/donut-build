@@ -95,9 +95,7 @@
       "arrowDown": "Mũi tên xuống",
       "tab": "Tab"
     },
-    "errors": {
-      "unknown": "Đã xảy ra lỗi không xác định"
-    },
+    "errors": {},
     "window": {
       "minimize": "Thu nhỏ",
       "maximize": "Phóng to",
@@ -199,9 +197,6 @@
     },
     "advanced": {
       "title": "Nâng cao",
-      "clearCache": "Xóa toàn bộ bộ nhớ đệm phiên bản",
-      "clearCacheDescription": "Xóa tất cả dữ liệu phiên bản trình duyệt đã lưu và làm mới từ nguồn. Thao tác này sẽ buộc tải lại thông tin phiên bản cho tất cả trình duyệt.",
-      "clearCacheFailed": "Xóa bộ nhớ đệm thất bại",
       "copyLogs": "Sao chép nhật ký",
       "openLogDir": "Mở thư mục nhật ký",
       "copyLogsSuccess": "Đã sao chép nhật ký vào clipboard",
@@ -478,20 +473,10 @@
       "removePassword": "Xóa mật khẩu"
     },
     "synchronizer": {
-      "launchWithSync": "Khởi chạy với trình đồng bộ",
       "stopLeader": "Dừng hồ sơ này và tất cả hồ sơ đi theo",
       "stopFollower": "Đang đi theo hành động của {{leaderName}}",
       "desyncedTooltip": "Đồng bộ thất bại tại {{url}}",
-      "paidFeature": "Trình đồng bộ là tính năng trả phí",
-      "wayfernOnly": "Chỉ hồ sơ Wayfern mới có thể đồng bộ",
-      "selectFollowers": "Chọn hồ sơ đi theo",
-      "selectFollowersDesc": "Chọn các hồ sơ sẽ phản chiếu hành động của hồ sơ dẫn đầu. Chỉ hồ sơ Wayfern đã dừng mới có thể chọn.",
       "leader": "Dẫn đầu",
-      "follower": "Đi theo",
-      "startSession": "Bắt đầu phiên đồng bộ",
-      "noFollowers": "Chọn ít nhất một hồ sơ đi theo",
-      "flakyBadge": "KHÔNG ỔN ĐỊNH",
-      "flakyTooltip": "Hồ sơ này có độ phân giải màn hình khác với hồ sơ dẫn đầu. Bố cục trang có thể khác, khiến nhấp chuột và tương tác có thể sai lệch.",
       "pauseMirroring": "Tạm dừng phản chiếu",
       "resumeMirroring": "Tiếp tục phản chiếu",
       "pausedNote": "Các hồ sơ theo sau không sao chép hồ sơ dẫn nữa. Việc bạn làm bây giờ ở hồ sơ dẫn sẽ chỉ ở đó.",
@@ -594,7 +579,6 @@
     "antiDetect": {
       "title": "Trình duyệt chống phát hiện",
       "description": "Chọn trình duyệt có khả năng chống phát hiện",
-      "chromium": "Wayfern",
       "badge": "Trình duyệt chống phát hiện"
     },
     "regular": {
@@ -617,26 +601,11 @@
       "label": "URL Hook khởi chạy",
       "placeholder": "https://example.com/hooks/profile-launch"
     },
-    "version": {
-      "fetching": "Đang lấy danh sách phiên bản...",
-      "fetchError": "Không thể lấy danh sách phiên bản trình duyệt. Vui lòng kiểm tra kết nối mạng và thử lại.",
-      "needsDownload": "Phiên bản {{browser}} ({{version}}) cần được tải xuống",
-      "available": "Phiên bản {{browser}} ({{version}}) đã sẵn sàng",
-      "downloading": "Đang tải xuống {{browser}} phiên bản ({{version}})...",
-      "latestNeedsDownload": "Phiên bản mới nhất ({{version}}) cần được tải xuống",
-      "latestAvailable": "Phiên bản mới nhất ({{version}}) đã sẵn sàng",
-      "latestDownloading": "Đang tải xuống phiên bản ({{version}})...",
-      "upgradeAvailable": "Đã có phiên bản mới hơn ({{version}}) của {{browser}}."
-    },
     "chromiumLabel": "Chromium",
-    "chromiumSubtitle": "Dựa trên Wayfern",
-    "platformUnavailable": "{{browser}} chưa khả dụng trên nền tảng của bạn.",
     "passwordProtect": {
       "label": "Bảo vệ hồ sơ bằng mật khẩu",
       "description": "Mã hóa dữ liệu hồ sơ trên ổ đĩa. Yêu cầu mật khẩu để khởi chạy."
     },
-    "downloadingSubtitle": "Đang tải xuống…",
-    "browsersDownloading": "Trình duyệt vẫn đang được tải xuống. Việc tạo hồ sơ sẽ khả dụng khi quá trình tải hoàn tất.",
     "advancedOptions": "Tùy chọn nâng cao",
     "moreOptions": "Tùy chọn khác",
     "hourlyLimit": {
@@ -646,6 +615,9 @@
     },
     "group": {
       "notFound": "Không tìm thấy nhóm."
+    },
+    "engine": {
+      "preparing": "Công cụ trình duyệt vẫn đang được tải. Bạn có thể tạo hồ sơ ngay bây giờ; hồ sơ sẽ mở ngay khi công cụ sẵn sàng."
     }
   },
   "deleteDialog": {
@@ -1079,7 +1051,6 @@
     "apiToggleFailed": "Bật/tắt máy chủ API thất bại",
     "apiStartFailed": "Khởi động máy chủ API thất bại",
     "tokenCopied": "Đã sao chép token",
-    "mcpAcceptTermsFirst": "(Chấp nhận điều khoản Wayfern trong Cài đặt trước)",
     "apiRunningOn": "Đang chạy trên",
     "apiExampleRequest": "Ví dụ yêu cầu",
     "examples": {
@@ -1195,38 +1166,6 @@
     "error": "Nhập profile thất bại"
   },
   "config": {
-    "wayfern": {
-      "title": "Cấu hình Wayfern",
-      "fingerprint": {
-        "title": "Vân tay",
-        "randomize": "Tạo ngẫu nhiên khi khởi chạy",
-        "randomizeDescription": "Tạo vân tay mới mỗi khi khởi chạy trình duyệt.",
-        "platformPlaceholder": "ví dụ: Win32, MacIntel, Linux x86_64",
-        "timezoneOffsetPlaceholder": "ví dụ: 300 cho EST (UTC-5)",
-        "webglRendererPlaceholder": "ví dụ: Intel(R) HD Graphics"
-      },
-      "os": {
-        "title": "Hệ điều hành",
-        "description": "Hệ điều hành mô phỏng để tạo vân tay.",
-        "windows": "Windows",
-        "macos": "macOS",
-        "linux": "Linux",
-        "android": "Android",
-        "ios": "iOS"
-      },
-      "screen": {
-        "title": "Kích thước màn hình",
-        "minWidth": "Chiều rộng tối thiểu",
-        "maxWidth": "Chiều rộng tối đa",
-        "minHeight": "Chiều cao tối thiểu",
-        "maxHeight": "Chiều cao tối đa"
-      },
-      "blocking": {
-        "title": "Chặn",
-        "webrtc": "Chặn WebRTC",
-        "webgl": "Chặn WebGL"
-      }
-    },
     "shared": {
       "browserBehavior": "Hành vi trình duyệt",
       "allowAddonsOpenTabs": "Cho phép tiện ích trình duyệt tự động mở tab mới"
@@ -1249,7 +1188,7 @@
       "sourcePlaceholder": "Chọn profile để sao chép cookie từ",
       "running": "(đang chạy)",
       "targetProfiles": "Profile đích ({{count}})",
-      "noOtherTargets": "Chưa chọn profile Wayfern nào khác",
+      "noOtherTargets": "Chưa chọn hồ sơ nào khác",
       "selectSourceFirst": "Hãy chọn profile nguồn trước",
       "selectionStatus": "(đã chọn {{selected}}/{{total}})",
       "searchPlaceholder": "Tìm kiếm tên miền hoặc cookie...",
@@ -1470,7 +1409,7 @@
     "renameProfileFailed": "Đổi tên profile thất bại: {{error}}",
     "killBrowserFailed": "Dừng trình duyệt thất bại: {{error}}",
     "deleteSelectedProfilesFailed": "Xóa các profile đã chọn thất bại: {{error}}",
-    "cookieCopyUnsupportedBrowser": "Sao chép cookie chỉ hoạt động với profile Wayfern",
+    "cookieCopyUnsupportedBrowser": "Sao chép cookie chỉ hoạt động với hồ sơ Apostate",
     "updateSyncSettingsFailed": "Cập nhật cài đặt đồng bộ thất bại",
     "cloneProfileFailed": "Nhân bản profile thất bại: {{error}}",
     "loadSupportedBrowsersFailed": "Tải danh sách trình duyệt hỗ trợ thất bại",
@@ -1486,13 +1425,9 @@
     "themeNotFound": "Không tìm thấy chủ đề Tokyo Night",
     "setProfilePasswordFailed": "Đặt mật khẩu profile thất bại: {{error}}"
   },
-  "browser": {
-    "wayfern": "Wayfern"
-  },
+  "browser": {},
   "fingerprint": {
-    "crossOsWarning": "Giả mạo vân tay cho hệ điều hành khác kém tin cậy hơn vì không thể mô phỏng hoàn hảo tất cả thành phần nền tảng. Hãy sử dụng thận trọng.",
-    "crossOsApostateWarning": "Hồ sơ này mở bằng engine mã nguồn mở Apostate, được tải xuống ở lần đầu cần dùng. Cần có VPN hoặc proxy vì kết nối không được xuất phát từ máy tính này. Trên Apple silicon, hồ sơ hiện ra như một laptop Windows chạy ARM.",
-    "crossOsLimitations": "Giả mạo vân tay xuyên hệ điều hành có giới hạn. Các API cấp hệ thống vẫn có thể phản ánh hệ điều hành thực tế của bạn, và một số tính năng có thể bị giảm hiệu suất.",
+    "crossOsApostateWarning": "Hồ sơ này mở bằng engine mã nguồn mở Apostate, do Donut tự tải xuống. Có thể mở mà không cần proxy hay VPN, nhưng nếu không đi qua đường VPN WireGuard (hoặc proxy), tầng mạng (TCP/IP) vẫn lộ hệ điều hành của máy tính này và trang web có thể đối chiếu với vân tay trình duyệt. Trên Apple silicon, hồ sơ hiện ra như một laptop Windows chạy ARM.",
     "osLabel": "Vân tay hệ điều hành",
     "selectOSPlaceholder": "Chọn hệ điều hành",
     "generateRandomOnLaunch": "Tạo vân tay ngẫu nhiên mỗi lần khởi chạy",
@@ -1764,7 +1699,7 @@
       "unlockedDescription": "Dữ liệu vẫn được giải mã cho đến khi bạn khóa lại."
     },
     "fingerprint": {
-      "notSupported": "Chỉnh sửa vân tay chỉ khả dụng cho profile Wayfern.",
+      "notSupported": "Chỉnh sửa vân tay chỉ khả dụng cho hồ sơ Apostate.",
       "lockedTitle": "Xem và chỉnh sửa vân tay là tính năng Pro",
       "lockedDescription": "Thông tin thiết bị của bạn được bảo vệ trong mọi profile. Việc xem và chỉnh sửa vân tay của profile yêu cầu gói trả phí đang hoạt động.",
       "customValuesKept": "Các giá trị vân tay tùy chỉnh của bạn được giữ lại. Chúng áp dụng khi tài khoản có gói Pro đang hoạt động."
@@ -2320,16 +2255,6 @@
       "unavailable": "Profile này hiện không thể mở liên kết."
     }
   },
-  "wayfernTerms": {
-    "title": "Điều khoản và điều kiện Wayfern",
-    "description": "Trước khi sử dụng Donut Browser, bạn phải đọc và đồng ý với Điều khoản và Điều kiện của Wayfern.",
-    "reviewLabel": "Vui lòng xem lại Điều khoản và Điều kiện tại:",
-    "agreeNotice": "Bằng cách nhấn \"Tôi chấp nhận\", bạn đồng ý bị ràng buộc bởi các điều khoản này.",
-    "acceptButton": "Tôi chấp nhận",
-    "acceptSuccess": "Chấp nhận điều khoản thành công",
-    "acceptFailed": "Chấp nhận điều khoản thất bại",
-    "tryAgain": "Vui lòng thử lại"
-  },
   "commercialTrial": {
     "title": "Thời gian dùng thử thương mại đã hết",
     "description": "Thời gian dùng thử thương mại 2 tuần của bạn đã kết thúc.",
@@ -2521,43 +2446,13 @@
   },
   "browserDownload": {
     "toast": {
-      "fetchVersionsFailed": "Tải phiên bản {{browser}} thất bại",
-      "foundNewVersions": "Tìm thấy {{count}} phiên bản {{browser}} mới!",
-      "totalAvailableVersions": "Tổng số phiên bản: {{count}}",
       "downloadFailed": "Tải xuống {{browser}} {{version}} thất bại",
       "calculating": "đang tính...",
-      "extractionFailed": "{{browser}} {{version}}: giải nén thất bại",
-      "extractionFailedDescription": "Tệp hỏng đã bị xóa. Sẽ được tải lại trong lần thử tiếp theo.",
       "extracting": "Đang giải nén tệp trình duyệt... Vui lòng không đóng ứng dụng.",
       "verifying": "Đang xác minh tệp trình duyệt...",
-      "downloadingRolling": "Đang tải bản phát hành rolling...",
       "geoipDownloading": "Đang tải cơ sở dữ liệu GeoIP",
       "geoipDownloaded": "Đã tải cơ sở dữ liệu GeoIP thành công!",
       "downloadFailedDescription": "Không thể hoàn tất tải xuống. Hãy kiểm tra kết nối và thử lại."
-    }
-  },
-  "versionUpdater": {
-    "toast": {
-      "alreadyAvailable": "{{browser}} {{version}} đã có sẵn",
-      "updatingProfiles": "Đang cập nhật cấu hình profile...",
-      "updateCompleted": "Cập nhật {{browser}} hoàn tất",
-      "singleProfileUpdated": "Profile \"{{name}}\" đã được cập nhật lên phiên bản {{version}}. Bạn có thể khởi chạy trình duyệt với phiên bản mới nhất.",
-      "multipleProfilesUpdated": "{{count}} profile đã được cập nhật lên phiên bản {{version}}. Bạn có thể khởi chạy trình duyệt với phiên bản mới nhất.",
-      "versionAvailable": "Phiên bản {{version}} hiện đã có sẵn. Các profile đang chạy sẽ sử dụng phiên bản mới khi khởi động lại.",
-      "autoUpdateFailed": "Tự động cập nhật {{browser}} thất bại",
-      "updateWithErrors": "Cập nhật hoàn tất với một số lỗi",
-      "updateWithErrorsDescription": "Tìm thấy {{newVersions}} phiên bản mới, {{failedUpdates}} trình duyệt cập nhật thất bại",
-      "updateSuccess": "Cập nhật phiên bản trình duyệt thành công",
-      "updateSuccessDescription": "Tìm thấy {{newVersions}} phiên bản mới trên {{successfulUpdates}} trình duyệt. Tự động tải xuống sẽ bắt đầu sớm.",
-      "upToDate": "Không tìm thấy phiên bản trình duyệt mới",
-      "upToDateDescription": "Tất cả phiên bản trình duyệt đều đã cập nhật",
-      "updateAllFailed": "Cập nhật phiên bản trình duyệt thất bại",
-      "updateStarted": "Đã bắt đầu cập nhật {{browser}}",
-      "updateStartedDescription": "Quá trình tải phiên bản {{version}} sẽ sớm bắt đầu. Việc khởi chạy trình duyệt bị tắt cho đến khi cập nhật hoàn tất.",
-      "downloadStarting": "Đang bắt đầu tải {{browser}} {{version}}",
-      "downloadProgressBelow": "Tiến trình tải sẽ hiển thị bên dưới...",
-      "autoDownloadStarted": "Đang tự động tải {{browser}} {{version}}. Tiến trình sẽ hiển thị bên dưới.",
-      "lookingForUpdates": "Đang tìm bản cập nhật cho {{browser}}"
     }
   },
   "profilePassword": {
@@ -2664,17 +2559,12 @@
     "proxyNotWorking": "Proxy đã chọn không hoạt động, nên profile chưa được tạo.",
     "proxyPaymentRequired": "Proxy đã chọn yêu cầu thanh toán (402) — gói đăng ký của nó có thể đã hết hạn — nên profile chưa được tạo.",
     "vpnNotWorking": "VPN đã chọn không hoạt động, nên profile chưa được tạo.",
-    "camoufoxImportDeprecated": "Việc nhập loại hồ sơ này không còn được hỗ trợ. Vui lòng sử dụng Wayfern thay thế.",
     "updateChecksumsUnavailable": "Không thể xác minh bản cập nhật {{version}} vì không thể tải tệp checksum. Bản cập nhật chưa được cài đặt; sẽ thử lại sau.",
     "updateChecksumMismatch": "Tệp cập nhật đã tải xuống {{file}} không vượt qua kiểm tra checksum và đã bị loại bỏ. Vui lòng thử lại.",
-    "browserChecksumUnavailable": "Không thể xác minh {{browser}} {{version}} vì không thể tải tệp checksum. Quá trình tải xuống đã dừng; sẽ thử lại sau.",
-    "browserChecksumMismatch": "Kho lưu trữ {{browser}} {{version}} đã tải xuống không vượt qua kiểm tra checksum và đã bị loại bỏ. Vui lòng thử lại.",
     "nameCannotBeEmpty": "Tên không được để trống",
-    "wayfernVersionNotAvailable": "Phiên bản Wayfern {{requested}} không có sẵn để tải xuống. Phiên bản hiện tại là {{current}}.",
     "profileNameExists": "Hồ sơ có tên \"{{name}}\" đã tồn tại",
     "importSourceNotFound": "Đường dẫn nguồn không tồn tại",
     "importNoItems": "Chưa chọn mục nào để nhập",
-    "browserNotDownloaded": "Không có phiên bản {{browser}} nào đã tải xuống. Hãy tải xuống trước, sau đó thử nhập lại.",
     "archiveExtractionFailed": "Không thể giải nén tệp: {{detail}}",
     "unsupportedArchiveFormat": "Định dạng tệp nén không được hỗ trợ. Chỉ hỗ trợ tệp ZIP.",
     "clearOnCloseUnavailable": "Tính năng xóa khi đóng không khả dụng với hồ sơ tạm thời hoặc hồ sơ được bảo vệ bằng mật khẩu.",
@@ -2686,11 +2576,11 @@
     "fingerprintMatchFailed": "Không thể khớp vân tay với proxy.",
     "proxySidecarVersionMismatch": "Một số tệp Donut Browser thuộc các phiên bản khác nhau. Hãy cài đặt lại bản cập nhật mới nhất; hồ sơ của bạn vẫn được giữ an toàn.",
     "proxySidecarNotResponding": "Trình trợ giúp proxy của Donut (donut-proxy) không hoàn tất trong {{seconds}} giây. Có thể phần mềm bảo mật đang giữ nó: hãy cho phép donut-proxy trong phần mềm diệt virus rồi thử lại.",
-    "wayfernNotResponding": "Wayfern đã khởi động nhưng không phản hồi trong {{seconds}} giây. Có thể phần mềm bảo mật đang giữ nó, hoặc nó không mở được cửa sổ. Hãy cho phép Wayfern trong phần mềm diệt virus rồi thử lại.",
+    "wayfernNotResponding": "Trình duyệt đã khởi động nhưng không phản hồi trong {{seconds}} giây. Có thể phần mềm bảo mật đang giữ nó, hoặc nó không mở được cửa sổ. Hãy cho phép Apostate trong phần mềm diệt virus rồi thử lại.",
     "updateProfilesRunning": "Hãy dừng tất cả hồ sơ đang chạy trước khi cài đặt bản cập nhật.",
     "updatePreparationFailed": "Donut Browser không thể dừng an toàn một tiến trình mạng chạy nền. Hãy khởi động lại máy tính rồi thử cập nhật lại.",
     "portableUpdateFailed": "Donut Browser không thể thay thế các tệp trong thư mục di động và giữ phiên bản hiện tại. Hãy đóng các chương trình đang dùng tệp trong thư mục đó, rồi khởi động lại lần nữa.",
-    "wayfernTermsRequired": "Hãy chấp nhận Điều khoản và Điều kiện của Wayfern để sử dụng Wayfern.",
+    "wayfernTermsRequired": "Công cụ trình duyệt không thể khởi động cho đến khi điều khoản của nó được chấp nhận.",
     "apiPortUnavailable": "Máy chủ API không tìm thấy cổng khả dụng.",
     "mcpAgentUnknown": "Ứng dụng MCP này không được hỗ trợ.",
     "mcpAgentInstallFailed": "Không thể thêm Donut Browser vào ứng dụng MCP: {{detail}}",
@@ -2740,7 +2630,8 @@
     "profileLockedElsewhere": "Hồ sơ này đang được sử dụng trên thiết bị khác.",
     "profileLockUnavailable": "Không thể kiểm tra hồ sơ này có đang được dùng ở nơi khác hay không. Hãy kiểm tra kết nối và thử lại.",
     "fingerprintExitMismatch": "Nút thoát của proxy không khớp với dấu vân tay của hồ sơ này.",
-    "fingerprintHostOsMismatch": "Hồ sơ này khai {{claimed}}, nhưng Donut đang chạy trên {{host}}. Hãy mở nó trên máy hoặc máy ảo {{claimed}}.",
+    "fingerprintHostOsMismatch": "Hồ sơ này khai {{claimed}} và Donut đang chạy trên {{host}}, nhưng proxy hoặc VPN của hồ sơ không khả dụng. Nếu thiếu nó, kết nối sẽ xuất phát từ máy tính này và lộ {{host}}. Hãy sửa hoặc gỡ proxy/VPN rồi mở lại.",
+    "fingerprintMobileUnsupported": "Donut không còn mở hồ sơ khai là điện thoại hoặc máy tính bảng (Android, iOS). Hãy chọn Windows, macOS hoặc Linux.",
     "launchConsentExpired": "Xác nhận đó không còn hiệu lực. Hãy thử khởi chạy lại.",
     "vpnWorkerStartFailed": "Không thể khởi động kết nối VPN: {{detail}}",
     "exitProbeFailed": "Không thể kết nối tới nút thoát của proxy để kiểm tra vị trí.",
@@ -2758,7 +2649,7 @@
       "parameter": "Liên kết chứa một tùy chọn mà Donut không hỗ trợ.",
       "malformed": "Liên kết chia sẻ không hợp lệ."
     },
-    "camoufoxRemoved": "Camoufox không còn được hỗ trợ. Hãy tạo lại hồ sơ này bằng Wayfern.",
+    "camoufoxRemoved": "Camoufox không còn được hỗ trợ. Hãy tạo lại hồ sơ này; nó sẽ chạy trên công cụ Apostate.",
     "noE2ePasswordSet": "Chưa đặt mật khẩu mã hóa đầu cuối. Hãy đặt trước khi đồng bộ dữ liệu đã mã hóa.",
     "importSourceNotChromium": "Thư mục này không phải hồ sơ trình duyệt Chromium",
     "importSourceNotChromiumNamed": "Không thể nhập hồ sơ {{family}}; chỉ hỗ trợ các trình duyệt nền Chromium",
@@ -2788,7 +2679,7 @@
     "profileImportUnsafeArchive": "Tệp này cố ghi ra ngoài thư mục hồ sơ nên đã bị từ chối.",
     "recordingAlreadyRunning": "Đã có một bản ghi đang chạy. Hãy dừng nó trước khi bắt đầu bản mới.",
     "profileNotRunning": "Trình duyệt của hồ sơ này chưa chạy. Hãy khởi động nó trước.",
-    "wayfern152Required": "Ghi lại cần Wayfern 152 trở lên. Hãy cập nhật trình duyệt cho hồ sơ này.",
+    "wayfern152Required": "Công cụ Apostate không hỗ trợ ghi lại.",
     "recordingFailed": "Không thể bắt đầu ghi. {{detail}}",
     "mcpRemoteRequiresSignIn": "Đăng nhập tài khoản Donut trước khi bật điều khiển từ xa.",
     "mcpRemoteUnauthorized": "Donut cloud đã từ chối thông tin xác thực của thiết bị này. Hãy đăng xuất rồi đăng nhập lại.",
@@ -2971,7 +2862,7 @@
     "agentNotEntitled": "Tác tử không khả dụng cho tài khoản này.",
     "noCredits": "Tác tử đã hết tín dụng.",
     "taskBudget": "Tác vụ đã chạm giới hạn tín dụng.",
-    "agentUnsupported": "Phiên bản trình duyệt này không chạy được tác tử. Hãy cập nhật Wayfern.",
+    "agentUnsupported": "Công cụ Apostate không chạy được tác tử.",
     "agentBusy": "Hồ sơ này đang chạy một tác vụ.",
     "agentTokenRequired": "Tác tử không đăng nhập được. Hãy thử lại.",
     "agentEngineFailed": "Tác tử không làm được việc đó.",
@@ -3005,7 +2896,7 @@
     "pasteTypingFailed": "Không gõ được: {{detail}}",
     "profileStillSyncing": "Hồ sơ này vẫn đang đồng bộ. Hãy thử lại sau ít phút.",
     "cloudApiUrlInvalid": "Nhập địa chỉ http:// hoặc https:// đầy đủ.",
-    "cookieBotRequiresWayfern": "Cookie Bot cục bộ chỉ điều khiển được hồ sơ Wayfern vì nó dùng kết nối DevTools của trình duyệt."
+    "cookieBotRequiresWayfern": "Cookie Bot cục bộ chỉ điều khiển được hồ sơ Apostate vì nó dùng kết nối DevTools của trình duyệt."
   },
   "rail": {
     "profiles": "Profile",
@@ -3265,7 +3156,7 @@
     "steps": {
       "createProfile": {
         "title": "Tạo hồ sơ đầu tiên của bạn",
-        "content": "Nhấn vào đây để tạo hồ sơ đầu tiên của bạn. Chọn Wayfern làm trình duyệt — Chromium được khuyến nghị, có bảo vệ vân tay."
+        "content": "Nhấn vào đây để tạo hồ sơ đầu tiên của bạn. Donut tự tải công cụ trình duyệt, nên bạn có thể bắt đầu ngay."
       },
       "dnsBlocking": {
         "title": "Chặn DNS",
@@ -3296,25 +3187,6 @@
       "grant": "Cho phép truy cập",
       "requesting": "Đang yêu cầu…"
     },
-    "ready": {
-      "title": "Đang thiết lập",
-      "descDownloading": "Đang tải trình duyệt đầu tiên của bạn (Wayfern). Quá trình thiết lập một lần này chạy ngầm — vui lòng chờ.",
-      "descReady": "Trình duyệt của bạn đã sẵn sàng. Hãy tạo hồ sơ đầu tiên của bạn.",
-      "cta": "Tạo hồ sơ đầu tiên của tôi",
-      "downloading": "Đang tải xuống…",
-      "extracting": "Đang giải nén…",
-      "stats": "{{downloaded}} trên {{total}}",
-      "speed": "{{speed}}/giây",
-      "timeLeft": "còn {{time}}",
-      "descExtracting": "Đang giải nén trình duyệt của bạn. Quá trình thiết lập một lần này chạy ngầm — vui lòng chờ.",
-      "almostFinished": "Sắp hoàn tất…",
-      "errorTitle": "Thiết lập thất bại",
-      "errorDownload": "Không thể tải {{browser}}. Kiểm tra kết nối và thử lại.",
-      "errorExtraction": "Không thể giải nén {{browser}}. Vui lòng thử lại.",
-      "errorGeneric": "Đã xảy ra lỗi khi thiết lập {{browser}}. Vui lòng thử lại.",
-      "retry": "Thử lại",
-      "proxyHint": "Nếu mạng của bạn chặn máy chủ của Donut, hãy nhập proxy cho Donut rồi thử lại."
-    },
     "features": {
       "title": "Tính năng",
       "items": {
@@ -3340,10 +3212,6 @@
     },
     "progress": "Tiến độ thiết lập"
   },
-  "wayfernBlocked": {
-    "title": "Không phải thiết bị chính",
-    "description": "Tự động hóa trình duyệt và hồ sơ cho hệ điều hành khác chỉ chạy trên thiết bị chính của bạn. Hãy đăng xuất Donut Browser trên các máy tính khác, rồi thử lại."
-  },
   "profileGenerationLimit": {
     "title": "Đã đạt giới hạn hồ sơ mỗi giờ",
     "description": "Bạn đã đạt giới hạn hồ sơ mới mỗi giờ của gói hiện tại. Việc tạo sẽ tiếp tục khi thời gian trôi qua, tài khoản của bạn không bị khóa."
@@ -3355,9 +3223,7 @@
     "invalidFingerprintDescription": "Cấu hình vân tay chứa JSON không hợp lệ. Vui lòng kiểm tra cài đặt nâng cao.",
     "saveFailed": "Lưu cấu hình thất bại"
   },
-  "cookieCopy": {
-    "noOtherTargets": "Chưa chọn profile Wayfern nào khác"
-  },
+  "cookieCopy": {},
   "about": {
     "website": "Trang web",
     "licenses": "Giấy phép",
@@ -3645,7 +3511,14 @@
       "ownTimes": "Mỗi hồ sơ một giờ khác nhau",
       "timeRandom": "Ngẫu nhiên theo hồ sơ",
       "summaryOwnTimes_one": "Mỗi hồ sơ chạy {{count}} lần mỗi tuần vào một giờ ngẫu nhiên riêng, tối đa {{minutes}} phút mỗi lần.",
-      "summaryOwnTimes_other": "Mỗi hồ sơ chạy {{count}} lần mỗi tuần vào một giờ ngẫu nhiên riêng, tối đa {{minutes}} phút mỗi lần."
+      "summaryOwnTimes_other": "Mỗi hồ sơ chạy {{count}} lần mỗi tuần vào một giờ ngẫu nhiên riêng, tối đa {{minutes}} phút mỗi lần.",
+      "sourceTopic": "Chủ đề sản phẩm",
+      "topicKeywordPlaceholder": "Từ khóa, ví dụ iphone 15",
+      "topicKeywordLabel": "Từ khóa sản phẩm",
+      "topicKeywordInvalid": "Dùng từ {{min}} đến {{max}} ký tự.",
+      "topicHint": "Tìm từ khóa này trên Google, mở kết quả {{site}}, đọc sản phẩm và xem ảnh, rồi tiếp tục tìm các biến thể {{site}} gợi ý.",
+      "topicLearned": "Biến thể đã học: {{count}}",
+      "enterKeywordFirst": "Nhập từ khóa trước"
     },
     "preset": {
       "light": "Nhẹ",
@@ -3670,7 +3543,7 @@
       "fixFailed": "Không áp dụng được cách khắc phục đó.",
       "exitNodeHint": "Không có proxy hoặc VPN, lần chạy sẽ đi ra từ chính địa chỉ trung tâm dữ liệu của hệ thống máy. Nhiều giờ lưu lượng từ một mạng lưu trữ gây hại cho danh tính hồ sơ hơn cả việc không làm ấm.",
       "reasonSyncPassword": "Đã đặt mật khẩu mã hóa đồng bộ",
-      "reasonLocalBrowser": "Cookie Bot cục bộ cần hồ sơ Wayfern",
+      "reasonLocalBrowser": "Cookie Bot cục bộ cần hồ sơ Apostate",
       "reasonEphemeral": "Hồ sơ này là tạm thời nên cookie sẽ mất khi đóng"
     },
     "conflict": {
@@ -3744,7 +3617,8 @@
       "profileNotSynced": "Bản sao trên đám mây chưa đầy đủ, hãy đồng bộ xong hồ sơ từ máy tính",
       "profileOsMismatch": "Hồ sơ đến từ hệ điều hành khác với máy chủ đã chạy nó",
       "cancelledByUser": "Đã dừng thủ công",
-      "unknown": "Lý do không xác định ({{code}})"
+      "unknown": "Lý do không xác định ({{code}})",
+      "siteChallenge": "Trang yêu cầu xác minh người thật nên lượt chạy đã dừng"
     },
     "exitCheck": {
       "failed": "Lần kiểm tra gần nhất ({{time}}) không kết nối được tới proxy hoặc VPN. Hãy kiểm tra lại.",
@@ -3825,17 +3699,6 @@
     "handoffLocalLocation": "Máy tính này",
     "handoffSyncDetails": "Mở chi tiết đồng bộ"
   },
-  "synchronizerPreview": {
-    "title": "Thử một lượt nhấp",
-    "description": "Xem trước cách thao tác từ hồ sơ chính đến các hồ sơ theo dõi đã chọn. Ví dụ này không khởi chạy trình duyệt.",
-    "send": "Gửi lượt nhấp mẫu",
-    "empty": "Chọn hồ sơ theo dõi để thử bản xem trước.",
-    "ready": "Hồ sơ theo dõi đã chọn: {{count}}",
-    "sent": "Đã hiển thị lượt nhấp mẫu. Hồ sơ theo dõi nhận được: {{count}}",
-    "received": "Đã nhận lượt nhấp mẫu",
-    "starting": "Đang khởi chạy hồ sơ và kết nối bộ đồng bộ…",
-    "startError": "Không thể khởi động bộ đồng bộ. Lựa chọn của bạn vẫn được giữ. Hãy kiểm tra hồ sơ và thử lại."
-  },
   "isolationDemo": {
     "title": "Một thay đổi. Một hồ sơ.",
     "description": "Thử các hồ sơ mẫu này. Không thao tác nào ở đây thay đổi hồ sơ thật của bạn.",
@@ -3897,6 +3760,7 @@
     "launch": {
       "queued": "Đã yêu cầu khởi chạy",
       "preparing": "Đang chuẩn bị hồ sơ",
+      "engine": "Đang chuẩn bị công cụ trình duyệt",
       "network": "Đang chuẩn bị mạng",
       "extensions": "Đang chuẩn bị tiện ích",
       "starting": "Đang khởi động trình duyệt",
@@ -4400,7 +4264,7 @@
       "confirmDelete": "Nhấn lần nữa để xóa",
       "emptyTitle": "Tác tử nên làm gì?",
       "emptyBody": "Tác tử làm việc trong trình duyệt của hồ sơ bạn chọn. Bạn thấy từng bước và có thể can thiệp bất cứ lúc nào.",
-      "noProfiles": "Hãy tạo hồ sơ Wayfern trước. Tác tử làm việc trong trình duyệt của hồ sơ đó.",
+      "noProfiles": "Hãy tạo hồ sơ trước. Tác tử làm việc trong trình duyệt của hồ sơ đó.",
       "placeholderStart": "Nhờ tác tử làm một việc",
       "placeholderFollowUp": "Viết tin nhắn tiếp theo",
       "placeholderSteer": "Hướng dẫn tác tử khi đang làm việc",
@@ -4631,12 +4495,6 @@
         "title": "Giữ mã 2FA cùng profile",
         "body": "Thêm khóa 2FA của tài khoản trong thông tin profile, Donut hiện mã hiện tại, sẵn sàng để sao chép. Khóa được mã hóa và ở lại trên thiết bị này.",
         "action": "Thử một khóa 2FA"
-      },
-      "synchronizer": {
-        "label": "Trình đồng bộ",
-        "title": "Điều khiển nhiều profile cùng lúc",
-        "body": "Chọn Khởi chạy với trình đồng bộ trong menu của profile và chọn các profile theo sau. Mỗi cú nhấp và phím gõ ở profile dẫn đầu được lặp lại ở từng profile theo sau.",
-        "action": "Mở Hồ sơ"
       }
     },
     "sections": {

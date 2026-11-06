@@ -158,7 +158,6 @@ interface ProfileInfoDialogProps {
   onCloneProfile?: (profile: BrowserProfile) => void;
   onSaveAsTemplate?: (profile: BrowserProfile) => void;
   onDeleteProfile?: (profile: BrowserProfile) => void;
-  onLaunchWithSync?: (profile: BrowserProfile) => void;
   onSetPassword?: (profile: BrowserProfile) => void;
   onChangePassword?: (profile: BrowserProfile) => void;
   onRemovePassword?: (profile: BrowserProfile) => void;
@@ -651,7 +650,6 @@ function ProfileInfoContents({
   onCloneProfile,
   onSaveAsTemplate,
   onDeleteProfile,
-  onLaunchWithSync,
   onSetPassword,
   onChangePassword,
   onRemovePassword,
@@ -835,17 +833,6 @@ function ProfileInfoContents({
       proBadge: !crossOsUnlocked,
       runningBadge: isRunning,
       hidden: !isWayfern || !onConfigureWayfern,
-    },
-    {
-      id: "synchronizer",
-      icon: <LuUsers className="size-4" />,
-      label: t("profiles.synchronizer.launchWithSync"),
-      onClick: () => {
-        handleAction(() => onLaunchWithSync?.(profile));
-      },
-      disabled: isDisabled || isRunning || !crossOsUnlocked,
-      proBadge: !crossOsUnlocked,
-      hidden: profile.browser !== "wayfern" || !onLaunchWithSync,
     },
     {
       id: "cookiesCopy",
@@ -2962,7 +2949,6 @@ function FingerprintSectionInline({
           readOnly={isDisabled}
           crossOsUnlocked={crossOsUnlocked}
           limitedMode={false}
-          profileVersion={profile.version}
           profileBrowser={profile.browser}
           profileId={profile.id}
           nativeOS={getProfileNativeOs(profile)}

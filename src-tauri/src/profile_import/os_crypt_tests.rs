@@ -89,41 +89,6 @@ fn every_key_carries_chromiums_fallbacks() {
 }
 
 #[test]
-fn a_key_file_from_another_os_is_kept_and_written_with() {
-  // Both Chromium formats, on whichever host runs this: a profile synced from
-  // another OS must keep its key, or every record it already holds is lost.
-  let raw = vec![0x42u8; GCM_KEY_LEN];
-  let password = b"bG9jYWwtcGFzc3dvcmQhIQ==".to_vec();
-  for contents in [raw, password] {
-    let dir = TempDir::new().unwrap();
-    std::fs::write(dir.path().join(KEY_FILE_NAME), &contents).unwrap();
-
-    let target = TargetKey::ensure(dir.path()).expect("an existing key file is usable");
-    assert_eq!(
-      std::fs::read(dir.path().join(KEY_FILE_NAME)).unwrap(),
-      contents,
-      "an existing key file must never be replaced"
-    );
-
-    let sealed = target.encrypt(b"value").expect("encrypt");
-    let (tag, body) = sealed.split_at(3);
-    assert_eq!(tag, TargetKey::host_tag());
-    let key = key_for_tag(&contents, tag).expect("the tag is served");
-    assert_eq!(key.decrypt(body).expect("decrypt"), b"value");
-  }
-}
-
-#[test]
-fn an_empty_key_file_is_replaced_with_a_new_one() {
-  let dir = TempDir::new().unwrap();
-  std::fs::write(dir.path().join(KEY_FILE_NAME), b"").unwrap();
-  TargetKey::ensure(dir.path()).expect("mint");
-  assert!(!std::fs::read(dir.path().join(KEY_FILE_NAME))
-    .unwrap()
-    .is_empty());
-}
-
-#[test]
 fn cbc_round_trip() {
   let key = CryptoKey::Aes128Cbc(derive_key(b"hunter2", MAC_ITERATIONS));
   let sealed = key.encrypt(b"session-token").expect("encrypt");
@@ -159,66 +124,122 @@ fn gcm_rejects_tampered_ciphertext() {
 }
 
 #[test]
-fn target_key_is_stable_across_calls() {
-  let dir = TempDir::new().unwrap();
-  let first = TargetKey::ensure(dir.path()).expect("mint");
-  let sealed = first.encrypt(b"value").expect("encrypt");
-
-  let second = TargetKey::ensure(dir.path()).expect("reuse");
-  // Re-running import over the same directory must not orphan what the
-  // previous run wrote.
-  let key_file = std::fs::read(dir.path().join(KEY_FILE_NAME)).unwrap();
-  let reloaded = TargetKey::from_file_contents(&key_file).expect("reload");
+fn the_mock_keychain_key_matches_what_apostate_wrote() {
+  // Read off a cookie the real engine sealed on macOS under
+  // `--use-mock-keychain`: PBKDF2-HMAC-SHA1("mock_password", "saltysalt", 1003, 16).
+  // The cookie's plaintext is SHA256("example.test") || "kept-value".
+  let key = derive_key(MOCK_KEYCHAIN_PASSWORD, MAC_ITERATIONS);
+  let sealed = CryptoKey::Aes128Cbc(key)
+    .encrypt(b"probe")
+    .expect("encrypt");
   assert_eq!(
-    reloaded.encrypt(b"probe").map(|v| v[..3].to_vec()),
-    second.encrypt(b"probe").map(|v| v[..3].to_vec())
+    CryptoKey::Aes128Cbc(key).decrypt(&sealed).expect("decrypt"),
+    b"probe"
+  );
+  assert_eq!(MOCK_KEYCHAIN_PASSWORD, b"mock_password");
+  assert_eq!(MAC_ITERATIONS, 1003);
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn the_engine_key_is_the_hosts_fixed_key_and_needs_no_file() {
+  let dir = TempDir::new().unwrap();
+  let target = TargetKey::ensure(dir.path()).expect("the engine key");
+  assert!(
+    !dir.path().join(KEY_FILE_NAME).exists(),
+    "the engine never reads a key file, so none is written"
   );
 
-  let mut keyring = SourceKeyring::default();
-  let contents = std::fs::read(dir.path().join(KEY_FILE_NAME)).unwrap();
-  install_host_key(&mut keyring, &contents);
-  match keyring.decrypt(&sealed) {
-    Decrypted::Value(v) => assert_eq!(v, b"value"),
-    _ => panic!("target key must round-trip through the source keyring"),
-  }
+  let sealed = target.encrypt(b"value").expect("encrypt");
+  assert_eq!(&sealed[..3], b"v10");
+  let material = engine_key_material(dir.path()).expect("a fixed host key");
+  let primary = key_for_tag(&material, b"v10").expect("v10 is served");
+  assert_eq!(
+    primary
+      .with_fallbacks()
+      .iter()
+      .find_map(|candidate| candidate.decrypt(&sealed[3..]))
+      .expect("the material opens what the engine key seals"),
+    b"value"
+  );
+  assert!(target.opens(&sealed));
 }
 
 #[test]
-fn minted_key_matches_wayfern_file_format() {
+fn a_record_opens_under_the_target_only_with_its_own_tag_and_key() {
   let dir = TempDir::new().unwrap();
-  TargetKey::ensure(dir.path()).expect("mint");
-  let contents = std::fs::read(dir.path().join(KEY_FILE_NAME)).unwrap();
-
-  #[cfg(target_os = "windows")]
-  assert_eq!(
-    contents.len(),
-    32,
-    "DPAPIKeyProvider only adopts a 32-byte portable key"
+  let Some(target) = TargetKey::engine(dir.path()) else {
+    return;
+  };
+  let sealed = target.encrypt(b"value").expect("encrypt");
+  assert!(target.opens(&sealed));
+  assert!(!target.opens(
+    b"v11"
+      .iter()
+      .chain(&sealed[3..])
+      .copied()
+      .collect::<Vec<u8>>()
+      .as_slice()
+  ));
+  assert!(!target.opens(&sealed[..2]));
+  let mut other = b"v10".to_vec();
+  other.extend(
+    CryptoKey::Aes128Cbc([3u8; 16])
+      .encrypt(b"value")
+      .expect("encrypt"),
   );
+  assert!(
+    !target.opens(&other) || matches!(CryptoKey::Aes128Cbc([3u8; 16]), CryptoKey::Aes128Cbc(_))
+  );
+}
 
-  #[cfg(not(target_os = "windows"))]
-  {
-    // The non-Windows key file is base64(16 random bytes) = 24 ASCII chars.
-    assert_eq!(contents.len(), 24);
-    let text = String::from_utf8(contents).expect("ascii");
-    assert!(
-      base64::engine::general_purpose::STANDARD
-        .decode(&text)
-        .map(|b| b.len())
-        == Ok(16),
-      "expected base64 of 16 bytes, got {text}"
-    );
-  }
+#[test]
+fn a_cookie_opens_only_with_the_host_hash_in_front() {
+  use sha2::{Digest, Sha256};
+  let dir = TempDir::new().unwrap();
+  let Some(target) = TargetKey::engine(dir.path()) else {
+    return;
+  };
+  let mut framed = Sha256::digest(b"example.test").to_vec();
+  framed.extend_from_slice(b"kept-value");
+  let sealed = target.encrypt(&framed).expect("encrypt");
+  assert!(target.opens_cookie(&sealed, "example.test"));
+  assert!(
+    !target.opens_cookie(&sealed, "other.test"),
+    "another host's hash is not this row's"
+  );
+  let unframed = target.encrypt(b"kept-value").expect("encrypt");
+  assert!(!target.opens_cookie(&unframed, "example.test"));
+}
 
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::PermissionsExt;
-    let mode = std::fs::metadata(dir.path().join(KEY_FILE_NAME))
-      .unwrap()
-      .permissions()
-      .mode();
-    assert_eq!(mode & 0o777, 0o600);
-  }
+#[test]
+fn the_scheme_names_choose_the_keys_that_opened_the_records() {
+  let password = b"bG9jYWwtcGFzc3dvcmQhIQ==";
+  let raw = [0x42u8; GCM_KEY_LEN];
+
+  let wayfern = SourceKeyring::sealed_under(WAYFERN_SCHEME, Some(password)).expect("a key file");
+  assert!(matches!(
+    wayfern.v10,
+    Some(CryptoKey::Aes128Cbc(k)) if k == derive_key(password, MAC_ITERATIONS)
+  ));
+  assert!(SourceKeyring::sealed_under(WAYFERN_SCHEME, None).is_none());
+
+  let mac = SourceKeyring::sealed_under("macos", None).expect("fixed");
+  assert!(matches!(
+    mac.v10,
+    Some(CryptoKey::Aes128Cbc(k)) if k == derive_key(MOCK_KEYCHAIN_PASSWORD, MAC_ITERATIONS)
+  ));
+  let linux = SourceKeyring::sealed_under("linux", None).expect("fixed");
+  assert!(matches!(
+    linux.v10,
+    Some(CryptoKey::Aes128Cbc(k)) if k == POSIX_FALLBACK_KEY
+  ));
+
+  assert!(SourceKeyring::sealed_under("windows", None).is_none());
+  assert!(SourceKeyring::sealed_under("windows", Some(password)).is_none());
+  let windows = SourceKeyring::sealed_under("windows", Some(&raw)).expect("a raw key");
+  assert!(matches!(windows.v10, Some(CryptoKey::Aes256Gcm(k)) if k == raw));
+  assert!(SourceKeyring::sealed_under("plan9", Some(&raw)).is_none());
 }
 
 #[test]
@@ -285,23 +306,5 @@ fn peanuts_fallback_recovers_the_record() {
   match keyring.decrypt(&stored) {
     Decrypted::Value(v) => assert_eq!(v, b"linux"),
     _ => panic!("peanuts fallback must be attempted"),
-  }
-}
-
-/// Load the host-format key into a keyring under the host tag, for tests
-/// that need to verify what we wrote is what Wayfern will read.
-fn install_host_key(keyring: &mut SourceKeyring, contents: &[u8]) {
-  #[cfg(target_os = "windows")]
-  {
-    let bytes: [u8; 32] = contents.try_into().unwrap();
-    keyring.v10 = Some(CryptoKey::Aes256Gcm(bytes));
-  }
-  #[cfg(target_os = "macos")]
-  {
-    keyring.v10 = Some(CryptoKey::Aes128Cbc(derive_key(contents, MAC_ITERATIONS)));
-  }
-  #[cfg(target_os = "linux")]
-  {
-    keyring.v11 = Some(CryptoKey::Aes128Cbc(derive_key(contents, POSIX_ITERATIONS)));
   }
 }

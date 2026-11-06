@@ -74,6 +74,7 @@ import { cookieBotScopeFor, useCookieBot } from "@/hooks/use-cookie-bot";
 import { useSyncPasswordSet } from "@/hooks/use-sync-password";
 import { parseBackendError, translateBackendError } from "@/lib/backend-errors";
 import {
+  COOKIE_BOT_TOPIC_SITES,
   type CookieBotConflict,
   type CookieBotPreset,
   type CookieBotPresetList,
@@ -81,6 +82,7 @@ import {
   type CookieBotScheduleInput,
   type CookieBotSlot,
   type CookieBotTemplate,
+  type CookieBotTopicSite,
   type CookieBotUserTemplate,
   checkCookieBotConflicts,
   createCookieBotUserTemplate,
@@ -150,7 +152,10 @@ const TEMPLATE_LABEL_KEYS: Record<string, { name: string; hint: string }> = {
 };
 
 /** Where this enrolment's sites come from. */
-type SiteSource = "own" | "template" | "saved";
+type SiteSource = "own" | "template" | "saved" | "topic";
+
+const TOPIC_KEYWORD_MIN = 2;
+const TOPIC_KEYWORD_MAX = 60;
 
 /**
  * One row of the calendar, as the form holds it.
@@ -342,6 +347,10 @@ export function CookieBotEnrolDialog({
   const [source, setSource] = useState<SiteSource>("own");
   const [templateId, setTemplateId] = useState("");
   const [sitesText, setSitesText] = useState("");
+  const [topicSite, setTopicSite] = useState<CookieBotTopicSite>(
+    COOKIE_BOT_TOPIC_SITES[0],
+  );
+  const [keyword, setKeyword] = useState("");
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [fixingId, setFixingId] = useState<string | null>(null);
@@ -402,14 +411,23 @@ export function CookieBotEnrolDialog({
     setMaxMinutesTouched(Boolean(existing));
     const storedTemplate = existing?.template_id ?? "";
     setTemplateId(storedTemplate);
+    const focus = existing?.focus ?? null;
     setSource(
-      storedTemplate
-        ? isUserTemplateId(storedTemplate)
-          ? "saved"
-          : "template"
-        : "own",
+      focus
+        ? "topic"
+        : storedTemplate
+          ? isUserTemplateId(storedTemplate)
+            ? "saved"
+            : "template"
+          : "own",
     );
-    setSitesText((existing?.sites ?? []).join("\n"));
+    setTopicSite(
+      (COOKIE_BOT_TOPIC_SITES as readonly string[]).includes(focus?.site ?? "")
+        ? (focus?.site as CookieBotTopicSite)
+        : COOKIE_BOT_TOPIC_SITES[0],
+    );
+    setKeyword(focus?.keyword ?? "");
+    setSitesText(focus ? "" : (existing?.sites ?? []).join("\n"));
     setAdjustOpen(false);
     setConflict(null);
     setConflictAcknowledged(false);
@@ -526,7 +544,13 @@ export function CookieBotEnrolDialog({
   const hasDuplicateSlot = !useOwnTimes && duplicateSlotKeys.size > 0;
 
   const sites = useMemo(() => normaliseSites(sitesText), [sitesText]);
-  const usingTemplate = source !== "own";
+  const usingTemplate = source === "template" || source === "saved";
+  const usingTopic = source === "topic";
+  const topicKeyword = keyword.trim().replace(/\s+/g, " ");
+  const keywordInvalid =
+    usingTopic &&
+    (topicKeyword.length < TOPIC_KEYWORD_MIN ||
+      topicKeyword.length > TOPIC_KEYWORD_MAX);
   const chosenSaved = useMemo(
     () => userTemplates?.find((item) => item.id === templateId) ?? null,
     [userTemplates, templateId],
@@ -540,7 +564,7 @@ export function CookieBotEnrolDialog({
     userTemplates !== null &&
     chosenSaved === null;
 
-  const sitesTooMany = !usingTemplate && sites.length > MAX_SITES;
+  const sitesTooMany = source === "own" && sites.length > MAX_SITES;
   // v1 browses the user's declared sites and nothing else, so an empty list is
   // not a schedule the server can accept — it 400s with COOKIE_BOT_SITE_LIMIT
   // and, before this, `canSubmit` did not ask. The three-click happy path
@@ -548,7 +572,7 @@ export function CookieBotEnrolDialog({
   // single time, with the only input the bot cannot run without hidden inside a
   // collapsed disclosure. A template is the other way to answer the same
   // question, so it satisfies this too.
-  const sitesTooFew = !usingTemplate && sites.length < MIN_SITES;
+  const sitesTooFew = source === "own" && sites.length < MIN_SITES;
   const templateMissing = usingTemplate && templateId.length === 0;
   const maxMinutesValid =
     Number.isFinite(maxMinutes) &&
@@ -580,6 +604,7 @@ export function CookieBotEnrolDialog({
     !sitesTooFew &&
     !templateMissing &&
     !savedMissing &&
+    !keywordInvalid &&
     !isSaving;
 
   // A single-profile enrolment asks the server up front whether a teammate
@@ -633,7 +658,12 @@ export function CookieBotEnrolDialog({
         // carrying both, so the unused half is sent empty rather than stale.
         template_id: usingTemplate ? templateId : undefined,
         max_minutes: Math.round(maxMinutes),
-        sites: usingTemplate ? [] : sites,
+        // A topic run builds its own path from the keyword, so it carries no
+        // site list either.
+        sites: usingTemplate || usingTopic ? [] : sites,
+        focus: usingTopic
+          ? { site: topicSite, keyword: topicKeyword }
+          : undefined,
       };
     },
     [
@@ -645,6 +675,9 @@ export function CookieBotEnrolDialog({
       sites,
       usingTemplate,
       templateId,
+      usingTopic,
+      topicSite,
+      topicKeyword,
     ],
   );
 
@@ -1006,6 +1039,14 @@ export function CookieBotEnrolDialog({
                 >
                   {t("cookieBot.enrol.sourceSaved")}
                 </AnimatedTabsTrigger>
+                {isSelfHostedAccount() && (
+                  <AnimatedTabsTrigger
+                    value="topic"
+                    className="h-7 px-2.5 text-xs"
+                  >
+                    {t("cookieBot.enrol.sourceTopic")}
+                  </AnimatedTabsTrigger>
+                )}
               </AnimatedTabsList>
             </AnimatedTabs>
 
@@ -1018,6 +1059,7 @@ export function CookieBotEnrolDialog({
                 templateList.length,
                 userTemplates?.length ?? -1,
                 isLoadingTemplates,
+                keywordInvalid,
               ]}
             >
               <div key={source}>
@@ -1060,6 +1102,22 @@ export function CookieBotEnrolDialog({
                     onDeselect={() => {
                       setTemplateId("");
                     }}
+                  />
+                )}
+                {source === "topic" && (
+                  <TopicPanel
+                    site={topicSite}
+                    onSite={setTopicSite}
+                    keyword={keyword}
+                    onKeyword={setKeyword}
+                    invalid={keywordInvalid && keyword.length > 0}
+                    learned={
+                      existing?.focus &&
+                      existing.focus.site === topicSite &&
+                      existing.focus.keyword === topicKeyword
+                        ? (existing.focus.learned ?? [])
+                        : []
+                    }
                   />
                 )}
               </div>
@@ -1241,6 +1299,7 @@ export function CookieBotEnrolDialog({
                   saving: isSaving,
                   needsSites: sitesTooFew,
                   needsTemplate: templateMissing || savedMissing,
+                  needsKeyword: keywordInvalid,
                   needsSlot: slotsIncomplete || slotCount === 0,
                   duplicateSlot: hasDuplicateSlot,
                   overSlotCap: slotCount > maxSlots,
@@ -1627,6 +1686,100 @@ function CuratedPanel({
   );
 }
 
+const TOPIC_SITE_LABELS: Record<CookieBotTopicSite, string> = {
+  ebay: "eBay",
+};
+
+/**
+ * A run about one product: it searches the keyword on Google, opens the shop's
+ * results, then keeps searching the shop with words from the listings and the
+ * suggestions it saw. What it learns is kept for the next run.
+ */
+function TopicPanel({
+  site,
+  onSite,
+  keyword,
+  onKeyword,
+  invalid,
+  learned,
+}: {
+  site: CookieBotTopicSite;
+  onSite: (next: CookieBotTopicSite) => void;
+  keyword: string;
+  onKeyword: (next: string) => void;
+  invalid: boolean;
+  learned: string[];
+}) {
+  const { t } = useTranslation();
+  const shown = learned.slice(0, 12);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap gap-1.5">
+        {COOKIE_BOT_TOPIC_SITES.map((id) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={id === site}
+            onClick={() => {
+              onSite(id);
+            }}
+            className={cn(
+              "cursor-pointer rounded-md border px-3 py-1.5 text-xs font-medium transition-colors duration-100",
+              id === site
+                ? "border-primary/50 bg-primary/8 text-foreground"
+                : "border-border text-muted-foreground hover:bg-foreground/4",
+            )}
+          >
+            {TOPIC_SITE_LABELS[id]}
+          </button>
+        ))}
+      </div>
+      <Input
+        value={keyword}
+        maxLength={TOPIC_KEYWORD_MAX}
+        placeholder={t("cookieBot.enrol.topicKeywordPlaceholder")}
+        onChange={(event) => {
+          onKeyword(event.target.value);
+        }}
+        variant="soft"
+        className="h-8 text-xs"
+        aria-invalid={invalid}
+        aria-label={t("cookieBot.enrol.topicKeywordLabel")}
+      />
+      <p
+        className={cn(
+          "text-[11px] leading-snug",
+          invalid ? "text-destructive-text" : "text-muted-foreground",
+        )}
+      >
+        {invalid
+          ? t("cookieBot.enrol.topicKeywordInvalid", {
+              min: TOPIC_KEYWORD_MIN,
+              max: TOPIC_KEYWORD_MAX,
+            })
+          : t("cookieBot.enrol.topicHint", { site: TOPIC_SITE_LABELS[site] })}
+      </p>
+      {shown.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <p className="text-[11px] text-muted-foreground">
+            {t("cookieBot.enrol.topicLearned", { count: learned.length })}
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {shown.map((term) => (
+              <span
+                key={term}
+                className="rounded-md bg-foreground/5 px-1.5 py-0.5 text-[11px] text-foreground"
+              >
+                {term}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** The user's saved lists: pick one, rename one, delete one. */
 function SavedPanel({
   templates,
@@ -1920,6 +2073,7 @@ function confirmLabel(
     saving: boolean;
     needsSites: boolean;
     needsTemplate: boolean;
+    needsKeyword: boolean;
     needsSlot: boolean;
     /** Two rows claim the same days and time; the server would store one. */
     duplicateSlot: boolean;
@@ -1938,6 +2092,7 @@ function confirmLabel(
     return t("cookieBot.enrol.fixFirst");
   if (state.needsSites) return t("cookieBot.enrol.addSitesFirst");
   if (state.needsTemplate) return t("cookieBot.enrol.pickListFirst");
+  if (state.needsKeyword) return t("cookieBot.enrol.enterKeywordFirst");
   if (state.needsSlot) return t("cookieBot.enrol.finishCalendarFirst");
   if (state.duplicateSlot) return t("cookieBot.enrol.duplicateSlot");
   if (state.overSlotCap)

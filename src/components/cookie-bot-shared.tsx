@@ -708,6 +708,7 @@ export const OUTCOME_KEYS: Record<string, string> = {
   profile_not_synced: "cookieBot.outcome.profileNotSynced",
   profile_os_mismatch: "cookieBot.outcome.profileOsMismatch",
   cancelled_by_user: "cookieBot.outcome.cancelledByUser",
+  site_challenge: "cookieBot.outcome.siteChallenge",
 };
 
 export function outcomeLabel(

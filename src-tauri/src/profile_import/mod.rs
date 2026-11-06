@@ -100,6 +100,72 @@ pub fn import_into(
   Ok(report)
 }
 
+/// Names, inside a profile, the scheme its stored secrets are sealed under: the
+/// OS whose engine key it is (`std::env::consts::OS`). A profile that moves to
+/// another OS (a sync) is re-sealed for the new host when it next opens. A
+/// profile without one was sealed by Wayfern, or never opened.
+pub const ENGINE_KEY_MARKER: &str = ".donut-engine-key";
+
+/// Seal a profile's stored secrets for the key Apostate reads on this host.
+///
+/// Wayfern sealed cookies, saved logins and cards with the profile's own
+/// `os_crypt_key` file, so a profile could move between machines and systems.
+/// Apostate never reads that file: it opens secrets with the key of its host
+/// ([`os_crypt::engine_key_material`]). A profile moved over without this step
+/// comes up logged out of every site on its first launch and silently loses its
+/// saved logins, and so does one synced from another OS.
+///
+/// Only rows the old scheme's key opens are rewritten. A row already sealed for
+/// this host stays, and a row nothing here opens stays too (it is unreadable to
+/// the engine either way, and leaving it keeps it recoverable).
+///
+/// Returns what was carried, or `None` when there is nothing to do: the profile
+/// is already sealed for this host, or the old keys are not known here.
+pub fn adopt_engine_key(user_data_dir: &Path) -> Result<Option<ProfileImportReport>, String> {
+  #[cfg(target_os = "windows")]
+  if let Err(error) = keyring::write_key_file_from_local_state(user_data_dir) {
+    log::warn!("Portable copy of the engine key not written err=\"{error}\"");
+  }
+
+  let marker = user_data_dir.join(ENGINE_KEY_MARKER);
+  let host = std::env::consts::OS;
+  let sealed_under = std::fs::read_to_string(&marker)
+    .ok()
+    .map(|text| text.trim().to_string());
+  let key_file = std::fs::read(user_data_dir.join(os_crypt::KEY_FILE_NAME))
+    .ok()
+    .filter(|bytes| bytes.iter().any(|byte| *byte != 0));
+
+  let scheme = match (sealed_under.as_deref(), &key_file) {
+    (Some(scheme), _) if scheme == host => return Ok(None),
+    (Some(scheme), _) => scheme.to_string(),
+    (None, Some(_)) => os_crypt::WAYFERN_SCHEME.to_string(),
+    (None, None) => {
+      // Nothing from an earlier scheme: the engine on this host seals it from here.
+      std::fs::write(&marker, format!("{host}\n"))
+        .map_err(|e| format!("Failed to write {ENGINE_KEY_MARKER}: {e}"))?;
+      return Ok(None);
+    }
+  };
+  let Some(source) = os_crypt::SourceKeyring::sealed_under(&scheme, key_file.as_deref()) else {
+    return Ok(None);
+  };
+
+  let target = os_crypt::TargetKey::adopting(user_data_dir, key_file.as_deref().unwrap_or(&[]))?;
+  let mut report = ProfileImportReport::default();
+  rewrite::reseal_in_place(
+    &user_data_dir.join(INITIAL_PROFILE_DIR),
+    &crate::cookie_manager::CookieManager::wayfern_cookie_path(user_data_dir),
+    &source,
+    &target,
+    &mut report,
+  );
+
+  std::fs::write(&marker, format!("{host}\n"))
+    .map_err(|e| format!("Failed to write {ENGINE_KEY_MARKER}: {e}"))?;
+  Ok(Some(report))
+}
+
 /// Is the browser that owns this profile currently running?
 ///
 /// Matched on the profile path in the process command line rather than on the
@@ -257,7 +323,10 @@ mod tests {
       !dest.join("Preferences").exists(),
       "nothing profile-scoped belongs at the root"
     );
-    assert!(dest.join(os_crypt::KEY_FILE_NAME).exists());
+    assert!(
+      os_crypt::TargetKey::engine(&dest).is_some(),
+      "the engine key is ready for the first launch"
+    );
     assert!(report.bytes_copied > 0);
   }
 
@@ -296,10 +365,11 @@ mod tests {
     touch(&source.join("Preferences"), b"{}");
 
     import_into(&source, &dest, "chromium", true).expect("first");
-    let key = std::fs::read(dest.join(os_crypt::KEY_FILE_NAME)).unwrap();
+    let key = os_crypt::engine_key_material(&dest);
+    assert!(key.is_some());
     import_into(&source, &dest, "chromium", true).expect("second");
     assert_eq!(
-      std::fs::read(dest.join(os_crypt::KEY_FILE_NAME)).unwrap(),
+      os_crypt::engine_key_material(&dest),
       key,
       "re-running must not orphan what the first run encrypted"
     );
@@ -335,8 +405,226 @@ mod tests {
       profile.join("Local State").exists(),
       "Local State belongs to the user-data dir, not the profile"
     );
-    assert!(profile.join(os_crypt::KEY_FILE_NAME).exists());
+    assert!(os_crypt::TargetKey::engine(&profile).is_some());
     assert!(!profile.join(".donut-import-repair").exists());
+  }
+
+  #[cfg(any(target_os = "macos", target_os = "linux"))]
+  mod adopt {
+    use super::*;
+    use sha2::{Digest, Sha256};
+
+    const WAYFERN_PASSWORD: &[u8] = b"bG9jYWwtcGFzc3dvcmQhIQ==";
+
+    fn framed(host: &str, value: &str) -> Vec<u8> {
+      let mut plain = Sha256::digest(host.as_bytes()).to_vec();
+      plain.extend_from_slice(value.as_bytes());
+      plain
+    }
+
+    /// What Wayfern wrote: its own `os_crypt_key` file, keyed per tag.
+    fn sealed_by_wayfern(plain: &[u8]) -> Vec<u8> {
+      let tag: &[u8; 3] = if cfg!(target_os = "linux") {
+        b"v11"
+      } else {
+        b"v10"
+      };
+      let mut out = tag.to_vec();
+      out.extend(
+        os_crypt::key_for_tag(WAYFERN_PASSWORD, tag)
+          .unwrap()
+          .encrypt(plain)
+          .unwrap(),
+      );
+      out
+    }
+
+    fn sealed_by_engine(profile: &Path, plain: &[u8]) -> Vec<u8> {
+      os_crypt::TargetKey::engine(profile)
+        .unwrap()
+        .encrypt(plain)
+        .unwrap()
+    }
+
+    fn cookie_store(profile: &Path, rows: &[(&str, &str, &[u8])]) {
+      let path = profile.join("Default").join("Cookies");
+      std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+      let conn = rusqlite::Connection::open(&path).unwrap();
+      conn
+        .execute_batch(
+          "CREATE TABLE cookies(
+             creation_utc INTEGER NOT NULL,
+             host_key TEXT NOT NULL,
+             top_frame_site_key TEXT NOT NULL DEFAULT '',
+             name TEXT NOT NULL,
+             value TEXT NOT NULL DEFAULT '',
+             encrypted_value BLOB NOT NULL DEFAULT '',
+             path TEXT NOT NULL DEFAULT '/'
+           );
+           CREATE TABLE meta(key LONGVARCHAR NOT NULL UNIQUE PRIMARY KEY, value LONGVARCHAR);
+           INSERT INTO meta VALUES('version', '24');
+           INSERT INTO meta VALUES('last_compatible_version', '24');",
+        )
+        .unwrap();
+      for (host, name, sealed) in rows {
+        conn
+          .execute(
+            "INSERT INTO cookies(creation_utc, host_key, name, encrypted_value) VALUES(0, ?1, ?2, ?3)",
+            rusqlite::params![host, name, sealed],
+          )
+          .unwrap();
+      }
+    }
+
+    fn stored(profile: &Path, name: &str) -> Vec<u8> {
+      rusqlite::Connection::open(profile.join("Default").join("Cookies"))
+        .unwrap()
+        .query_row(
+          "SELECT encrypted_value FROM cookies WHERE name = ?1",
+          [name],
+          |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn engine_opens(profile: &Path, name: &str, host: &str, value: &str) -> bool {
+      let row = stored(profile, name);
+      let engine = os_crypt::TargetKey::engine(profile).unwrap();
+      if !engine.opens_cookie(&row, host) {
+        return false;
+      }
+      let keyring = os_crypt::SourceKeyring::sealed_under(std::env::consts::OS, None).unwrap();
+      matches!(
+        keyring.decrypt(&row),
+        os_crypt::Decrypted::Value(plain) if plain == framed(host, value)
+      )
+    }
+
+    #[test]
+    fn a_wayfern_sealed_profile_is_resealed_for_the_engine_once() {
+      let dir = TempDir::new().unwrap();
+      let profile = dir.path().join("profile");
+      touch(&profile.join(os_crypt::KEY_FILE_NAME), WAYFERN_PASSWORD);
+      cookie_store(
+        &profile,
+        &[(
+          "example.test",
+          "session",
+          &sealed_by_wayfern(&framed("example.test", "kept-value")),
+        )],
+      );
+      assert!(!engine_opens(
+        &profile,
+        "session",
+        "example.test",
+        "kept-value"
+      ));
+
+      let report = adopt_engine_key(&profile).unwrap().expect("a re-seal ran");
+      assert_eq!(report.cookies_migrated, 1);
+      assert_eq!(report.cookies_unrecoverable, 0);
+      assert!(engine_opens(
+        &profile,
+        "session",
+        "example.test",
+        "kept-value"
+      ));
+      assert_eq!(
+        std::fs::read(profile.join(os_crypt::KEY_FILE_NAME)).unwrap(),
+        WAYFERN_PASSWORD,
+        "the old key stays, so nothing is lost if the profile goes back"
+      );
+      assert_eq!(
+        std::fs::read_to_string(profile.join(ENGINE_KEY_MARKER))
+          .unwrap()
+          .trim(),
+        std::env::consts::OS
+      );
+
+      let sealed = stored(&profile, "session");
+      assert!(adopt_engine_key(&profile).unwrap().is_none());
+      assert_eq!(
+        stored(&profile, "session"),
+        sealed,
+        "the second run is a no-op"
+      );
+    }
+
+    #[test]
+    fn a_row_the_engine_already_sealed_or_nothing_opens_is_left_alone() {
+      let dir = TempDir::new().unwrap();
+      let profile = dir.path().join("profile");
+      touch(&profile.join(os_crypt::KEY_FILE_NAME), WAYFERN_PASSWORD);
+      let engine_row = sealed_by_engine(&profile, &framed("a.test", "from-engine"));
+      let mut foreign = b"v10".to_vec();
+      foreign.extend([7u8; 32]);
+      cookie_store(
+        &profile,
+        &[
+          ("a.test", "engine", &engine_row),
+          (
+            "b.test",
+            "wayfern",
+            &sealed_by_wayfern(&framed("b.test", "from-wayfern")),
+          ),
+          ("c.test", "foreign", &foreign),
+        ],
+      );
+
+      adopt_engine_key(&profile).unwrap().expect("a re-seal ran");
+
+      assert_eq!(stored(&profile, "engine"), engine_row);
+      assert!(engine_opens(&profile, "wayfern", "b.test", "from-wayfern"));
+      assert_eq!(
+        stored(&profile, "foreign"),
+        foreign,
+        "a row no key here opens is kept, not deleted"
+      );
+    }
+
+    #[test]
+    fn a_profile_without_an_old_key_only_gets_the_marker() {
+      let dir = TempDir::new().unwrap();
+      let profile = dir.path().join("profile");
+      let row = sealed_by_engine(&profile, &framed("a.test", "from-engine"));
+      cookie_store(&profile, &[("a.test", "engine", &row)]);
+
+      assert!(adopt_engine_key(&profile).unwrap().is_none());
+
+      assert_eq!(stored(&profile, "engine"), row);
+      assert!(profile.join(ENGINE_KEY_MARKER).exists());
+      assert!(!profile.join(os_crypt::KEY_FILE_NAME).exists());
+    }
+
+    #[test]
+    fn a_profile_synced_from_another_os_is_resealed_for_this_one() {
+      let dir = TempDir::new().unwrap();
+      let profile = dir.path().join("profile");
+      let other = if cfg!(target_os = "macos") {
+        "linux"
+      } else {
+        "macos"
+      };
+      let other_key = os_crypt::SourceKeyring::sealed_under(other, None).unwrap();
+      let mut sealed = b"v10".to_vec();
+      sealed.extend(
+        other_key
+          .v10
+          .as_ref()
+          .unwrap()
+          .encrypt(&framed("a.test", "travelled"))
+          .unwrap(),
+      );
+      cookie_store(&profile, &[("a.test", "moved", &sealed)]);
+      touch(
+        &profile.join(ENGINE_KEY_MARKER),
+        format!("{other}\n").as_bytes(),
+      );
+
+      adopt_engine_key(&profile).unwrap().expect("a re-seal ran");
+
+      assert!(engine_opens(&profile, "moved", "a.test", "travelled"));
+    }
   }
 
   #[test]

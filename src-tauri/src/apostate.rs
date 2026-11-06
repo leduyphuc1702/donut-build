@@ -1,24 +1,29 @@
-//! The open-source Apostate engine (GPL-3.0), for profiles that claim another
-//! desktop OS than this machine's.
+//! The open-source Apostate engine (GPL-3.0): the one browser every profile
+//! runs on.
 //!
-//! Wayfern (closed) refuses a cross-OS device without a Donut cloud token.
-//! Apostate takes the persona on its command line and has no such gate. It is a
-//! separately downloaded executable that Donut starts as a child process, never
-//! linked.
+//! Apostate takes the persona on its command line, needs no account, token or
+//! terms, and presents any desktop OS. It is a separately downloaded executable
+//! that Donut starts as a child process, never linked.
 //!
-//! The rule is automatic and has no picker: a profile created with a desktop OS
-//! that differs from the host's stores `engine = "apostate"` once, and keeps it
-//! on every machine it syncs to, so its persona does not change when it moves.
-//! Same-OS profiles and every existing profile keep Wayfern.
+//! Donut downloads and verifies it by itself, in the background, from the first
+//! start (`start_background_install`); a launch that comes before it is done
+//! waits for the same download. The browser type stays `"wayfern"` in stored
+//! profiles, synced metadata and the API, so nothing already saved changes
+//! shape; `engine = "apostate"` is stamped on every profile and a profile
+//! stored without it reads the same (`WayfernConfig::uses_apostate`).
 
-use crate::downloader::DownloadProgress;
+use crate::log_streak::Streak;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::LazyLock;
 use tokio::sync::Mutex as AsyncMutex;
 
 pub const ENGINE: &str = "apostate";
 pub const VERSION: &str = "0.5.1";
-const CHROMIUM: &str = "155.0.8059.31";
+/// The Chromium the engine is built on, and the `version` every profile stores:
+/// the version a page's user agent reports.
+pub const CHROMIUM: &str = "155.0.8059.31";
 const RELEASE_BASE: &str = "https://github.com/heretic-tech/apostate/releases/download/v0.5.1";
 
 struct Asset {
@@ -77,43 +82,128 @@ fn asset_file_name(asset: &Asset) -> String {
   format!("apostate-{CHROMIUM}-{}.{}", asset.target, asset.extension)
 }
 
+/// What the `download-progress` event carries while the engine installs.
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DownloadProgress {
+  pub browser: String,
+  pub version: String,
+  pub downloaded_bytes: u64,
+  pub total_bytes: Option<u64>,
+  pub percentage: f64,
+  pub speed_bytes_per_sec: f64,
+  pub eta_seconds: Option<f64>,
+  /// "downloading", "extracting", "verifying", "completed" or "error".
+  pub stage: String,
+  /// Why an "error" stage happened: a coded backend error or plain text.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub error: Option<String>,
+}
+
+impl DownloadProgress {
+  /// The terminal event for an install that stopped, so the UI can show why.
+  pub fn failed(browser: &str, version: &str, error: Option<String>) -> Self {
+    Self {
+      browser: browser.to_string(),
+      version: version.to_string(),
+      downloaded_bytes: 0,
+      total_bytes: None,
+      percentage: 0.0,
+      speed_bytes_per_sec: 0.0,
+      eta_seconds: None,
+      stage: "error".to_string(),
+      error,
+    }
+  }
+}
+
 pub fn is_desktop_os(os: &str) -> bool {
   matches!(os, "windows" | "macos" | "linux")
 }
 
-/// Whether a profile that claims `claimed` belongs on Apostate when this
-/// machine runs `host`: a desktop OS that is not the host's. Android and iOS
-/// have no Apostate persona and stay refused as before.
+pub fn is_mobile_os(os: &str) -> bool {
+  matches!(os, "android" | "ios")
+}
+
+/// Whether a persona of `claimed` is another desktop OS than this machine's
+/// `host`, which is the only case that needs a route whose first SYN does not
+/// come from this machine's network stack.
 pub fn needs_apostate(claimed: &str, host: &str) -> bool {
   is_desktop_os(claimed) && claimed != host
 }
 
-/// The engine a new profile is stored with: `Some("apostate")` for a desktop OS
-/// other than this machine's, `None` (Wayfern) otherwise.
-pub fn engine_for_new_profile(claimed_os: Option<&str>) -> Option<String> {
-  let claimed = claimed_os.map(str::trim).filter(|os| !os.is_empty())?;
-  needs_apostate(claimed, &crate::profile::types::get_host_os()).then(|| ENGINE.to_string())
+/// Stamp the engine on a profile's config. Every profile has it: the field says
+/// so to anything reading the stored metadata.
+pub fn stamp_engine(config: &mut crate::wayfern_manager::WayfernConfig) {
+  config.engine = Some(ENGINE.to_string());
 }
 
-pub fn uses_apostate(profile: &crate::profile::BrowserProfile) -> bool {
-  profile
-    .wayfern_config
-    .as_ref()
-    .is_some_and(|config| config.uses_apostate())
+/// What a profile's config stores for its device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StoredShape {
+  /// A complete device payload.
+  Payload,
+  /// An identity id of the closed engine, with a payload or a baseline beside it.
+  IdentityWithView,
+  /// An identity id alone: the closed engine derived the device from it.
+  Identity,
+  /// Neither: the next launch draws a device.
+  Empty,
 }
 
-/// Refuse a feature that talks to Wayfern's own protocol (`Wayfern.*`) on a
-/// profile that runs Apostate, which would otherwise wait for a method that
-/// does not exist.
-pub fn refuse_wayfern_only(profile: &crate::profile::BrowserProfile) -> Result<(), String> {
-  if uses_apostate(profile) {
-    log::debug!(
-      "Wayfern-only feature refused, profile runs on Apostate profile={}",
-      profile.id
-    );
-    return Err(crate::backend_error("APOSTATE_FEATURE_UNSUPPORTED"));
+fn stored_identity_id(config: &crate::wayfern_manager::WayfernConfig) -> Option<&str> {
+  config
+    .identity_id
+    .as_deref()
+    .map(str::trim)
+    .filter(|id| !id.is_empty())
+}
+
+fn has_stored_payload(config: &crate::wayfern_manager::WayfernConfig) -> bool {
+  config
+    .fingerprint
+    .as_deref()
+    .and_then(|json| crate::wayfern_manager::WayfernManager::launch_fingerprint_payload(json).ok())
+    .and_then(|payload| payload.as_object().map(|object| !object.is_empty()))
+    .unwrap_or(false)
+}
+
+pub fn stored_shape(config: &crate::wayfern_manager::WayfernConfig) -> StoredShape {
+  let payload = has_stored_payload(config);
+  let baseline =
+    !crate::wayfern_manager::WayfernManager::stored_object(config.identity_baseline.as_deref())
+      .is_empty();
+  match (stored_identity_id(config).is_some(), payload, baseline) {
+    (true, true, _) | (true, false, true) => StoredShape::IdentityWithView,
+    (true, false, false) => StoredShape::Identity,
+    (false, true, _) => StoredShape::Payload,
+    (false, false, _) => StoredShape::Empty,
   }
-  Ok(())
+}
+
+/// Refuse a persona that claims a phone. Apostate presents desktop machines
+/// only, and a stored mobile claim would launch as the wrong device.
+pub fn refuse_mobile(claimed_os: Option<&str>) -> Result<(), String> {
+  match claimed_os.map(str::trim) {
+    Some(os) if is_mobile_os(os) => Err(crate::backend_error("FINGERPRINT_MOBILE_UNSUPPORTED")),
+    _ => Ok(()),
+  }
+}
+
+/// Every profile runs on Apostate; the argument only keeps call sites uniform
+/// with the other per-profile checks.
+pub fn uses_apostate(_profile: &crate::profile::BrowserProfile) -> bool {
+  true
+}
+
+/// Refuse a feature that talks to Wayfern's own protocol (`Wayfern.*`). No
+/// profile runs on that engine any more, so the call would wait for a method
+/// that does not exist.
+pub fn refuse_wayfern_only(profile: &crate::profile::BrowserProfile) -> Result<(), String> {
+  log::debug!(
+    "Wayfern-only feature refused, profile runs on Apostate profile={}",
+    profile.id
+  );
+  Err(crate::backend_error("APOSTATE_FEATURE_UNSUPPORTED"))
 }
 
 /// `refuse_wayfern_only` for profiles named by id; an id that names no profile
@@ -126,6 +216,135 @@ pub fn refuse_wayfern_only_ids(ids: &[String]) -> Result<(), String> {
     .iter()
     .filter(|profile| ids.contains(&profile.id.to_string()))
     .try_for_each(refuse_wayfern_only)
+}
+
+/// What a config stored for the closed engine needs to run on Apostate, and
+/// nothing more. Returns whether it changed anything.
+///
+/// A profile whose device lived behind an identity id (the closed engine
+/// derived it, so Donut holds no payload) gets a device drawn here from the
+/// profile's own seed, with the person's edits to it applied on top, and the
+/// identity fields go: with an id left in place the form keeps writing edits
+/// into overrides that Apostate never reads. The exit's location was stored
+/// separately (`location`) and stays. Nothing here asks the network, so it runs
+/// at startup; the same seed and OS draw the same device on every machine.
+pub fn adopt_config(
+  profile: &crate::profile::BrowserProfile,
+  config: &mut crate::wayfern_manager::WayfernConfig,
+) -> bool {
+  use crate::wayfern_manager::WayfernManager;
+
+  let mut changed = config.engine.as_deref() != Some(ENGINE);
+  stamp_engine(config);
+
+  let shape = stored_shape(config);
+  if shape == StoredShape::Identity {
+    let os = config
+      .os
+      .clone()
+      .filter(|os| !os.is_empty())
+      .unwrap_or_else(|| profile.native_os());
+    if is_desktop_os(&os) {
+      let mut device =
+        crate::fingerprint_generator::generate(&profile.id.to_string(), &os, CHROMIUM, None);
+      if let Some(object) = device.as_object_mut() {
+        object.extend(WayfernManager::stored_object(
+          config.identity_overrides.as_deref(),
+        ));
+      }
+      config.fingerprint = Some(device.to_string());
+      if config.os.as_deref().is_none_or(str::is_empty) {
+        config.os = Some(os);
+      }
+    }
+  }
+  let has_payload = stored_shape(config) == StoredShape::Payload
+    || config
+      .fingerprint
+      .as_deref()
+      .and_then(WayfernManager::fingerprint_object)
+      .is_some_and(|device| !device.is_empty());
+  let has_identity = config.identity_id.is_some()
+    || config.identity_baseline.is_some()
+    || config.identity_overrides.is_some();
+  if has_payload && has_identity {
+    config.identity_id = None;
+    config.identity_baseline = None;
+    config.identity_overrides = None;
+    changed = true;
+  } else if shape == StoredShape::Identity && has_payload {
+    changed = true;
+  }
+  changed
+}
+
+/// Move every stored profile to Apostate (`adopt_profile`). Not an edit: no
+/// `updated_at` bump and no team activity, so no machine uploads a metadata
+/// change its peers will not make by themselves. The profile data directory is
+/// never touched, so cookies and logins carry over. Returns how many profiles
+/// moved.
+pub fn migrate_profiles() -> usize {
+  let Ok(profiles) = crate::profile::ProfileManager::instance().list_profiles() else {
+    return 0;
+  };
+  let moved = profiles
+    .iter()
+    .filter(|profile| adopt_profile(profile).is_some())
+    .count();
+  if moved > 0 {
+    let _ = crate::events::emit_empty("profiles-changed");
+  }
+  moved
+}
+
+/// The profile as Apostate runs it, stored, or `None` when it already is one.
+/// A launch calls this too, so a profile that no startup pass has reached yet
+/// (a sync that just delivered it) is moved before it opens.
+///
+/// The stored `version` becomes the engine's Chromium: the persona's user agent
+/// is built from it, and the closed engine's number would claim a browser that
+/// is not the one running.
+pub fn adopt_profile(
+  profile: &crate::profile::BrowserProfile,
+) -> Option<crate::profile::BrowserProfile> {
+  if profile.browser != "wayfern" {
+    return None;
+  }
+  let mut updated = profile.clone();
+  let mut identity_replaced = false;
+  let mut changed = updated.version != CHROMIUM;
+  updated.version = CHROMIUM.to_string();
+  if let Some(config) = updated.wayfern_config.as_mut() {
+    identity_replaced = config.identity_id.is_some();
+    changed |= adopt_config(profile, config);
+  }
+  if !changed {
+    return None;
+  }
+  let manager = crate::profile::ProfileManager::instance();
+  match manager.save_profile_unchanged(profile, &updated) {
+    Ok(true) => {
+      log::info!(
+        "Profile moved to Apostate profile={} identity_replaced={identity_replaced}",
+        profile.id
+      );
+      Some(updated)
+    }
+    Ok(false) => {
+      log::debug!(
+        "Profile changed while moving to Apostate, next start retries profile={}",
+        profile.id
+      );
+      None
+    }
+    Err(error) => {
+      log::warn!(
+        "Profile not moved to Apostate profile={} err=\"{error}\"",
+        profile.id
+      );
+      None
+    }
+  }
 }
 
 fn install_dir(asset: &Asset) -> PathBuf {
@@ -173,9 +392,12 @@ fn stage(stage: &str, downloaded: u64, total: Option<u64>) -> DownloadProgress {
   }
 }
 
+static INSTALL_STREAK: Streak = Streak::new(module_path!(), "Apostate install");
+static BACKGROUND_INSTALL: AtomicBool = AtomicBool::new(false);
+
 /// The engine's executable, downloaded and verified first when it is not on
-/// disk. One install at a time: a launch and a profile creation that both need
-/// it share the download.
+/// disk. One install at a time: a launch, a profile creation and the startup
+/// install that all need it share the download.
 pub async fn ensure_installed() -> Result<PathBuf, String> {
   let Some(asset) = host_asset() else {
     log::warn!(
@@ -196,6 +418,7 @@ pub async fn ensure_installed() -> Result<PathBuf, String> {
   match install(asset).await {
     Ok(exe) => {
       emit_progress(stage("completed", 0, None));
+      INSTALL_STREAK.succeeded();
       log::info!(
         "Apostate installed version={VERSION} target={} elapsed_ms={}",
         asset.target,
@@ -204,11 +427,11 @@ pub async fn ensure_installed() -> Result<PathBuf, String> {
       Ok(exe)
     }
     Err(error) => {
-      log::warn!(
-        "Apostate install failed version={VERSION} target={} err=\"{}\"",
+      INSTALL_STREAK.failed(format!(
+        "version={VERSION} target={} err=\"{}\"",
         asset.target,
         crate::log_redaction::text(&error)
-      );
+      ));
       emit_progress(DownloadProgress::failed(
         ENGINE,
         VERSION,
@@ -216,6 +439,99 @@ pub async fn ensure_installed() -> Result<PathBuf, String> {
       ));
       Err(error)
     }
+  }
+}
+
+/// Whether the engine's download at startup is switched off: an end-to-end
+/// session without network, which seeds a stand-in executable instead.
+fn startup_install_disabled() -> bool {
+  cfg!(test)
+    || (cfg!(feature = "e2e")
+      && crate::e2e_automation_enabled()
+      && std::env::var_os("DONUT_E2E_DISABLE_STARTUP_NETWORK").is_some())
+}
+
+/// How long the background install waits after its n-th failed attempt.
+fn retry_delay(failures: u32) -> std::time::Duration {
+  std::time::Duration::from_secs((15u64 << failures.min(5)).min(300))
+}
+
+/// Download and verify the engine in the background until it is on disk. Idempotent:
+/// a second call while one runs does nothing, and an installed engine ends it at
+/// once. A failed attempt (offline, a blocked host) is retried with a growing wait,
+/// logged through `INSTALL_STREAK`, and a launch that comes in the meantime tries
+/// by itself. The download shows its progress through `download-progress`.
+pub fn start_background_install() {
+  if startup_install_disabled() {
+    return;
+  }
+  if BACKGROUND_INSTALL.swap(true, Ordering::SeqCst) {
+    return;
+  }
+  tauri::async_runtime::spawn(async {
+    {
+      let _install = INSTALL.lock().await;
+      let binaries = crate::app_dirs::binaries_dir();
+      let _ = tokio::task::spawn_blocking(move || sweep_leftovers(&binaries)).await;
+    }
+    let mut failures = 0u32;
+    loop {
+      match ensure_installed().await {
+        Ok(_) => break,
+        Err(error) if error.contains("APOSTATE_UNSUPPORTED_HOST") => break,
+        Err(_) => {
+          tokio::time::sleep(retry_delay(failures)).await;
+          failures += 1;
+        }
+      }
+    }
+    BACKGROUND_INSTALL.store(false, Ordering::SeqCst);
+  });
+}
+
+/// Removes what no launch reads any more: downloads an earlier run left half
+/// done when it quit, other Apostate versions, and the Wayfern builds the
+/// app used before Apostate. Runs under `INSTALL`, so no download is live.
+fn sweep_leftovers(binaries: &Path) {
+  let Ok(entries) = std::fs::read_dir(binaries) else {
+    return;
+  };
+  let staging_prefix = format!(".{ENGINE}-staging-");
+  let mut removed = Vec::new();
+  for entry in entries.flatten() {
+    let name = entry.file_name().to_string_lossy().into_owned();
+    if (name.starts_with(&staging_prefix) || name == "wayfern")
+      && std::fs::remove_dir_all(entry.path()).is_ok()
+    {
+      removed.push(name);
+    }
+  }
+  if let Ok(versions) = std::fs::read_dir(binaries.join(ENGINE)) {
+    for entry in versions.flatten() {
+      let name = entry.file_name().to_string_lossy().into_owned();
+      if name != VERSION && std::fs::remove_dir_all(entry.path()).is_ok() {
+        removed.push(format!("{ENGINE}/{name}"));
+      }
+    }
+  }
+  if !removed.is_empty() {
+    log::info!(
+      "Removed old engine files count={} kinds=[{}]",
+      removed.len(),
+      removed
+        .iter()
+        .map(|name| if name.starts_with(&staging_prefix) {
+          "partial_download"
+        } else if name == "wayfern" {
+          "wayfern"
+        } else {
+          "old_version"
+        })
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>()
+        .join(",")
+    );
   }
 }
 
@@ -575,9 +891,76 @@ pub fn geolocation_override(
   }))
 }
 
+/// Whether the engine is on disk, for the UI's "preparing the engine" notes.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct InstallStatus {
+  pub installed: bool,
+  /// False on a machine the engine has no build for: nothing will download.
+  pub supported: bool,
+  pub version: &'static str,
+  pub chromium: &'static str,
+}
+
+#[tauri::command]
+pub fn get_engine_install_status() -> InstallStatus {
+  InstallStatus {
+    installed: installed_executable().is_some(),
+    supported: host_asset().is_some(),
+    version: VERSION,
+    chromium: CHROMIUM,
+  }
+}
+
+/// The engine's download, for callers that name a browser and a version (the
+/// REST API and the frontend's download calls). There is one engine: any version
+/// asked for gets it, and the answer is the version it is.
+#[tauri::command]
+pub async fn download_browser(browser_str: String, version: String) -> Result<String, String> {
+  if browser_str != "wayfern" {
+    return Err(crate::backend_error_with_detail(
+      "INTERNAL_ERROR",
+      format!(
+        "Invalid browser type: {}",
+        crate::log_redaction::Plain(&browser_str)
+      ),
+    ));
+  }
+  log::debug!(
+    "Engine download requested version={}",
+    crate::log_redaction::Plain(&version)
+  );
+  ensure_installed().await?;
+  Ok(CHROMIUM.to_string())
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn sweep_keeps_only_the_pinned_engine() {
+    let root = tempfile::tempdir().unwrap();
+    let binaries = root.path();
+    let keep = binaries.join(ENGINE).join(VERSION).join("macos-arm64");
+    std::fs::create_dir_all(&keep).unwrap();
+    std::fs::write(keep.join("marker"), b"x").unwrap();
+    for dir in [
+      binaries.join(format!(".{ENGINE}-staging-abc")),
+      binaries.join("wayfern").join("156.0.1"),
+      binaries.join(ENGINE).join("0.4.0"),
+    ] {
+      std::fs::create_dir_all(&dir).unwrap();
+    }
+    std::fs::create_dir_all(binaries.join("other")).unwrap();
+
+    sweep_leftovers(binaries);
+
+    assert!(keep.join("marker").is_file());
+    assert!(binaries.join("other").is_dir());
+    assert!(!binaries.join(format!(".{ENGINE}-staging-abc")).exists());
+    assert!(!binaries.join("wayfern").exists());
+    assert!(!binaries.join(ENGINE).join("0.4.0").exists());
+  }
 
   fn persona<'a>(platform: &'a str) -> Persona<'a> {
     Persona {
@@ -624,21 +1007,6 @@ mod tests {
     assert!(!needs_apostate("android", "macos"));
     assert!(!needs_apostate("ios", "windows"));
     assert!(!needs_apostate("", "macos"));
-  }
-
-  #[test]
-  fn a_new_profile_is_stored_with_the_engine_its_os_needs() {
-    let host = crate::profile::types::get_host_os();
-    let other = if host == "windows" {
-      "macos"
-    } else {
-      "windows"
-    };
-    assert_eq!(engine_for_new_profile(Some(other)).as_deref(), Some(ENGINE));
-    assert_eq!(engine_for_new_profile(Some(&host)), None);
-    assert_eq!(engine_for_new_profile(None), None);
-    assert_eq!(engine_for_new_profile(Some("  ")), None);
-    assert_eq!(engine_for_new_profile(Some("android")), None);
   }
 
   #[test]
@@ -730,6 +1098,122 @@ mod tests {
       assert!(!asset.executable.is_empty());
       assert!(asset_file_name(asset).starts_with("apostate-155."));
     }
+  }
+
+  fn legacy_profile() -> crate::profile::BrowserProfile {
+    crate::profile::BrowserProfile {
+      name: "p".to_string(),
+      browser: "wayfern".to_string(),
+      version: "150.0.1.1".to_string(),
+      ..Default::default()
+    }
+  }
+
+  #[test]
+  fn a_phone_claim_is_refused_with_its_code_and_a_desktop_one_is_not() {
+    for os in ["android", "ios", " android "] {
+      let error = refuse_mobile(Some(os)).unwrap_err();
+      assert!(
+        error.contains("FINGERPRINT_MOBILE_UNSUPPORTED"),
+        "{os}: {error}"
+      );
+    }
+    for os in [
+      Some("windows"),
+      Some("macos"),
+      Some("linux"),
+      Some(""),
+      None,
+    ] {
+      assert!(refuse_mobile(os).is_ok(), "{os:?}");
+    }
+  }
+
+  #[test]
+  fn every_config_is_stamped_with_the_engine() {
+    let mut config = crate::wayfern_manager::WayfernConfig::default();
+    assert_eq!(config.engine, None);
+    stamp_engine(&mut config);
+    assert_eq!(config.engine.as_deref(), Some("apostate"));
+  }
+
+  #[test]
+  fn the_stored_shape_tells_a_payload_from_an_identity() {
+    let mut config = crate::wayfern_manager::WayfernConfig::default();
+    assert_eq!(stored_shape(&config), StoredShape::Empty);
+
+    config.identity_id = Some("id-1".to_string());
+    assert_eq!(stored_shape(&config), StoredShape::Identity);
+
+    config.identity_baseline = Some(r#"{"platform":"Win32"}"#.to_string());
+    assert_eq!(stored_shape(&config), StoredShape::IdentityWithView);
+
+    config.identity_id = None;
+    config.identity_baseline = None;
+    config.fingerprint = Some(r#"{"platform":"Win32"}"#.to_string());
+    assert_eq!(stored_shape(&config), StoredShape::Payload);
+  }
+
+  #[test]
+  fn an_identity_only_profile_gets_a_device_drawn_from_its_own_seed() {
+    let profile = legacy_profile();
+    let mut config = crate::wayfern_manager::WayfernConfig {
+      identity_id: Some("id-1".to_string()),
+      os: Some("windows".to_string()),
+      ..Default::default()
+    };
+
+    assert!(adopt_config(&profile, &mut config));
+    assert_eq!(config.engine.as_deref(), Some("apostate"));
+    assert_eq!(config.identity_id, None);
+    assert_eq!(stored_shape(&config), StoredShape::Payload);
+
+    let first = config.fingerprint.clone();
+    let mut again = crate::wayfern_manager::WayfernConfig {
+      identity_id: Some("id-1".to_string()),
+      os: Some("windows".to_string()),
+      ..Default::default()
+    };
+    adopt_config(&profile, &mut again);
+    assert_eq!(
+      first, again.fingerprint,
+      "the same seed draws the same device"
+    );
+  }
+
+  #[test]
+  fn an_adopted_config_is_left_alone_the_second_time() {
+    let profile = legacy_profile();
+    let mut config = crate::wayfern_manager::WayfernConfig {
+      identity_id: Some("id-1".to_string()),
+      os: Some("linux".to_string()),
+      ..Default::default()
+    };
+    assert!(adopt_config(&profile, &mut config));
+    let after_first = config.fingerprint.clone();
+    assert!(!adopt_config(&profile, &mut config));
+    assert_eq!(config.fingerprint, after_first);
+  }
+
+  #[test]
+  fn a_payload_beside_a_stale_identity_drops_the_identity() {
+    let profile = legacy_profile();
+    let mut config = crate::wayfern_manager::WayfernConfig {
+      identity_id: Some("id-1".to_string()),
+      identity_overrides: Some(r#"{"hardwareConcurrency":4}"#.to_string()),
+      fingerprint: Some(r#"{"platform":"Win32","hardwareConcurrency":8}"#.to_string()),
+      ..Default::default()
+    };
+    assert!(adopt_config(&profile, &mut config));
+    assert_eq!(config.identity_id, None);
+    assert_eq!(config.identity_overrides, None);
+    assert!(config.fingerprint.as_deref().unwrap().contains("Win32"));
+  }
+
+  #[test]
+  fn the_background_install_waits_longer_after_each_failure_up_to_five_minutes() {
+    let waits: Vec<u64> = (0..8).map(|n| retry_delay(n).as_secs()).collect();
+    assert_eq!(waits, [15, 30, 60, 120, 240, 300, 300, 300]);
   }
 
   #[test]
