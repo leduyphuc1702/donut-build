@@ -39,7 +39,7 @@ The updater automatically detects how the application was installed:
 
 ## Update Process
 
-1. **Check**: Fetches releases from GitHub and from Donut's copy on donutbrowser.com, every hour
+1. **Check**: Fetches releases from the fork's GitHub repository, every hour
 2. **Filter**: Filters releases based on build type (stable vs nightly)
 3. **Compare**: Compares versions using semantic versioning or commit hashes
 4. **Download**: Downloads appropriate asset with progress tracking

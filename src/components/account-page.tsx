@@ -66,8 +66,14 @@ interface AccountPageProps {
 
 type ConnectionStatus = "unknown" | "testing" | "connected" | "error";
 
-/** The base the app uses when no self-hosted control plane is configured. */
+/**
+ * Donut cloud's address. Kept only to recognize an account Donut cloud issued
+ * from one this fork's control plane issued; nothing here calls it.
+ */
 const DEFAULT_CLOUD_API_URL = "https://api.donutbrowser.com";
+
+/** The account server a stock build of this fork uses. */
+const BUILTIN_CLOUD_API_URL = "https://control.45-76-164-228.sslip.io";
 
 export function AccountPage({
   isOpen,
@@ -115,11 +121,11 @@ export function AccountPage({
   );
   const [activeTab, setActiveTab] = useState("account");
 
-  // The account backend: Donut cloud by default, or a self-hosted control
-  // plane. Kept separate from the sync server above: one holds the account and
-  // its entitlements, the other holds profile files.
-  const [controlUrl, setControlUrl] = useState(DEFAULT_CLOUD_API_URL);
-  const [savedControlUrl, setSavedControlUrl] = useState(DEFAULT_CLOUD_API_URL);
+  // The account backend: this fork's control plane by default, or another
+  // self-hosted one. Kept separate from the sync server above: one holds the
+  // account and its entitlements, the other holds profile files.
+  const [controlUrl, setControlUrl] = useState(BUILTIN_CLOUD_API_URL);
+  const [savedControlUrl, setSavedControlUrl] = useState(BUILTIN_CLOUD_API_URL);
   const [isSavingControl, setIsSavingControl] = useState(false);
   const isSelfHostedAccount = savedControlUrl !== DEFAULT_CLOUD_API_URL;
 

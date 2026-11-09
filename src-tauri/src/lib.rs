@@ -2682,7 +2682,8 @@ pub fn run_with_builder(
       }
 
       // Resolve the account backend before the first cloud request. A malformed
-      // stored value leaves the Donut default (or DONUT_CLOUD_API_URL) in place.
+      // stored value leaves the fork's control plane (or DONUT_CLOUD_API_URL)
+      // in place.
       if let Ok(settings) = crate::settings_manager::SettingsManager::instance().load_settings() {
         crate::cloud_auth::set_cloud_api_base(settings.cloud_api_url.as_deref());
       }

@@ -20,7 +20,9 @@ static GENERATION: AtomicU64 = AtomicU64::new(0);
 
 const SCHEMES: [&str; 4] = ["http", "https", "socks5", "socks5h"];
 const LOOPBACK: &str = "localhost,127.0.0.1,::1";
-const TEST_URL: &str = "https://donutbrowser.com/wayfern.json";
+/// Any reachable host proves the proxy carries a request. GitHub is already a
+/// hard dependency (updates and the engine download), so it adds no new one.
+const TEST_URL: &str = "https://github.com/";
 const TEST_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// The proxy URL, normalized, or `APP_PROXY_INVALID`.

@@ -37,7 +37,10 @@ import { showErrorToast, showSuccessToast } from "@/lib/toast-utils";
 import { cn } from "@/lib/utils";
 import type { SyncServerCheck, SyncSettings, SyncSourceState } from "@/types";
 
-const DEVICE_LINK_URL = "https://donutbrowser.com/auth/link";
+/** This fork's control plane serves the link page a code is minted on. */
+const DEVICE_LINK_URL = "https://control.45-76-164-228.sslip.io/auth/link";
+/** The sync server a stock build of this fork offers first. */
+const BUILTIN_SYNC_URL = "https://sync.45-76-164-228.sslip.io";
 
 interface SyncConfigDialogProps {
   isOpen: boolean;
@@ -139,7 +142,7 @@ export function SyncConfigDialog({
     setIsLoading(true);
     try {
       const settings = await invoke<SyncSettings>("get_sync_settings");
-      setServerUrl(settings.sync_server_url ?? "");
+      setServerUrl(settings.sync_server_url ?? BUILTIN_SYNC_URL);
       setToken(settings.sync_token ?? "");
       if (settings.sync_server_url && settings.sync_token) {
         void testConnection(settings.sync_server_url);
@@ -387,7 +390,7 @@ export function SyncConfigDialog({
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1" asChild>
                 <a
-                  href="https://donutbrowser.com/account"
+                  href="https://control.45-76-164-228.sslip.io/admin"
                   target="_blank"
                   rel="noopener noreferrer"
                 >

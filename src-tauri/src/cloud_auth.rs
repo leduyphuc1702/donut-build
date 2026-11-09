@@ -13,8 +13,15 @@ use crate::proxy_manager::PROXY_MANAGER;
 use crate::settings_manager::{SettingsManager, StoredMcpRemoteKey};
 use crate::sync;
 
+/// Donut cloud's address. This build never calls it: the value stays only as
+/// the marker that tells an account Donut cloud issued from one this fork's
+/// control plane issued, so a stored legacy address can be recognized.
 pub const DEFAULT_CLOUD_API_URL: &str = "https://api.donutbrowser.com";
 pub const CLOUD_SYNC_URL: &str = "https://sync.donutbrowser.com";
+
+/// The control plane this fork ships with. Every account call goes here when
+/// no other server was saved and `DONUT_CLOUD_API_URL` is not set.
+pub const BUILTIN_CONTROL_PLANE_URL: &str = "https://control.45-76-164-228.sslip.io";
 
 /// The configured cloud API base, formatted on demand.
 ///
@@ -64,21 +71,28 @@ pub fn is_self_hosted_account() -> bool {
   cloud_api_base() != DEFAULT_CLOUD_API_URL
 }
 
+/// Whether `base` is Donut cloud's own address. A value stored by an older
+/// build is ignored rather than honored: this fork has no route to it.
+fn is_donut_cloud(base: &str) -> bool {
+  base.trim_end_matches('/') == DEFAULT_CLOUD_API_URL
+}
+
 /// The base `set_cloud_api_base` will apply: the configured address, else
-/// `DONUT_CLOUD_API_URL`, else Donut cloud.
+/// `DONUT_CLOUD_API_URL`, else this fork's control plane.
 fn effective_cloud_api_base(configured: Option<&str>) -> String {
   configured
     .and_then(normalize_cloud_api_base)
+    .filter(|base| !is_donut_cloud(base))
     .unwrap_or_else(|| {
       std::env::var("DONUT_CLOUD_API_URL")
         .ok()
         .and_then(|value| normalize_cloud_api_base(&value))
-        .unwrap_or_else(|| DEFAULT_CLOUD_API_URL.to_string())
+        .unwrap_or_else(|| BUILTIN_CONTROL_PLANE_URL.to_string())
     })
 }
 
 /// Point every account call at `url`. `None` restores `DONUT_CLOUD_API_URL`
-/// when it is set, else Donut cloud.
+/// when it is set, else this fork's control plane.
 pub fn set_cloud_api_base(url: Option<&str>) {
   let next = effective_cloud_api_base(url);
   *CLOUD_API_BASE
@@ -2050,7 +2064,7 @@ pub fn get_cloud_api_url() -> String {
 }
 
 /// Point the account backend at another server. `None` clears the stored
-/// address, falling back to `DONUT_CLOUD_API_URL` or Donut cloud.
+/// address, falling back to `DONUT_CLOUD_API_URL` or this fork's control plane.
 #[tauri::command]
 pub async fn set_cloud_api_url(url: Option<String>) -> Result<String, String> {
   let normalized = match url.as_deref().map(str::trim).filter(|url| !url.is_empty()) {
@@ -2392,6 +2406,28 @@ mod tests {
     assert_eq!(
       format!("{CLOUD_API_URL}/api/auth/me"),
       format!("{base}/api/auth/me")
+    );
+  }
+
+  #[test]
+  fn a_stock_build_and_a_stored_cloud_address_both_use_the_fork_control_plane() {
+    if std::env::var_os("DONUT_CLOUD_API_URL").is_some() {
+      return;
+    }
+    assert_eq!(
+      effective_cloud_api_base(None),
+      BUILTIN_CONTROL_PLANE_URL,
+      "a stock build has no Donut cloud fallback"
+    );
+    assert_eq!(
+      effective_cloud_api_base(Some(DEFAULT_CLOUD_API_URL)),
+      BUILTIN_CONTROL_PLANE_URL,
+      "an address saved by an older build is ignored"
+    );
+    assert_eq!(
+      effective_cloud_api_base(Some("https://control.example.com")),
+      "https://control.example.com",
+      "another self-hosted server is still honored"
     );
   }
 

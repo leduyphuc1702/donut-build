@@ -1,0 +1,91 @@
+# Donut control plane + sync server on one VPS, behind one Caddy (HTTPS).
+#
+# One machine, one Caddy: the control plane answers on CONTROL_DOMAIN and
+# donut-sync on SYNC_DOMAIN. Only Caddy publishes ports; everything else stays
+# on the compose network.
+#
+# Images are built off the server (`vietflow/vps/README.md`): the boxes this
+# runs on are small enough that a Rust release build there swaps or OOMs.
+services:
+  control-plane:
+    image: donut-control-plane:latest
+    restart: unless-stopped
+    environment:
+      PORT: "8787"
+      CONTROL_TOKEN: ${CONTROL_TOKEN:?CONTROL_TOKEN is required}
+      AUTO_LOGIN_KEY: ${AUTO_LOGIN_KEY:-}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      ACCOUNT_ID: ${ACCOUNT_ID:-selfhosted-owner}
+      ACCOUNT_EMAIL: ${ACCOUNT_EMAIL:-owner@selfhosted.local}
+      ACCOUNT_PLAN: ${ACCOUNT_PLAN:-enterprise}
+      SYNC_SERVER_URL: ${SYNC_SERVER_URL:-}
+      TEAM_ID: ${TEAM_ID:-local-team}
+      TEAM_NAME: ${TEAM_NAME:-Vietflow}
+      DATA_DIR: /data
+    volumes:
+      - ./data/control:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    mem_limit: 96m
+
+  s3:
+    image: rclone/rclone:latest
+    restart: unless-stopped
+    command:
+      - serve
+      - s3
+      - /data
+      - --addr
+      - :9000
+      - --auth-key
+      - ${S3_ACCESS_KEY_ID},${S3_SECRET_ACCESS_KEY}
+      - --force-path-style
+      - --vfs-cache-mode
+      - writes
+    volumes:
+      - ./data/s3:/data
+    mem_limit: 192m
+
+  donut-sync:
+    image: donut-sync:latest
+    restart: unless-stopped
+    depends_on:
+      - s3
+    environment:
+      SYNC_TOKEN: ${SYNC_TOKEN:?SYNC_TOKEN is required}
+      PORT: "12342"
+      S3_ENDPOINT: http://s3:9000
+      S3_REGION: us-east-1
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: donut-sync
+      S3_FORCE_PATH_STYLE: "true"
+      SYNC_AT_REST_KEY: ${SYNC_AT_REST_KEY:?SYNC_AT_REST_KEY is required}
+    mem_limit: 64m
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - control-plane
+      - donut-sync
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CONTROL_DOMAIN: ${CONTROL_DOMAIN:?CONTROL_DOMAIN is required}
+      SYNC_DOMAIN: ${SYNC_DOMAIN:?SYNC_DOMAIN is required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 64m
+
+volumes:
+  caddy_data:
+  caddy_config:

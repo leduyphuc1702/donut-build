@@ -1100,8 +1100,12 @@ mod tests {
   }
 
   #[test]
-  fn bridge_url_is_the_websocket_scheme_of_the_cloud_api() {
-    assert_eq!(bridge_url(), "wss://api.donutbrowser.com/api/mcp-bridge");
+  fn bridge_url_is_the_websocket_scheme_of_the_account_api() {
+    let expected = format!(
+      "{}{BRIDGE_PATH}",
+      crate::cloud_auth::BUILTIN_CONTROL_PLANE_URL.replacen("https://", "wss://", 1)
+    );
+    assert_eq!(bridge_url(), expected);
   }
 
   #[test]

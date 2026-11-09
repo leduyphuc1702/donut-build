@@ -105,6 +105,7 @@ donutbrowser/
 │   └── src/                        # Controllers, services, auth, S3 sync
 ├── vietflow/sync-server/           # Vietflow fork: donut-sync deploy (VPS with Caddy HTTPS, or LAN) and its Vietnamese guide
 ├── vietflow/control-plane/         # Self-hosted account/control plane (Node, no deps): team members and /admin page, per-user sign-in, unlimited entitlements, profile locks, per-device activity log
+├── vietflow/vps/                   # One VPS for both: compose (control plane + rclone S3 + donut-sync + Caddy) and its build-off-box guide
 ├── e2e/                            # Isolated native UI/sync/browser E2E system
 │   ├── app/                        # Test-only Tauri harness that injects the private driver
 │   ├── lib/                        # WebDriver, CDP, fixtures, app-session helpers

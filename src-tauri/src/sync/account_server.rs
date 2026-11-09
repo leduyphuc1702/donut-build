@@ -80,9 +80,10 @@ pub fn normalize_server_url(raw: &str) -> Option<String> {
 }
 
 /// The source the settings name. Signed out, the shared-token server. Signed
-/// in, the picked one while its server is still set; with no pick, an own
-/// server set before the choice existed, else Donut cloud. A team seat never
-/// syncs with a shared-token server, which is outside the team's rules.
+/// in, the picked one while its server is still set; with no pick, the
+/// shared-token server, else the account's own server. A self-hosted account
+/// never falls back to Donut cloud, and a team seat of one uses the same
+/// server as everyone else in this fork.
 pub(crate) fn resolve(
   settings: &AppSettings,
   signed_in: bool,
@@ -446,22 +447,23 @@ mod tests {
   }
 
   #[test]
-  fn signing_in_starts_on_donut_cloud() {
+  fn signing_in_never_starts_on_donut_cloud() {
     assert_eq!(
       resolve(&settings(None, None, None), true, false),
-      Some(SyncSource::Cloud)
+      None,
+      "a stock build has no cloud account to sync with"
     );
     assert_eq!(
       resolve(&settings(None, Some(SHARED), None), true, false),
-      Some(SyncSource::Cloud)
+      Some(SyncSource::SelfHosted(SHARED.into()))
     );
   }
 
   #[test]
-  fn an_own_server_set_before_the_choice_stays_in_use() {
+  fn the_shared_server_wins_over_an_unpicked_own_server() {
     assert_eq!(
       resolve(&settings(Some(OWN), Some(SHARED), None), true, false),
-      Some(SyncSource::Account(OWN.into()))
+      Some(SyncSource::SelfHosted(SHARED.into()))
     );
   }
 
@@ -474,7 +476,11 @@ mod tests {
         false,
       )
     };
-    assert_eq!(both(SyncSourceKind::Cloud), Some(SyncSource::Cloud));
+    assert_eq!(
+      both(SyncSourceKind::Cloud),
+      Some(SyncSource::SelfHosted(SHARED.into())),
+      "a cloud pick cannot reach an account this server issued"
+    );
     assert_eq!(
       both(SyncSourceKind::Account),
       Some(SyncSource::Account(OWN.into()))
@@ -490,8 +496,8 @@ mod tests {
         true,
         false
       ),
-      Some(SyncSource::Cloud),
-      "a pick whose server is gone falls back"
+      None,
+      "a pick whose server is gone disables sync"
     );
     assert_eq!(
       resolve(
@@ -499,12 +505,13 @@ mod tests {
         true,
         false
       ),
-      Some(SyncSource::Account(OWN.into()))
+      None,
+      "a self-hosted pick with no shared server stays off rather than using the account's"
     );
   }
 
   #[test]
-  fn saving_an_own_server_picks_it_and_removing_it_returns_to_cloud() {
+  fn saving_an_own_server_picks_it_and_removing_it_returns_to_the_shared_server() {
     let mut saved = settings(None, Some(SHARED), Some(SyncSourceKind::Cloud));
     apply_account_server(&mut saved, Some(OWN.into()));
     assert_eq!(
@@ -513,7 +520,10 @@ mod tests {
     );
     apply_account_server(&mut saved, None);
     assert_eq!(saved.sync_source, None);
-    assert_eq!(resolve(&saved, true, false), Some(SyncSource::Cloud));
+    assert_eq!(
+      resolve(&saved, true, false),
+      Some(SyncSource::SelfHosted(SHARED.into()))
+    );
 
     let mut shared = settings(Some(OWN), Some(SHARED), Some(SyncSourceKind::SelfHosted));
     apply_account_server(&mut shared, None);
@@ -535,8 +545,8 @@ mod tests {
       assert_eq!(token_server(&legacy), None, "{stored}");
       assert_eq!(
         resolve(&legacy, true, false),
-        Some(SyncSource::Cloud),
-        "{stored}"
+        None,
+        "a legacy cloud address leaves nothing to sync with: {stored}"
       );
     }
     assert_eq!(
@@ -546,21 +556,26 @@ mod tests {
   }
 
   #[test]
-  fn a_team_seat_never_syncs_with_a_shared_token_server() {
+  fn a_team_seat_uses_the_self_hosted_server() {
     let picked = settings(Some(OWN), Some(SHARED), Some(SyncSourceKind::SelfHosted));
-    assert_eq!(resolve(&picked, true, true), Some(SyncSource::Cloud));
+    assert_eq!(
+      resolve(&picked, true, true),
+      Some(SyncSource::SelfHosted(SHARED.into())),
+      "a one-seat self-hosted team still syncs where the person pointed it"
+    );
     assert_eq!(
       resolve(&settings(Some(OWN), Some(SHARED), None), true, true),
-      Some(SyncSource::Account(OWN.into()))
+      Some(SyncSource::SelfHosted(SHARED.into()))
     );
 
     let mut stored = picked.clone();
     assert!(!settle_team_pick(&mut stored, false));
     assert_eq!(stored.sync_source, Some(SyncSourceKind::SelfHosted));
-    assert!(settle_team_pick(&mut stored, true));
-    assert_eq!(stored.sync_source, Some(SyncSourceKind::Cloud));
-    assert!(!settle_team_pick(&mut stored, true), "reset once");
-    assert_eq!(resolve(&stored, true, false), Some(SyncSource::Cloud));
+    assert!(
+      !settle_team_pick(&mut stored, true),
+      "a self-hosted pick is never reset to Donut cloud"
+    );
+    assert_eq!(stored.sync_source, Some(SyncSourceKind::SelfHosted));
   }
 
   #[test]

@@ -20,8 +20,8 @@ import { useCloudAuth } from "@/hooks/use-cloud-auth";
 import { translateBackendError } from "@/lib/backend-errors";
 import { showErrorToast, showSuccessToast } from "@/lib/toast-utils";
 
-const DEVICE_LINK_URL = "https://donutbrowser.com/auth/link";
-const DEFAULT_CLOUD_API_URL = "https://api.donutbrowser.com";
+/** This fork's control plane serves the link page a code is minted on. */
+const DEVICE_LINK_URL = "https://control.45-76-164-228.sslip.io/auth/link";
 
 interface DeviceCodeVerifyDialogProps {
   isOpen: boolean;
@@ -59,8 +59,7 @@ export function DeviceCodeVerifyDialog({
   };
 
   // Reset the field when the dialog reopens so a stale code from a previous
-  // attempt doesn't auto-populate. A self-hosted control plane serves its own
-  // link page; the Donut website only knows about Donut cloud accounts.
+  // attempt doesn't auto-populate. The account server serves its own link page.
   useEffect(() => {
     if (!isOpen) return;
     setLinkCode("");
@@ -68,11 +67,7 @@ export function DeviceCodeVerifyDialog({
     void invoke<string>("get_cloud_api_url")
       .then((base) => {
         if (cancelled) return;
-        setLoginUrl(
-          base === DEFAULT_CLOUD_API_URL
-            ? DEVICE_LINK_URL
-            : `${base}/auth/link`,
-        );
+        setLoginUrl(`${base}/auth/link`);
       })
       .catch((error) => {
         console.error("Failed to read the account server:", error);
