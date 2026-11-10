@@ -648,6 +648,50 @@ test("the first sync of an empty profile publishes a manifest and records comple
   }
 });
 
+test("sync is on by default, and a profile switched off here stays off", async () => {
+  const app = appFromEnvironment("sync-default-on");
+  try {
+    await app.start();
+    const kept = await createProfile(app, "Default On Profile");
+    const declined = await createProfile(app, "Switched Off Profile");
+    await configureSync(app);
+    const modeOf = async (id) =>
+      (await app.invoke("list_browser_profiles")).find((item) => item.id === id)
+        ?.sync_mode;
+    await waitFor(
+      app,
+      async () =>
+        (await modeOf(kept.id)) === "Regular" &&
+        (await modeOf(declined.id)) === "Regular",
+      "both new profiles switch sync on by themselves",
+      120_000,
+    );
+    await waitFor(
+      app,
+      async () =>
+        (await listRemote(`profiles/${kept.id}/`)).some(
+          (item) => item.key === `profiles/${kept.id}/manifest.json`,
+        ),
+      "a profile nobody toggled reaches the sync server",
+      60_000,
+    );
+
+    await app.invoke("set_profile_sync_mode", {
+      profileId: declined.id,
+      syncMode: "Disabled",
+    });
+    // Longer than one default sweep.
+    await new Promise((resolve) => setTimeout(resolve, 40_000));
+    assert.equal(await modeOf(declined.id), "Disabled");
+    assert.equal(await modeOf(kept.id), "Regular");
+  } catch (error) {
+    await app.capture("failure");
+    throw error;
+  } finally {
+    await app.close();
+  }
+});
+
 test("a restore point keeps a profile's files and puts them back on every device", async () => {
   const app = appFromEnvironment("sync-restore-points");
   try {

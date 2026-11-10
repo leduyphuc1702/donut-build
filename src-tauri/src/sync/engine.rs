@@ -245,7 +245,7 @@ fn is_safe_manifest_path(path: &str) -> bool {
 /// Whether this machine syncs the profile's browser files, or only its
 /// metadata. Every Wayfern profile syncs its files, whichever OS created it;
 /// only a profile of a browser bound to another OS keeps to its metadata.
-fn syncs_browser_files(profile: &BrowserProfile) -> bool {
+pub(super) fn syncs_browser_files(profile: &BrowserProfile) -> bool {
   !profile.is_cross_os()
 }
 
@@ -3989,7 +3989,7 @@ pub async fn resume_profile_sync(
   apply_profile_sync_mode(app_handle, profile_id, mode, true).await
 }
 
-async fn apply_profile_sync_mode(
+pub(super) async fn apply_profile_sync_mode(
   app_handle: tauri::AppHandle,
   profile_id: String,
   new_mode: SyncMode,
@@ -4111,6 +4111,7 @@ async fn apply_profile_sync_mode(
   profile_manager
     .save_profile(&profile)
     .map_err(|e| crate::backend_error_with_detail("INTERNAL_ERROR", e))?;
+  super::default_on::note_switched_off(&profile_id, !enabling);
 
   // A remote run obtains the profile through sync, so a local-only profile has
   // nothing there — and switching to Encrypted leaves a copy that cannot be

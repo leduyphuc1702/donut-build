@@ -3485,6 +3485,14 @@ pub fn run_with_builder(
           };
           tokio::join!(sync_token_fut, proxy_fut);
 
+          if sync::account_server::adopt_from_account(&app_handle_cloud).await {
+            let app_handle_sync = app_handle_cloud.clone();
+            tauri::async_runtime::spawn(async move {
+              STARTUP_SCAN_DONE.wait().await;
+              sync::start_pipeline(app_handle_sync).await;
+            });
+          }
+
           // Subscribe to remote-session transitions. Started here rather than
           // unconditionally because a signed-out desktop has nothing to stream
           // and would only be refused on a loop; the frontend starts it again

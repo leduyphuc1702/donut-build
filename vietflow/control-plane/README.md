@@ -12,6 +12,7 @@ Nó **không** chứa dữ liệu hồ sơ. Việc đồng bộ hồ sơ vẫn d
 | Quản lý thành viên | `/admin`, `/admin/login`, `/admin/members/*` | Trang web cho chủ sở hữu: thêm nhân viên, cấp lại mã, đổi vai trò, đăng xuất các máy, xóa |
 | Tài khoản | `/api/auth/me`, `/api/auth/token/refresh` | Tài khoản của đúng người đang đăng nhập: `teamRole` là vai trò của họ, gói và entitlements là của chủ sở hữu |
 | Sync token | `/api/auth/sync-token` | JWT `scope=server-sync`, `sub` là người hỏi, gắn với `server` được hỏi |
+| Cấu hình đồng bộ | `GET /api/auth/sync-config` | `{ server, token }` lấy từ `SYNC_SERVER_URL` và `SYNC_SHARED_TOKEN`; 404 `SYNC_NOT_PROVIDED` khi thiếu một trong hai. App gọi sau khi đăng nhập để tự bật đồng bộ |
 | Khóa hồ sơ | `/api/profile-locks/*` | Mỗi hồ sơ một người giữ khóa tại một thời điểm; khóa hết hạn sau 90 giây nếu máy giữ không gửi heartbeat (30 giây một lần) |
 | Nhóm | `GET /api/teams/{id}/members`, `PUT .../members/{user}/access` | Danh sách mọi người và nhóm hồ sơ mỗi người được dùng. Chủ sở hữu và quản trị viên mới xem/sửa được |
 | Nhật ký hoạt động | `POST /api/teams/activity`, `GET /api/teams/{id}/activity`, `.../activity.csv` | Nhật ký trong `DATA_DIR/team.json`: ai làm gì, trên máy nào. Chỉ chủ sở hữu và quản trị viên đọc được |
@@ -108,6 +109,7 @@ Không chạy thêm Caddy thứ hai: nó sẽ tranh cổng 80/443. Thêm service
       ACCOUNT_EMAIL: ${ACCOUNT_EMAIL:-owner@selfhosted.local}
       ACCOUNT_PLAN: ${ACCOUNT_PLAN:-enterprise}
       SYNC_SERVER_URL: ${SYNC_SERVER_URL:-}
+      SYNC_SHARED_TOKEN: ${SYNC_SHARED_TOKEN:-}
       TEAM_ID: ${TEAM_ID:-local-team}
       TEAM_NAME: ${TEAM_NAME:-Vietflow}
       DATA_DIR: /data
@@ -182,7 +184,11 @@ pnpm tauri build
 
 ## Đồng bộ hồ sơ
 
-Control plane không thay `donut-sync`. Cấu hình **Tài khoản → Tự lưu trữ** (self-hosted sync) với `SYNC_TOKEN` của [`../sync-server`](../sync-server). Với tài khoản tự host, mục này vẫn mở sau khi đăng nhập (tài khoản tự host không có cloud backup), nên bản build tự đăng nhập vẫn đặt được server đồng bộ. Sau khi lưu, app dùng server đó và không gửi token tới `sync.donutbrowser.com`.
+Control plane không thay `donut-sync`. Khi đặt `SYNC_SERVER_URL` và `SYNC_SHARED_TOKEN` (bằng `SYNC_TOKEN` của [`../sync-server`](../sync-server)), mọi máy đăng nhập sẽ tự nhận server và token đồng bộ, không cần nhập gì. App hỏi lại lúc mở và mười phút một lần, nên đổi token trên server thì các máy tự theo. Đăng xuất sẽ xóa token đã nhận khỏi máy. Token này mở toàn bộ kho dữ liệu, nên ai đăng nhập được là đồng bộ được mọi hồ sơ.
+
+Hồ sơ mới mặc định bật đồng bộ (cùng proxy, nhóm, VPN và nhóm tiện ích của nó). Hồ sơ cũ đang tắt đồng bộ cũng được bật một lần khi máy có server đồng bộ. Hồ sơ người dùng tự tắt đồng bộ trên máy nào thì giữ tắt trên máy đó.
+
+Nếu không đặt `SYNC_SHARED_TOKEN`, vẫn có thể nhập tay ở **Tài khoản → Tự lưu trữ** như trước. Sau khi lưu, app dùng server đó và không gửi token tới `sync.donutbrowser.com`.
 
 Cách đơn giản nhất cho một công ty là:
 

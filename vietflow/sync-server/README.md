@@ -47,7 +47,7 @@ docker compose up -d --build
 
 ## 3. Trên từng máy Donut
 
-1. **Tài khoản → Tự lưu trữ**: nhập URL máy chủ và token (`SYNC_TOKEN`), rồi bấm "Kiểm tra kết nối".
+1. Nếu control plane có `SYNC_SHARED_TOKEN` (bản VPS đặt sẵn bằng `SYNC_TOKEN`), chỉ cần đăng nhập: máy tự nhận server và token, và hồ sơ mặc định bật đồng bộ. Nếu không, vào **Tài khoản → Tự lưu trữ**: nhập URL máy chủ và token (`SYNC_TOKEN`), rồi bấm "Kiểm tra kết nối".
 2. Đặt **mật khẩu mã hóa đầu cuối**, giống nhau trên mọi máy.
 3. Với mỗi hồ sơ dùng chung, chọn **Đồng bộ mã hóa E2E**.
 4. Mọi máy chạy Donut bản Vietflow. Máy chạy bản gốc sẽ bị coi là "không phản hồi" khi người khác yêu cầu dùng hồ sơ.

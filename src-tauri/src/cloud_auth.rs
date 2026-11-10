@@ -123,10 +123,15 @@ fn provisioning_config(
   baked_key: Option<&str>,
 ) -> Option<(String, String)> {
   let key = non_empty(runtime_key).or_else(|| non_empty(baked_key))?;
-  let base = if configured_base != DEFAULT_CLOUD_API_URL {
-    configured_base.to_string()
-  } else {
-    normalize_cloud_api_base(non_empty(runtime_url).or_else(|| non_empty(baked_url))?)?
+  // The built-in control plane is what an install uses when nothing was
+  // saved, so it yields to the address given with the key.
+  let saved =
+    configured_base != DEFAULT_CLOUD_API_URL && configured_base != BUILTIN_CONTROL_PLANE_URL;
+  let base = match non_empty(runtime_url).or_else(|| non_empty(baked_url)) {
+    _ if saved => configured_base.to_string(),
+    Some(url) => normalize_cloud_api_base(url)?,
+    None if configured_base == BUILTIN_CONTROL_PLANE_URL => configured_base.to_string(),
+    None => return None,
   };
   if base == DEFAULT_CLOUD_API_URL {
     return None;
@@ -168,6 +173,7 @@ const MAX_RETRY_AFTER: Duration = Duration::from_secs(60 * 60);
 static ACCESS_TOKEN_REFRESH: Streak = Streak::new(module_path!(), "Access token refresh");
 static SYNC_TOKEN_FETCH: Streak = Streak::new(module_path!(), "Sync token fetch");
 static SERVER_SYNC_TOKEN_FETCH: Streak = Streak::new(module_path!(), "Own server sync token fetch");
+static ACCOUNT_SYNC_CONFIG_FETCH: Streak = Streak::new(module_path!(), "Account sync config fetch");
 
 /// Tokens for the customer's own sync server, by address. In memory only:
 /// they last minutes and cost one request to replace.
@@ -495,6 +501,14 @@ struct RefreshTokenResponse {
 struct SyncTokenResponse {
   #[serde(rename = "syncToken")]
   sync_token: String,
+}
+
+/// The shared sync server and token a self-hosted control plane hands to a
+/// signed-in device.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct AccountSyncConfig {
+  pub server: String,
+  pub token: String,
 }
 
 /// Prefix of a remote MCP credential. Only a key carrying this prefix may ever
@@ -1424,6 +1438,47 @@ impl CloudAuthManager {
     Ok(Some(sync_token))
   }
 
+  /// The shared sync server and token the signed-in account's control plane
+  /// hands out, or `None` when it hands out none (an older control plane, or
+  /// one without `SYNC_SHARED_TOKEN`).
+  pub async fn account_sync_config(&self) -> Result<Option<AccountSyncConfig>, String> {
+    if !self.is_logged_in().await {
+      return Ok(None);
+    }
+    let fetched = self
+      .api_call_with_retry(|access_token| {
+        let url = format!("{CLOUD_API_URL}/api/auth/sync-config");
+        let client = self.client.get();
+        async move {
+          let response = client
+            .get(&url)
+            .header("Authorization", format!("Bearer {access_token}"))
+            .send()
+            .await
+            .map_err(|e| format!("Failed to get sync config: {e}"))?;
+          let status = response.status();
+          if status == reqwest::StatusCode::NOT_FOUND {
+            return Ok(None);
+          }
+          if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(format!("Sync config request failed ({status}): {body}"));
+          }
+          let config: AccountSyncConfig = response
+            .json()
+            .await
+            .map_err(|e| format!("Failed to parse sync config: {e}"))?;
+          Ok(Some(config).filter(|c| !c.server.trim().is_empty() && !c.token.is_empty()))
+        }
+      })
+      .await;
+    match &fetched {
+      Ok(_) => ACCOUNT_SYNC_CONFIG_FETCH.succeeded(),
+      Err(e) => ACCOUNT_SYNC_CONFIG_FETCH.failed(e),
+    }
+    fetched
+  }
+
   /// A token for the customer's own donut-sync at `server`, which the Donut
   /// API binds to that one address (`sync::account_server`).
   pub async fn server_sync_token(&self, server: &str) -> Result<String, String> {
@@ -1917,6 +1972,10 @@ impl CloudAuthManager {
       // Failures are logged inside.
       let _ = CLOUD_AUTH.get_or_refresh_sync_token().await;
 
+      if crate::sync::account_server::adopt_from_account(&app_handle).await {
+        sync::start_pipeline(app_handle.clone()).await;
+      }
+
       let plan_before = CLOUD_AUTH.plan_marker().await;
 
       // Refresh profile data periodically. A failure here leaves the cached
@@ -2019,6 +2078,9 @@ pub async fn cloud_exchange_device_code(
     state.user.effective_plan(),
     has_subscription
   );
+
+  // The caller restarts sync after sign-in, which picks this up.
+  crate::sync::account_server::adopt_from_account(&app_handle).await;
 
   // Pre-fetch sync token so sync can start immediately
   if has_subscription {
@@ -2169,7 +2231,8 @@ pub async fn cloud_refresh_profile() -> Result<CloudUser, String> {
 
 #[tauri::command]
 pub async fn cloud_logout(app_handle: tauri::AppHandle) -> Result<(), String> {
-  let keep_self_hosted = crate::sync::account_server::self_hosted_picked().await;
+  let keep_self_hosted = crate::sync::account_server::self_hosted_picked().await
+    && !crate::sync::account_server::holds_account_token(&app_handle).await;
   CLOUD_AUTH.logout().await?;
 
   // Stop the remote session-events stream. Its credential is now invalid, so
@@ -2502,6 +2565,22 @@ mod tests {
         "baked-key".to_string()
       )),
       "a distributed build uses what it was compiled with"
+    );
+    assert_eq!(
+      provisioning_config(
+        BUILTIN_CONTROL_PLANE_URL,
+        Some("http://127.0.0.1:4100"),
+        Some("key"),
+        None,
+        None
+      ),
+      Some(("http://127.0.0.1:4100".to_string(), "key".to_string())),
+      "the built-in control plane is no saved choice: the given address wins"
+    );
+    assert_eq!(
+      provisioning_config(BUILTIN_CONTROL_PLANE_URL, None, Some("key"), None, None),
+      Some((BUILTIN_CONTROL_PLANE_URL.to_string(), "key".to_string())),
+      "a key alone provisions against the built-in control plane"
     );
   }
 

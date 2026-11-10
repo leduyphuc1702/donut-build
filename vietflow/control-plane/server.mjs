@@ -98,6 +98,10 @@ export function loadConfig(env = process.env) {
     email: envString(env, "ACCOUNT_EMAIL", "owner@selfhosted.local"),
     plan: envString(env, "ACCOUNT_PLAN", "enterprise"),
     syncServerUrl: envString(env, "SYNC_SERVER_URL"),
+    // donut-sync's shared `SYNC_TOKEN`. Set together with SYNC_SERVER_URL, it
+    // is handed to every signed-in device, so signing in is all a device
+    // needs to sync. It opens the whole bucket, like typing it in did.
+    syncSharedToken: envString(env, "SYNC_SHARED_TOKEN"),
     // The account forms a one-seat team of its own. The id is stable and
     // local, so the desktop can hold team features (the activity log, access
     // rules, profile locks) without a cloud team to join.
@@ -1728,6 +1732,16 @@ export function createControlPlane(config) {
         }
         return sendJson(res, 200, {
           syncToken: syncToken(config, user, body.server),
+        });
+      }
+
+      if (path === "/api/auth/sync-config" && method === "GET") {
+        if (!config.syncServerUrl || !config.syncSharedToken) {
+          return sendJson(res, 404, { code: "SYNC_NOT_PROVIDED" });
+        }
+        return sendJson(res, 200, {
+          server: config.syncServerUrl,
+          token: config.syncSharedToken,
         });
       }
 

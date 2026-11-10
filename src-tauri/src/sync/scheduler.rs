@@ -509,6 +509,7 @@ impl SyncScheduler {
       // Once the senders are gone `recv()` resolves instantly and forever, so
       // the arm has to be disabled or the loop spins hot on a dead channel.
       let mut work_channel_open = true;
+      let mut last_default_sweep: Option<Instant> = None;
 
       while scheduler.running.load(Ordering::SeqCst) {
         tokio::select! {
@@ -543,6 +544,10 @@ impl SyncScheduler {
           }
           _ = ticker.tick() => {
             if sync_target_exists().await {
+              if last_default_sweep.is_none_or(|at| at.elapsed() >= super::default_on::SWEEP_EVERY) {
+                last_default_sweep = Some(Instant::now());
+                super::default_on::spawn_sweep(app_handle_clone.clone());
+              }
               scheduler.process_pending(&app_handle_clone).await;
             } else {
               // Nothing could sync: sleep instead of waking every 2 s.

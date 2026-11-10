@@ -2063,7 +2063,14 @@ test("offline cloud, update, team-lock, trial, and synchronizer contracts are de
       await app.invoke("cloud_logout");
       assert.equal(await app.invoke("cloud_get_user"), null);
     },
-    { extraEnv: { DONUT_E2E_PAID_PLAN: "" } },
+    {
+      // The stock, signed-out desktop these contracts describe: the fork's
+      // built-in control plane would answer some of them as a live server.
+      extraEnv: {
+        DONUT_E2E_PAID_PLAN: "",
+        DONUT_CLOUD_API_URL: "https://api.donutbrowser.com",
+      },
+    },
   );
 });
 
@@ -2076,7 +2083,8 @@ test("a self-hosted control plane signs in and answers the account contracts", a
     accountId: "e2e-owner",
     email: "e2e-owner@example.test",
     plan: "enterprise",
-    syncServerUrl: "",
+    syncServerUrl: "http://127.0.0.1:9/donut-sync",
+    syncSharedToken: "e2e-shared-sync-token",
     dataDir,
   });
   await new Promise((resolve, reject) => {
@@ -2086,6 +2094,8 @@ test("a self-hosted control plane signs in and answers the account contracts", a
   const base = `http://127.0.0.1:${control.address().port}`;
   try {
     await withApp("integrations-control-plane", async (app) => {
+      const unset = await app.invoke("get_sync_settings");
+      assert.equal(unset.sync_server_url ?? null, null);
       assert.equal(await app.invoke("set_cloud_api_url", { url: base }), base);
 
       const link = await fetch(`${base}/auth/link`, {
@@ -2119,12 +2129,13 @@ test("a self-hosted control plane signs in and answers the account contracts", a
       const user = await app.invoke("cloud_get_user");
       assert.equal(user.user.id, "e2e-owner");
       assert.deepEqual(await app.invoke("get_team_locks"), []);
+      // Signing in is all a device needs to sync: the control plane hands out
+      // its shared server and token, never Donut cloud.
+      const adopted = await app.invoke("get_sync_settings");
+      assert.equal(adopted.sync_server_url, "http://127.0.0.1:9/donut-sync");
+      assert.equal(adopted.sync_token, "e2e-shared-sync-token");
       const source = await app.invoke("get_sync_source");
-      assert.equal(
-        source.active,
-        null,
-        "a self-hosted account must not fall back to Donut cloud sync",
-      );
+      assert.equal(source.active, "self_hosted");
 
       const allowance = await app.invoke("get_profile_creation_allowance");
       assert.equal(allowance.unlimited, true);
@@ -2204,6 +2215,13 @@ test("a self-hosted control plane signs in and answers the account contracts", a
 
       await app.invoke("cloud_logout");
       assert.equal(await app.invoke("cloud_get_user"), null);
+      const cleared = await app.invoke("get_sync_settings");
+      assert.equal(
+        cleared.sync_token ?? null,
+        null,
+        "signing out takes back the token the account handed out",
+      );
+      assert.equal(cleared.sync_server_url ?? null, null);
     });
   } finally {
     control.closeAllConnections?.();
@@ -2223,7 +2241,8 @@ test("a build with a provisioning key signs itself in before the first launch", 
     accountId: "e2e-auto-owner",
     email: "e2e-auto-owner@example.test",
     plan: "pro",
-    syncServerUrl: "",
+    syncServerUrl: "http://127.0.0.1:9/auto-sync",
+    syncSharedToken: "e2e-auto-shared-sync-token",
     dataDir,
   });
   await new Promise((resolve, reject) => {
@@ -2248,6 +2267,18 @@ test("a build with a provisioning key signs itself in before the first launch", 
         assert.equal(state.user.entitlements.browserAutomation, true);
         assert.equal(state.user.entitlements.crossOsFingerprints, true);
         assert.equal(await app.invoke("get_cloud_api_url"), base);
+        const adopted = await app.waitFor(
+          async () => {
+            const settings = await app.invoke("get_sync_settings");
+            return settings.sync_token ? settings : null;
+          },
+          {
+            description: "the sync server the account hands out",
+            timeoutMs: 30_000,
+          },
+        );
+        assert.equal(adopted.sync_server_url, "http://127.0.0.1:9/auto-sync");
+        assert.equal(adopted.sync_token, "e2e-auto-shared-sync-token");
       },
       {
         extraEnv: {

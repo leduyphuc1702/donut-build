@@ -19,6 +19,7 @@ services:
       ACCOUNT_EMAIL: ${ACCOUNT_EMAIL:-owner@selfhosted.local}
       ACCOUNT_PLAN: ${ACCOUNT_PLAN:-enterprise}
       SYNC_SERVER_URL: ${SYNC_SERVER_URL:-}
+      SYNC_SHARED_TOKEN: ${SYNC_TOKEN:-}
       TEAM_ID: ${TEAM_ID:-local-team}
       TEAM_NAME: ${TEAM_NAME:-Vietflow}
       DATA_DIR: /data

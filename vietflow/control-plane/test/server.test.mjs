@@ -219,6 +219,32 @@ test("the sync token is bound to the requested server", async () => {
   assert.equal(claims.aud, server);
 });
 
+test("a signed-in device is handed the shared sync server and token", async () => {
+  const login = await signIn();
+  const unset = await json("/api/auth/sync-config", {
+    headers: auth(login.body.accessToken),
+  });
+  assert.equal(unset.status, 404);
+  assert.equal(unset.body.code, "SYNC_NOT_PROVIDED");
+
+  await withPlane(
+    async (plane) => {
+      const anonymous = await plane.call("/api/auth/sync-config");
+      assert.equal(anonymous.status, 401);
+      const owner = await ownerLogin(plane);
+      const handed = await plane.call("/api/auth/sync-config", {
+        headers: auth(owner.accessToken),
+      });
+      assert.equal(handed.status, 200);
+      assert.deepEqual(handed.body, {
+        server: "https://sync.example.test",
+        token: "shared-sync-token",
+      });
+    },
+    { syncSharedToken: "shared-sync-token" },
+  );
+});
+
 test("profile locks let a single owner launch without a conflict", async () => {
   const login = await signIn();
   const headers = auth(login.body.accessToken);

@@ -237,6 +237,64 @@ pub fn cloud_run_refusal() -> Option<String> {
   (source != SyncSource::Cloud).then(|| crate::backend_error("REMOTE_NEEDS_DONUT_SYNC"))
 }
 
+/// Point this device at the sync server and token its self-hosted account
+/// hands out, so signing in is all a device needs to sync. Whether the stored
+/// server or token changed; the caller restarts sync then.
+pub async fn adopt_from_account(app_handle: &tauri::AppHandle) -> bool {
+  if !self_hosted_account() {
+    return false;
+  }
+  let Ok(Some(config)) = crate::cloud_auth::CLOUD_AUTH.account_sync_config().await else {
+    return false;
+  };
+  let Some(server) = normalize_server_url(&config.server) else {
+    log::warn!("Account sync server ignored: not a server address");
+    return false;
+  };
+  let manager = SettingsManager::instance();
+  let Ok(mut settings) = manager.load_settings() else {
+    return false;
+  };
+  let stored_token = manager.get_sync_token(app_handle).await.ok().flatten();
+  let same_server = settings
+    .sync_server_url
+    .as_deref()
+    .and_then(normalize_server_url)
+    .is_some_and(|stored| stored == server);
+  if same_server && stored_token.as_deref() == Some(config.token.as_str()) {
+    return false;
+  }
+
+  let stored = manager.store_sync_token(app_handle, &config.token).await;
+  if let Err(e) = stored {
+    log::warn!("Account sync token not stored err=\"{e}\"");
+    return false;
+  }
+  settings.sync_server_url = Some(server.clone());
+  if save(&settings).is_err() {
+    return false;
+  }
+  log::info!("Sync server set from account server={server}");
+  true
+}
+
+/// Whether the sync token on this device is the one the signed-in account
+/// hands out. Asked before signing out, while the account can still answer.
+pub async fn holds_account_token(app_handle: &tauri::AppHandle) -> bool {
+  if !self_hosted_account() {
+    return false;
+  }
+  let Ok(Some(config)) = crate::cloud_auth::CLOUD_AUTH.account_sync_config().await else {
+    return false;
+  };
+  SettingsManager::instance()
+    .get_sync_token(app_handle)
+    .await
+    .ok()
+    .flatten()
+    .is_some_and(|token| token == config.token)
+}
+
 /// Forget the own server and the pick at sign-out; the next account starts on
 /// Donut cloud.
 pub(crate) fn clear() {

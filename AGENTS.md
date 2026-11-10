@@ -60,7 +60,7 @@ donutbrowser/
 │   │   ├── agent_schedules.rs       # Thin client for scheduled recipes (paid plans; the cloud checks the plan)
 │   │   ├── cloud_api.rs             # Signed-in JSON calls to Donut cloud, with token refresh and error codes
 │   │   ├── feedback.rs              # Feedback to the Donut team from the dialog and the send_feedback MCP tool, optional redacted logs
-│   │   ├── sync/                    # Cloud sync (engine, encryption, manifest, scheduler, lease: one device at a time per profile)
+│   │   ├── sync/                    # Cloud sync (engine, encryption, manifest, scheduler, lease: one device at a time per profile; default_on: every profile syncs unless switched off on this device; account_server: a self-hosted sign-in adopts the control plane's sync server and token)
 │   │   ├── vpn/                     # WireGuard tunnels; tcp_shape.rs gives the worker's TCP/IP packets the claimed OS's SYN layout, TTL and window scaling
 │   │   ├── ramfs/                   # Windows RAM volume for ephemeral profiles: in-memory file system on WinFsp, hosted by donut-proxy
 │   │   ├── xray/                    # Xray share links (VLESS, VMess, Trojan, Hysteria2): parse, export, client config
