@@ -250,7 +250,8 @@ impl WayfernManager {
     }
     let webrtc_mode = WebRtcMode::from_config(config);
     let exit_ip = crate::fingerprint_consistency::cached_exit_ip(profile);
-    let seed = profile.id.to_string();
+    let seed =
+      apostate::windows_11_seed(&executable_path, &platform, &profile.id.to_string()).await;
     let persona = Persona {
       seed: &seed,
       platform: &platform,

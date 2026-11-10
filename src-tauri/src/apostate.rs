@@ -830,6 +830,74 @@ pub fn persona_args(persona: &Persona) -> Result<Vec<String>, String> {
   Ok(args)
 }
 
+/// The engine draws a Windows persona's release from the seed, Windows 10 for
+/// about one seed in four, and fingerprint checkers flag a Windows 10 persona
+/// as inconsistent (iphey's "butterfly") whatever its fonts or GPU. So a
+/// Windows persona takes the first of `seed`, `seed-1`, `seed-2`... that draws
+/// Windows 11, read from `--fingerprint-explain`: the same profile still gets
+/// the same machine on every launch. A Windows 10 host keeps the plain seed,
+/// since it has no Windows 11 fonts to back such a persona.
+pub async fn windows_11_seed(executable: &Path, platform: &str, seed: &str) -> String {
+  const TRIES: u32 = 16;
+  if platform != "windows" || !host_backs_windows_11() {
+    return seed.to_string();
+  }
+  for n in 0..TRIES {
+    let candidate = if n == 0 {
+      seed.to_string()
+    } else {
+      format!("{seed}-{n}")
+    };
+    let explain = tokio::process::Command::new(executable)
+      .arg(format!("--fingerprint={candidate}"))
+      .arg("--fingerprint-platform=windows")
+      .arg("--fingerprint-explain")
+      .envs(ENVIRONMENT.iter().copied())
+      .stdin(std::process::Stdio::null())
+      .stderr(std::process::Stdio::null())
+      .kill_on_drop(true)
+      .output();
+    let report = match tokio::time::timeout(std::time::Duration::from_secs(10), explain).await {
+      Ok(Ok(output)) => String::from_utf8_lossy(&output.stdout).into_owned(),
+      Ok(Err(e)) => {
+        log::warn!("Persona release check failed err=\"{e}\"");
+        break;
+      }
+      Err(_) => {
+        log::warn!("Persona release check failed err=timeout");
+        break;
+      }
+    };
+    match os_release(&report) {
+      Some(release) if release.starts_with("windows-11") => return candidate,
+      Some(_) => {}
+      None => {
+        log::warn!("Persona release check failed err=no_os_release_row");
+        break;
+      }
+    }
+  }
+  seed.to_string()
+}
+
+fn host_backs_windows_11() -> bool {
+  if !cfg!(target_os = "windows") {
+    return true;
+  }
+  let windir = std::env::var_os("WINDIR").unwrap_or_else(|| "C:\\Windows".into());
+  Path::new(&windir)
+    .join("Fonts")
+    .join("SegUIVar.ttf")
+    .exists()
+}
+
+fn os_release(report: &str) -> Option<&str> {
+  report.lines().find_map(|line| {
+    let mut words = line.split_whitespace();
+    (words.next() == Some("os_release")).then(|| words.last())?
+  })
+}
+
 /// The environment Apostate's Chromium is started with: no Google API keys,
 /// so it never tries to reach Google's services with placeholder ones.
 pub const ENVIRONMENT: &[(&str, &str)] = &[
@@ -910,6 +978,32 @@ pub async fn download_browser(browser_str: String, version: String) -> Result<St
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn os_release_reads_the_explain_row() {
+    let report = "apostate fingerprint composition\n\n  seed                42\n\nsurface                   layer             evidence               value\nanchor                    anchor            physical-ground-truth  windows-d3d11-qualcomm-6388f9914f3f\nos_release                dispersion        catalogue-value        windows-10-22h2\n";
+    assert_eq!(os_release(report), Some("windows-10-22h2"));
+    assert_eq!(os_release("apostate fingerprint composition\n"), None);
+  }
+
+  #[cfg(unix)]
+  #[tokio::test]
+  async fn a_windows_persona_moves_to_the_first_windows_11_seed() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let engine = root.path().join("engine");
+    std::fs::write(
+      &engine,
+      "#!/bin/sh\ncase \"$1\" in\n  --fingerprint=p-2) echo 'os_release  dispersion  catalogue-value  windows-11-22h2' ;;\n  *) echo 'os_release  dispersion  catalogue-value  windows-10-22h2' ;;\nesac\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&engine, std::fs::Permissions::from_mode(0o755)).unwrap();
+
+    assert_eq!(windows_11_seed(&engine, "windows", "p").await, "p-2");
+    assert_eq!(windows_11_seed(&engine, "macos", "p").await, "p");
+    let missing = root.path().join("missing");
+    assert_eq!(windows_11_seed(&missing, "windows", "p").await, "p");
+  }
 
   #[test]
   fn sweep_keeps_only_the_pinned_engine() {
