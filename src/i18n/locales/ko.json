@@ -2452,6 +2452,8 @@
       "verifying": "브라우저 파일 확인 중...",
       "geoipDownloading": "GeoIP 데이터베이스 다운로드 중",
       "geoipDownloaded": "GeoIP 데이터베이스를 성공적으로 다운로드했습니다!",
+      "personaFontsDownloading": "Windows 프로필용 Windows 글꼴 다운로드 중",
+      "personaFontsDownloaded": "Windows 글꼴 설치됨",
       "downloadFailedDescription": "다운로드를 완료할 수 없습니다. 연결을 확인한 후 다시 시도하세요."
     }
   },

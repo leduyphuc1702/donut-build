@@ -2471,6 +2471,8 @@
       "verifying": "Verificando arquivos do navegador...",
       "geoipDownloading": "Baixando banco de dados GeoIP",
       "geoipDownloaded": "Banco de dados GeoIP baixado com sucesso!",
+      "personaFontsDownloading": "Baixando fontes do Windows para perfis do Windows",
+      "personaFontsDownloaded": "Fontes do Windows instaladas",
       "downloadFailedDescription": "Não foi possível concluir o download. Verifique sua conexão e tente novamente."
     }
   },

@@ -31,6 +31,8 @@ accepte = "accepte"
 administrar = "administrar"
 essentiels = "essentiels"
 preferenze = "preferenze"
+# Windows' Constantia font file (persona_fonts.rs).
+constan = "constan"
 
 [default.extend-identifiers]
 # Chrome Web Store extension name in the known-VPN list.

@@ -54,9 +54,10 @@ function progressDetail(speed?: number, eta?: number) {
 }
 
 /**
- * Shows the engine's first download, and the GeoIP database's, as toasts. The
- * app does not wait for either: the backend starts them at startup and a launch
- * that finds the engine missing waits for the same download.
+ * Shows the engine's first download, the Windows persona fonts' and the GeoIP
+ * database's, as toasts. The app does not wait for any: the backend starts them
+ * at startup and a launch that finds the engine or fonts missing waits for the
+ * same download.
  */
 export function useEngineInstallToasts() {
   useEffect(() => {
@@ -163,6 +164,38 @@ export function useEngineInstallToasts() {
           },
         );
         stops.push(stopGeoip);
+
+        // A failed attempt is retried by the backend, and a launch waits for
+        // the next one, so a failure only takes the toast away.
+        const stopFonts = await listen<GeoipProgress>(
+          "persona-fonts-progress",
+          (event) => {
+            const { stage, percentage, speed_bytes_per_sec, eta_seconds } =
+              event.payload;
+            if (stage === "downloading") {
+              showToast({
+                id: "persona-fonts-download",
+                type: "download",
+                title: i18n.t("browserDownload.toast.personaFontsDownloading"),
+                stage: "downloading",
+                progress: {
+                  percentage,
+                  ...progressDetail(speed_bytes_per_sec, eta_seconds),
+                },
+              });
+            } else if (stage === "completed") {
+              showToast({
+                id: "persona-fonts-download",
+                type: "download",
+                title: i18n.t("browserDownload.toast.personaFontsDownloaded"),
+                stage: "completed",
+              });
+            } else {
+              dismissToast("persona-fonts-download");
+            }
+          },
+        );
+        stops.push(stopFonts);
       } catch (error) {
         console.error("Failed to listen for download progress:", error);
       }

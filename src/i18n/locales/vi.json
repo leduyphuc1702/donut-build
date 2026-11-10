@@ -2452,6 +2452,8 @@
       "verifying": "Đang xác minh tệp trình duyệt...",
       "geoipDownloading": "Đang tải cơ sở dữ liệu GeoIP",
       "geoipDownloaded": "Đã tải cơ sở dữ liệu GeoIP thành công!",
+      "personaFontsDownloading": "Đang tải font Windows cho hồ sơ Windows",
+      "personaFontsDownloaded": "Đã cài font Windows",
       "downloadFailedDescription": "Không thể hoàn tất tải xuống. Hãy kiểm tra kết nối và thử lại."
     }
   },

@@ -2490,6 +2490,8 @@
       "verifying": "Проверка файлов браузера...",
       "geoipDownloading": "Загрузка базы данных GeoIP",
       "geoipDownloaded": "База данных GeoIP успешно загружена!",
+      "personaFontsDownloading": "Загрузка шрифтов Windows для профилей Windows",
+      "personaFontsDownloaded": "Шрифты Windows установлены",
       "downloadFailedDescription": "Не удалось завершить загрузку. Проверьте подключение и повторите попытку."
     }
   },

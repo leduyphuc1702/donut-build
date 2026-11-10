@@ -2471,6 +2471,8 @@
       "verifying": "Vérification des fichiers du navigateur...",
       "geoipDownloading": "Téléchargement de la base de données GeoIP",
       "geoipDownloaded": "Base de données GeoIP téléchargée avec succès !",
+      "personaFontsDownloading": "Téléchargement des polices Windows pour les profils Windows",
+      "personaFontsDownloaded": "Polices Windows installées",
       "downloadFailedDescription": "Le téléchargement n'a pas pu être terminé. Vérifiez votre connexion et réessayez."
     }
   },

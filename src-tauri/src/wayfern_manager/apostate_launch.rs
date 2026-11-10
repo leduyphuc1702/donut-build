@@ -40,6 +40,10 @@ pub(super) fn build_args(input: &ArgsInput) -> Result<Vec<String>, String> {
     "--hide-crash-restore-bubble".to_string(),
     "--disable-infobars".to_string(),
     LEAK_FEATURES_SWITCH.to_string(),
+    // The Widevine CDM the component updater fetches answers EME requests as
+    // the host OS, which contradicts any other persona; this also keeps an
+    // already downloaded CDM from loading. Costs DRM playback.
+    "--disable-component-update".to_string(),
     "--use-mock-keychain".to_string(),
     "--password-store=basic".to_string(),
     // The browser's own errors, among them one that says it could not open the
@@ -207,7 +211,14 @@ impl WayfernManager {
     };
     let executable_path = apostate::ensure_installed().await?;
     let platform = crate::launch_gate::claimed_fingerprint_os(profile);
-    let fonts_present = apostate::persona_fonts_present(&platform);
+    if let Err(error) = crate::persona_fonts::ensure_installed(&platform).await {
+      log::warn!(
+        "Persona fonts not installed, launching without them profile={} err=\"{}\"",
+        profile.id,
+        crate::log_redaction::text(&error)
+      );
+    }
+    let fonts_present = crate::persona_fonts::present(&platform);
     if !fonts_present {
       log::warn!(
         "Persona fonts missing, text measured by a page shows this machine's fonts profile={} platform={}",
@@ -521,6 +532,7 @@ mod tests {
     assert!(args.contains(&"--fingerprint-platform=windows".to_string()));
     assert!(args.contains(&"--fingerprint-noise".to_string()));
     assert!(args.contains(&"--use-mock-keychain".to_string()));
+    assert!(args.contains(&"--disable-component-update".to_string()));
     assert!(args.contains(&"--enable-logging=stderr".to_string()));
     assert!(args.iter().any(|a| a.starts_with("--proxy-pac-url=")));
     assert!(args.contains(&"--force-webrtc-ip-handling-policy=disable_non_proxied_udp".to_string()));

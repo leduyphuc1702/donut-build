@@ -207,6 +207,7 @@ pub mod log_streak;
 mod log_viewer;
 #[cfg_attr(feature = "e2e", allow(dead_code))]
 mod paste_typing;
+mod persona_fonts;
 mod platform_browser;
 mod portable_update;
 mod process_report;

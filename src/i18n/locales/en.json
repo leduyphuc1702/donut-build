@@ -2452,6 +2452,8 @@
       "verifying": "Verifying browser files...",
       "geoipDownloading": "Downloading GeoIP database",
       "geoipDownloaded": "GeoIP database downloaded successfully!",
+      "personaFontsDownloading": "Downloading Windows fonts for Windows profiles",
+      "personaFontsDownloaded": "Windows fonts installed",
       "downloadFailedDescription": "The download could not be completed. Check your connection and try again."
     }
   },

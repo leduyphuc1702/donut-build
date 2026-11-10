@@ -2452,6 +2452,8 @@
       "verifying": "Tarayıcı dosyaları doğrulanıyor...",
       "geoipDownloading": "GeoIP veritabanı indiriliyor",
       "geoipDownloaded": "GeoIP veritabanı başarıyla indirildi!",
+      "personaFontsDownloading": "Windows profilleri için Windows yazı tipleri indiriliyor",
+      "personaFontsDownloaded": "Windows yazı tipleri yüklendi",
       "downloadFailedDescription": "İndirme tamamlanamadı. Bağlantınızı kontrol edip tekrar deneyin."
     }
   },

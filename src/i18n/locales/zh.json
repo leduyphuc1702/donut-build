@@ -2452,6 +2452,8 @@
       "verifying": "正在验证浏览器文件...",
       "geoipDownloading": "正在下载 GeoIP 数据库",
       "geoipDownloaded": "GeoIP 数据库下载成功！",
+      "personaFontsDownloading": "正在为 Windows 配置文件下载 Windows 字体",
+      "personaFontsDownloaded": "Windows 字体已安装",
       "downloadFailedDescription": "下载未能完成。请检查网络连接后重试。"
     }
   },

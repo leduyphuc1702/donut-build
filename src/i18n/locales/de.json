@@ -2452,6 +2452,8 @@
       "verifying": "Browserdateien werden überprüft...",
       "geoipDownloading": "GeoIP-Datenbank wird heruntergeladen",
       "geoipDownloaded": "GeoIP-Datenbank erfolgreich heruntergeladen!",
+      "personaFontsDownloading": "Windows-Schriften für Windows-Profile werden heruntergeladen",
+      "personaFontsDownloaded": "Windows-Schriften installiert",
       "downloadFailedDescription": "Der Download konnte nicht abgeschlossen werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
     }
   },

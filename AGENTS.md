@@ -68,6 +68,7 @@ donutbrowser/
 │   │   ├── xray_worker_storage.rs   # Private Xray worker state and runtime files
 │   │   ├── wayfern_manager.rs       # Launch facade: the internal browser string stays "wayfern" (IDs, storage keys, synced data) while every profile runs on Apostate; wayfern_manager/apostate_launch.rs builds the command line
 │   │   ├── apostate.rs              # The only engine, open-source Apostate: pinned download + sha256, background install at startup (`download-progress` events), startup migration of stored profiles, persona switches
+│   │   ├── persona_fonts.rs         # Windows 11 core fonts a Windows persona needs on macOS/Linux: pinned files + sha256, background install after the engine, a launch waits for it (`persona-fonts-progress` events)
 │   │   ├── fingerprint_generator.rs # Local device payloads, drawn from fingerprint_devices.json (weighted real-desktop marginals, Apache-2.0 Apify data)
 │   │   ├── extraction.rs           # Archive extraction (zip, tar, dmg, msi)
 │   │   ├── portable_update.rs      # Portable Windows ZIP self-update: staged in .update/, files swapped at restart

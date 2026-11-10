@@ -452,7 +452,7 @@ fn startup_install_disabled() -> bool {
 }
 
 /// How long the background install waits after its n-th failed attempt.
-fn retry_delay(failures: u32) -> std::time::Duration {
+pub(crate) fn retry_delay(failures: u32) -> std::time::Duration {
   std::time::Duration::from_secs((15u64 << failures.min(5)).min(300))
 }
 
@@ -461,6 +461,7 @@ fn retry_delay(failures: u32) -> std::time::Duration {
 /// once. A failed attempt (offline, a blocked host) is retried with a growing wait,
 /// logged through `INSTALL_STREAK`, and a launch that comes in the meantime tries
 /// by itself. The download shows its progress through `download-progress`.
+/// The persona fonts follow once the engine is on disk.
 pub fn start_background_install() {
   if startup_install_disabled() {
     return;
@@ -475,15 +476,18 @@ pub fn start_background_install() {
       let _ = tokio::task::spawn_blocking(move || sweep_leftovers(&binaries)).await;
     }
     let mut failures = 0u32;
-    loop {
+    let installed = loop {
       match ensure_installed().await {
-        Ok(_) => break,
-        Err(error) if error.contains("APOSTATE_UNSUPPORTED_HOST") => break,
+        Ok(_) => break true,
+        Err(error) if error.contains("APOSTATE_UNSUPPORTED_HOST") => break false,
         Err(_) => {
           tokio::time::sleep(retry_delay(failures)).await;
           failures += 1;
         }
       }
+    };
+    if installed {
+      crate::persona_fonts::keep_installing().await;
     }
     BACKGROUND_INSTALL.store(false, Ordering::SeqCst);
   });
@@ -833,36 +837,6 @@ pub const ENVIRONMENT: &[(&str, &str)] = &[
   ("GOOGLE_DEFAULT_CLIENT_ID", "no"),
   ("GOOGLE_DEFAULT_CLIENT_SECRET", "no"),
 ];
-
-/// Where `apostate fonts install` puts the fonts a persona of `platform` needs,
-/// or `None` when this machine already has them (its own OS) or has no such
-/// directory.
-fn fonts_dir(platform: &str) -> Option<PathBuf> {
-  if platform == crate::profile::types::get_host_os() {
-    return None;
-  }
-  let name = match platform {
-    "windows" => "apostate-windows",
-    "macos" => "apostate-macos",
-    _ => return None,
-  };
-  if cfg!(target_os = "macos") {
-    dirs::home_dir().map(|home| home.join("Library/Fonts").join(name))
-  } else if cfg!(target_os = "linux") {
-    dirs::home_dir().map(|home| home.join(".local/share/fonts").join(name))
-  } else {
-    None
-  }
-}
-
-/// Whether the persona's fonts are installed on this machine. A persona without
-/// them still launches, but a page that measures text sees the host's fonts.
-pub fn persona_fonts_present(platform: &str) -> bool {
-  match fonts_dir(platform) {
-    Some(dir) => std::fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_some()),
-    None => true,
-  }
-}
 
 /// Geolocation as CDP's `Emulation.setGeolocationOverride` takes it. Apostate
 /// has no switch for it, and an override lasts only as long as the CDP session
