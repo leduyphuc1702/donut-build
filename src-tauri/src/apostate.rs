@@ -358,6 +358,39 @@ fn executable_in(dir: &Path, asset: &Asset) -> PathBuf {
   dir.join(asset.executable)
 }
 
+/// `chrome.exe` depends on a private side-by-side assembly named after the
+/// Chromium version, and Windows refuses to start it (os error 14001) unless
+/// that assembly's manifest sits beside it. Apostate's Windows archive leaves
+/// the manifest out, so Donut writes the one Chromium's build generates.
+fn ensure_version_assembly(dir: &Path, asset: &Asset) -> std::io::Result<()> {
+  if !asset.target.starts_with("windows") {
+    return Ok(());
+  }
+  let manifest = dir.join(format!("{CHROMIUM}.manifest"));
+  if manifest.is_file() {
+    return Ok(());
+  }
+  std::fs::write(
+    &manifest,
+    format!(
+      "<?xml version='1.0' encoding='UTF-8' standalone='yes'?>\r\n\
+       <assembly xmlns='urn:schemas-microsoft-com:asm.v1' manifestVersion='1.0'>\r\n\
+       \x20 <assemblyIdentity name='{CHROMIUM}' version='{CHROMIUM}' type='win32'/>\r\n\
+       \x20 <file name='chrome_elf.dll'/>\r\n\
+       </assembly>\r\n"
+    ),
+  )?;
+  log::info!("Apostate version assembly written version={CHROMIUM}");
+  Ok(())
+}
+
+/// Repairs an install made before Donut wrote the version assembly.
+fn complete_install(asset: &Asset) {
+  if let Err(error) = ensure_version_assembly(&install_dir(asset), asset) {
+    log::warn!("Apostate version assembly not written err=\"{error}\"");
+  }
+}
+
 /// The installed executable, if the engine is on disk.
 pub fn installed_executable() -> Option<PathBuf> {
   let asset = host_asset()?;
@@ -408,10 +441,12 @@ pub async fn ensure_installed() -> Result<PathBuf, String> {
     return Err(crate::backend_error("APOSTATE_UNSUPPORTED_HOST"));
   };
   if let Some(exe) = installed_executable() {
+    complete_install(asset);
     return Ok(exe);
   }
   let _install = INSTALL.lock().await;
   if let Some(exe) = installed_executable() {
+    complete_install(asset);
     return Ok(exe);
   }
   let started = std::time::Instant::now();
@@ -616,6 +651,7 @@ async fn install(asset: &'static Asset) -> Result<PathBuf, String> {
     if !executable_in(&top, asset).is_file() {
       return Err(download_failed("the archive holds no browser executable"));
     }
+    ensure_version_assembly(&top, asset).map_err(download_failed)?;
 
     let destination = install_dir(asset);
     if let Some(parent) = destination.parent() {
@@ -1166,6 +1202,27 @@ mod tests {
       assert!(!asset.executable.is_empty());
       assert!(asset_file_name(asset).starts_with("apostate-155."));
     }
+  }
+
+  #[test]
+  fn a_windows_install_gets_the_version_assembly_chrome_exe_names() {
+    let asset_for = |target| ASSETS.iter().find(|a| a.target == target).unwrap();
+    let root = tempfile::tempdir().unwrap();
+    let manifest = root.path().join(format!("{CHROMIUM}.manifest"));
+
+    ensure_version_assembly(root.path(), asset_for("macos-arm64")).unwrap();
+    assert!(!manifest.exists());
+
+    ensure_version_assembly(root.path(), asset_for("windows-x64")).unwrap();
+    let text = std::fs::read_to_string(&manifest).unwrap();
+    assert!(text.contains(&format!(
+      "name='{CHROMIUM}' version='{CHROMIUM}' type='win32'"
+    )));
+    assert!(text.contains("<file name='chrome_elf.dll'/>"));
+
+    std::fs::write(&manifest, "kept").unwrap();
+    ensure_version_assembly(root.path(), asset_for("windows-x64")).unwrap();
+    assert_eq!(std::fs::read_to_string(&manifest).unwrap(), "kept");
   }
 
   fn legacy_profile() -> crate::profile::BrowserProfile {
