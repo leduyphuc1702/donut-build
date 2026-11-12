@@ -189,6 +189,29 @@ pub fn header_names(start: &[u8], key_id: &str) -> bool {
     && &start[id_at..id_at + key_id.len()] == key_id.as_bytes()
 }
 
+/// Bytes enough to hold any header.
+pub const MAX_HEADER_LEN: usize = MAGIC.len() + 2 + MAX_KEY_ID + SALT;
+/// The smallest sealed object: a one-letter key id and one empty frame.
+pub const MIN_SEALED_LEN: u64 = (MAGIC.len() + 2 + 1 + SALT + TAG) as u64;
+
+/// Whether `start`, the first bytes read so far, could still begin a header.
+pub fn may_start_header(start: &[u8]) -> bool {
+  let n = start.len().min(MAGIC.len());
+  start[..n] == MAGIC[..n] && start.get(MAGIC.len()).is_none_or(|v| *v == VERSION)
+}
+
+/// The key id named by the header `start` begins with, or `None` when it
+/// begins with none.
+pub fn header_key_id(start: &[u8]) -> Option<&str> {
+  let id_at = MAGIC.len() + 2;
+  if start.len() < id_at || !may_start_header(start) {
+    return None;
+  }
+  let id_len = start[MAGIC.len() + 1] as usize;
+  let id = std::str::from_utf8(start.get(id_at..id_at + id_len)?).ok()?;
+  (key_id_valid(id) && start.len() as u64 >= header_len(id)).then_some(id)
+}
+
 fn frames(plain: u64) -> u64 {
   plain.div_ceil(FRAME as u64).max(1)
 }

@@ -5,10 +5,17 @@
 //! In the unsealing state (`Keyring::unsealing`) sealed objects still read,
 //! but writes stay plaintext, so `migrate-at-rest --unseal` can empty the
 //! bucket of sealed objects before the key is removed.
+//!
+//! Some stores lose the marker: rclone `serve s3` keeps user metadata in
+//! memory only, so a restart drops it, and so does an overwrite once its
+//! write cache has flushed. An object without a marker whose bytes start
+//! with a header, at a size a sealed object can have, is read as sealed.
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use bytes::Bytes;
+use futures_util::StreamExt;
 
 use crate::at_rest::{self, Keyring, MARKER};
 use crate::store::{
@@ -21,17 +28,63 @@ pub struct SealedStore {
   keyring: Arc<Keyring>,
 }
 
-/// The key id a stored object is sealed under; `None` for plaintext.
+/// The key id a stored object's marker names; `None` without one.
 pub fn sealed_by(head: &HeadOutput) -> Option<&str> {
   head.metadata_value(MARKER).and_then(at_rest::marker_key_id)
 }
 
-/// `head` as the plaintext object would have it.
-fn reveal(mut head: HeadOutput) -> Result<HeadOutput, StoreError> {
-  if let Some(id) = sealed_by(&head) {
-    let id = id.to_string();
+fn sealed_size(id: &str, head: &HeadOutput) -> bool {
+  head
+    .content_length
+    .is_none_or(|stored| at_rest::plain_len(id, stored).is_some())
+}
+
+/// The key id of a sealed object whose marker the store lost, read from its
+/// header; `None` for plaintext and for an object that has a marker.
+pub(crate) async fn unmarked_seal(
+  store: &dyn Store,
+  key: &str,
+  head: &HeadOutput,
+) -> Result<Option<String>, StoreError> {
+  if head.metadata_value(MARKER).is_some()
+    || head.content_length.unwrap_or(0) < at_rest::MIN_SEALED_LEN
+  {
+    return Ok(None);
+  }
+  let start = store.get_range(key, at_rest::MAX_HEADER_LEN as u64).await?;
+  Ok(
+    at_rest::header_key_id(&start)
+      .filter(|id| sealed_size(id, head))
+      .map(str::to_string),
+  )
+}
+
+/// Reads the start of `body` far enough to find a header, and gives the
+/// body back whole.
+async fn peek_seal(
+  mut body: ByteStream,
+  head: &HeadOutput,
+) -> Result<(Option<String>, ByteStream), StoreError> {
+  let mut start = Vec::new();
+  while start.len() < at_rest::MAX_HEADER_LEN && at_rest::may_start_header(&start) {
+    match body.next().await {
+      Some(chunk) => start.extend_from_slice(&chunk?),
+      None => break,
+    }
+  }
+  let id = at_rest::header_key_id(&start)
+    .filter(|id| sealed_size(id, head))
+    .map(str::to_string);
+  let first = futures_util::stream::once(async move { Ok(Bytes::from(start)) });
+  Ok((id, Box::pin(first.chain(body))))
+}
+
+/// `head` as the plaintext object would have it, for an object sealed under
+/// `id`.
+fn reveal(mut head: HeadOutput, id: Option<&str>) -> Result<HeadOutput, StoreError> {
+  if let Some(id) = id {
     head.content_length = match head.content_length {
-      Some(sealed) => Some(at_rest::plain_len(&id, sealed).ok_or_else(|| {
+      Some(sealed) => Some(at_rest::plain_len(id, sealed).ok_or_else(|| {
         StoreError::Corrupt(format!("sealed object has an invalid size {sealed}"))
       })?),
       None => None,
@@ -68,7 +121,12 @@ impl Store for SealedStore {
   }
 
   async fn head_object(&self, key: &str) -> Result<HeadOutput, StoreError> {
-    reveal(self.inner.head_object(key).await?)
+    let head = self.inner.head_object(key).await?;
+    let id = match sealed_by(&head) {
+      Some(id) => Some(id.to_string()),
+      None => unmarked_seal(self.inner.as_ref(), key, &head).await?,
+    };
+    reveal(head, id.as_deref())
   }
 
   async fn get_object_text(&self, key: &str) -> Result<String, StoreError> {
@@ -167,13 +225,16 @@ impl Store for SealedStore {
   }
 
   async fn get_object(&self, key: &str) -> Result<Download, StoreError> {
-    let download = self.inner.get_object(key).await?;
-    let sealed = sealed_by(&download.head).is_some();
-    let head = reveal(download.head)?;
-    let body = if sealed {
-      at_rest::open_stream(self.keyring.clone(), download.body)
-    } else {
-      download.body
+    let Download { head, body } = self.inner.get_object(key).await?;
+    let (id, body) = match sealed_by(&head) {
+      Some(id) => (Some(id.to_string()), body),
+      None if head.metadata_value(MARKER).is_none() => peek_seal(body, &head).await?,
+      None => (None, body),
+    };
+    let head = reveal(head, id.as_deref())?;
+    let body = match id {
+      Some(_) => at_rest::open_stream(self.keyring.clone(), body),
+      None => body,
     };
     Ok(Download { head, body })
   }

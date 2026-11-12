@@ -261,6 +261,23 @@ fn markers_name_their_key() {
   assert_eq!(marker_key_id("1:"), None);
 }
 
+#[test]
+fn headers_are_read_from_the_first_bytes() {
+  let sealed = seal(&keyring(K1), b"x");
+  assert_eq!(header_key_id(&sealed), Some("k1"));
+  assert_eq!(header_key_id(&sealed[..header_bytes("k1")]), Some("k1"));
+  assert_eq!(header_key_id(&sealed[..header_bytes("k1") - 1]), None);
+  assert_eq!(header_key_id(b"DSAR looks sealed but has no marker"), None);
+  assert_eq!(header_key_id(b"{\"token\":\"t\"}"), None);
+  assert!(may_start_header(b""));
+  assert!(may_start_header(b"DS"));
+  assert!(may_start_header(&sealed[..5]));
+  assert!(!may_start_header(b"DSAR "));
+  assert!(!may_start_header(b"{"));
+  assert!(header_bytes("k1") <= MAX_HEADER_LEN);
+  assert_eq!(sealed_len("k", 0), MIN_SEALED_LEN);
+}
+
 mod sealed_store {
   use super::*;
   use crate::memory_store::MemoryStore;
@@ -383,6 +400,59 @@ mod sealed_store {
       vec![("updated-at".to_string(), "5".to_string())]
     );
     assert_eq!(store.get_object_text("b").await.unwrap(), "x");
+  }
+
+  #[tokio::test]
+  async fn objects_whose_store_lost_the_marker_still_read_as_sealed() {
+    let (raw, store) = stores();
+    for (key, plain) in [
+      ("lease", b"{\"token\":\"t\"}".to_vec()),
+      ("empty", Vec::new()),
+      ("big", sample(2 * FRAME + 5)),
+    ] {
+      raw.insert(
+        key,
+        seal(&keyring(K1), &plain),
+        vec![("updated-at".to_string(), "9".to_string())],
+        None,
+      );
+      let head = store.head_object(key).await.unwrap();
+      assert_eq!(head.content_length, Some(plain.len() as u64), "{key}");
+      assert_eq!(
+        head.metadata,
+        vec![("updated-at".to_string(), "9".to_string())]
+      );
+      let download = store.get_object(key).await.unwrap();
+      assert_eq!(download.head.content_length, Some(plain.len() as u64));
+      assert_eq!(collect(download.body).await.unwrap(), plain, "{key}");
+      let kid = crate::migrate::sealed_kid(raw.as_ref(), key, &raw.head_object(key).await.unwrap())
+        .await
+        .unwrap();
+      assert_eq!(kid.as_deref(), Some("k1"), "{key} is not sealed again");
+    }
+    assert_eq!(
+      store.get_object_text("lease").await.unwrap(),
+      "{\"token\":\"t\"}"
+    );
+  }
+
+  #[tokio::test]
+  async fn plaintext_that_starts_like_a_header_reads_unchanged() {
+    let (raw, store) = stores();
+    let sealed = seal(&keyring(K1), b"x");
+    let cut = sealed[..header_bytes("k1") + 3].to_vec();
+    raw.insert("cut", cut.clone(), Vec::new(), None);
+    raw.insert("short", b"DSAR\x01".to_vec(), Vec::new(), None);
+    for (key, body) in [("cut", cut), ("short", b"DSAR\x01".to_vec())] {
+      let head = store.head_object(key).await.unwrap();
+      assert_eq!(head.content_length, Some(body.len() as u64), "{key}");
+      let download = store.get_object(key).await.unwrap();
+      assert_eq!(collect(download.body).await.unwrap(), body, "{key}");
+      let kid = crate::migrate::sealed_kid(raw.as_ref(), key, &raw.head_object(key).await.unwrap())
+        .await
+        .unwrap();
+      assert_eq!(kid, None, "{key}");
+    }
   }
 
   #[tokio::test]

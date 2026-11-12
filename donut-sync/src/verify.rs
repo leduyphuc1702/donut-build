@@ -12,7 +12,7 @@ use futures_util::StreamExt;
 use crate::at_rest::{self, Keyring, MARKER};
 use crate::config::Config;
 use crate::log;
-use crate::sealed_store::{SealedStore, sealed_by};
+use crate::sealed_store::{SealedStore, sealed_by, unmarked_seal};
 use crate::store::{ListInput, Store, StoreError};
 use crate::time;
 
@@ -233,7 +233,15 @@ async fn classify(store: &dyn Store, key: &str) -> Classified {
   };
   let stored = head.content_length.unwrap_or(0);
   let kind = match (head.metadata_value(MARKER), sealed_by(&head)) {
-    (None, _) => Kind::Plaintext,
+    (None, _) => match unmarked_seal(store, key, &head).await {
+      Ok(Some(id)) => Kind::Sealed {
+        plain: at_rest::plain_len(&id, stored).unwrap_or(0),
+        id,
+      },
+      Ok(None) => Kind::Plaintext,
+      Err(StoreError::NotFound) => Kind::Vanished,
+      Err(e) => return Err(e),
+    },
     (Some(marker), None) => Kind::Invalid(format!("unknown marker \"{marker}\"")),
     (Some(_), Some(id)) => {
       let start = match store.get_range(key, at_rest::header_len(id)).await {

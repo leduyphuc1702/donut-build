@@ -33,7 +33,7 @@ use crate::at_rest::{self, Keyring, MARKER};
 use crate::config::Config;
 use crate::log;
 use crate::original_times::{ORIGINAL_MTIME, original_mtime};
-use crate::sealed_store::sealed_by;
+use crate::sealed_store::{sealed_by, unmarked_seal};
 use crate::sealer::{Failed, Failure, read_state, retry_failed, save_state};
 use crate::store::{
   ByteStream, CopySpec, HeadOutput, ListInput, Store, StoreError, Upload, versions_of,
@@ -319,13 +319,15 @@ pub async fn honors_if_match(store: &dyn Store) -> Result<bool, StoreError> {
 /// The key id an object is sealed under, or `None` for plaintext. The marker
 /// alone is not trusted, since a device could set it on a direct upload:
 /// the stored bytes must start with the header it names, at a sealed size.
+/// An object whose marker the store lost is still sealed by its header, and
+/// is never sealed a second time.
 pub(crate) async fn sealed_kid(
   store: &dyn Store,
   key: &str,
   head: &HeadOutput,
 ) -> Result<Option<String>, StoreError> {
   let Some(id) = sealed_by(head) else {
-    return Ok(None);
+    return unmarked_seal(store, key, head).await;
   };
   let start = store.get_range(key, at_rest::header_len(id)).await?;
   if !at_rest::header_names(&start, id) {
